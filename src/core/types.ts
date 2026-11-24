@@ -27,6 +27,11 @@ export interface StylePack {
   readonly variants?: Readonly<Record<string, Readonly<Record<string, `#${string}`>>>>;
 }
 
+export interface Point2D {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface AnchorPoint {
   readonly name: string;
   readonly x: number;

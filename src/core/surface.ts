@@ -1,4 +1,4 @@
-import { type PaletteIndex, TRANSPARENT_INDEX } from './types.js';
+import { type PaletteIndex, type Point2D, TRANSPARENT_INDEX } from './types.js';
 
 const CARDINAL_DIRS: readonly (readonly [number, number])[] = [
   [0, -1],
@@ -13,6 +13,12 @@ function normalizeIndex(color: PaletteIndex): number {
     throw new RangeError(`Palette index ${color} out of range [0..${TRANSPARENT_INDEX}]`);
   }
   return idx;
+}
+
+function roundPoint(p: Point2D): Point2D {
+  const x = Math.round(p.x);
+  const y = Math.round(p.y);
+  return { x: x === 0 ? 0 : x, y: y === 0 ? 0 : y };
 }
 
 /**
@@ -114,6 +120,52 @@ export class IndexedSurface {
     for (let py = y + 1; py < y1; py++) {
       this.put(x, py, color);
       this.put(x1, py, color);
+    }
+  }
+
+  quad(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D, color: PaletteIndex): void {
+    const c = normalizeIndex(color);
+    const verts: readonly [Point2D, Point2D, Point2D, Point2D] = [
+      roundPoint(p0),
+      roundPoint(p1),
+      roundPoint(p2),
+      roundPoint(p3),
+    ];
+
+    let minY = verts[0].y;
+    let maxY = verts[0].y;
+    for (let i = 1; i < 4; i++) {
+      const vy = verts[i]?.y ?? minY;
+      if (vy < minY) minY = vy;
+      if (vy > maxY) maxY = vy;
+    }
+
+    const yStart = Math.max(0, minY);
+    const yEnd = Math.min(this.height - 1, maxY);
+    const xs: number[] = [];
+
+    for (let y = yStart; y <= yEnd; y++) {
+      xs.length = 0;
+      for (let i = 0; i < 4; i++) {
+        const a = verts[i] as Point2D;
+        const b = verts[(i + 1) & 3] as Point2D;
+        if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
+          xs.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      for (let i = 0; i + 1 < xs.length; i += 2) {
+        const x0 = Math.round(xs[i] as number);
+        const x1 = Math.round(xs[i + 1] as number);
+        this.hSpan(x0, x1, y, c);
+      }
+    }
+
+    // INVARIANT: Stroke perimeter edges after scanline fill so horizontal/degenerate edges are never dropped
+    for (let i = 0; i < 4; i++) {
+      const a = verts[i] as Point2D;
+      const b = verts[(i + 1) & 3] as Point2D;
+      this.line(a.x, a.y, b.x, b.y, c);
     }
   }
 

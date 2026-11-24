@@ -110,4 +110,28 @@ describe('IndexedSurface', () => {
     expect(block.get(2, 2)).toBe(4);
     expect(block.get(2, 3)).toBe(2);
   });
+
+  it('fills angled quadrilaterals with integer rounding and bounds clamping', () => {
+    const surface = createSurface(12, 12);
+    surface.quad({ x: 2.2, y: 1.8 }, { x: 8.7, y: 3.1 }, { x: 6.9, y: 9.2 }, { x: 0.8, y: 7.9 }, 6);
+
+    // Rounded vertices: (2,2), (9,3), (7,9), (1,8)
+    expect(surface.get(2, 2)).toBe(6);
+    expect(surface.get(9, 3)).toBe(6);
+    expect(surface.get(7, 9)).toBe(6);
+    expect(surface.get(1, 8)).toBe(6);
+    // Interior point
+    expect(surface.get(5, 5)).toBe(6);
+    // Outside points remain transparent
+    expect(surface.get(0, 0)).toBe(TRANSPARENT_INDEX);
+    expect(surface.get(11, 11)).toBe(TRANSPARENT_INDEX);
+
+    // Out-of-bounds quad clips silently without scanline wrap
+    const clipped = createSurface(6, 6);
+    clipped.quad({ x: -2, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 7 }, { x: -2, y: 7 }, 4);
+    expect(clipped.get(0, 1)).toBe(4);
+    expect(clipped.get(3, 5)).toBe(4);
+    expect(clipped.get(4, 1)).toBe(TRANSPARENT_INDEX);
+    expect(clipped.get(5, 1)).toBe(TRANSPARENT_INDEX);
+  });
 });
