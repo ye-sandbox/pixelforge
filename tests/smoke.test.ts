@@ -17,7 +17,7 @@ describe('pixelforge bootstrap smoke tests', () => {
     expect(renderArgs.positionals).toEqual(['assets/laptop.asset.ts']);
   });
 
-  it('returns exit code 0 for --help', () => {
-    expect(runCli(['--help'])).toBe(0);
+  it('returns exit code 0 for --help', async () => {
+    expect(await runCli(['--help'])).toBe(0);
   });
 });

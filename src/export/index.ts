@@ -14,6 +14,11 @@ export {
   generateContactSheet,
 } from './contact-sheet.js';
 export {
+  type DiffResult,
+  decodePngToRgba,
+  generatePixelDiff,
+} from './diff.js';
+export {
   assertBinaryAlpha,
   parseHexColor,
   type RgbaBuffer,
