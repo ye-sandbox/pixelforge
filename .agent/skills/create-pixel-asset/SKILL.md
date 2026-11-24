@@ -69,7 +69,7 @@ Before writing code, define the asset's structural blueprint:
 
 Implement the `AssetModule` using `@pixelforge/core` (`src/index.ts`) primitives and named indices from the target `StylePack`:
 
-- Build a local `Record<string, PaletteIndex>` lookup from `style.palette` (or import typed palette index constants from the style module).
+- Use `createPaletteLookup(ctx, [...])` (or `createPaletteLookup(ctx)`) from `../../src/index.js` to resolve `StylePack` token names to `PaletteIndex` with explicit missing-token errors.
 - Use `surface.put`, `surface.rect`, `surface.line`, `surface.circle`, `surface.fill`, `surface.spr`, `surface.autoOutline`, `surface.edgeMask`, and `isoBox` / `isoTile` / `isoProject`.
 - Keep all coordinates integer (`x | 0`, `y | 0`).
 - Never reference `Math.random`, raw `#rrggbb` hex strings, DOM/Canvas APIs, or external image files (`.png`, `.jpg`, `.webp`, `.svg`).
@@ -142,17 +142,9 @@ Evaluate the rendered contact sheet against these five criteria:
 ### Standard Asset Module Example
 
 ```typescript
-import type { AssetModule, PaletteIndex, RenderContext } from '../../src/index.js';
+import { type AssetModule, createPaletteLookup } from '../../src/index.js';
 
 type ServerState = 'healthy' | 'dusty' | 'faulty';
-
-function paletteMap(ctx: RenderContext<ServerState>): Record<string, PaletteIndex> {
-  const map: Record<string, PaletteIndex> = {};
-  for (const entry of ctx.style.palette) {
-    map[entry.name] = entry.index;
-  }
-  return map;
-}
 
 export const asset: AssetModule<ServerState> = {
   id: 'mini_node',
@@ -166,7 +158,13 @@ export const asset: AssetModule<ServerState> = {
   seed: 101,
 
   render(ctx) {
-    const pal = paletteMap(ctx);
+    const pal = createPaletteLookup(ctx, [
+      'OUTLINE',
+      'SHADOW',
+      'METAL_DARK',
+      'METAL_MID',
+      'METAL_LIGHT',
+    ]);
     const { surface, state, frame, rng } = ctx;
 
     // 1. Base chassis (1px inset for autoOutline)

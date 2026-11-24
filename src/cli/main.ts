@@ -133,15 +133,7 @@ export const stylePack: StylePack = {
 }
 
 function buildStarterAssetSource(styleId: string): string {
-  return `import type { AssetModule } from 'pixelforge';
-
-const PAL = {
-  OUTLINE: 0,
-  DARK: 1,
-  MID: 2,
-  LIGHT: 3,
-  LED_GREEN: 4,
-} as const;
+  return `import { type AssetModule, createPaletteLookup } from 'pixelforge';
 
 export const sampleBoxAsset: AssetModule<'healthy'> = {
   id: 'sample_box',
@@ -153,11 +145,18 @@ export const sampleBoxAsset: AssetModule<'healthy'> = {
   frames: 1,
   seed: 1,
   render(ctx) {
-    ctx.surface.rect(2, 2, 12, 12, PAL.MID);
-    ctx.surface.rect(2, 2, 12, 2, PAL.LIGHT);
-    ctx.surface.rect(2, 12, 12, 2, PAL.DARK);
-    ctx.surface.put(11, 5, PAL.LED_GREEN);
-    ctx.surface.autoOutline(PAL.OUTLINE);
+    const pal = createPaletteLookup(ctx, [
+      'OUTLINE',
+      'CHASSIS_DARK',
+      'CHASSIS_MID',
+      'CHASSIS_LIGHT',
+      'LED_GREEN',
+    ]);
+    ctx.surface.rect(2, 2, 12, 12, pal.CHASSIS_MID);
+    ctx.surface.rect(2, 2, 12, 2, pal.CHASSIS_LIGHT);
+    ctx.surface.rect(2, 12, 12, 2, pal.CHASSIS_DARK);
+    ctx.surface.put(11, 5, pal.LED_GREEN);
+    ctx.surface.autoOutline(pal.OUTLINE);
     ctx.anchor('foot', 8, 14);
   },
 };
