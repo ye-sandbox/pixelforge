@@ -9,7 +9,7 @@ type: architecture-design
 
 # `pixelforge` v2 — Python Compositional Pixel Art Compiler (`build123d`-Style)
 
-> **Mission:** Build a deterministic, code-drawn indexed pixel art compiler in Python (`pixelforge` SDK + CLI) using a `build123d`-inspired compositional context-manager API (`with Asset(...)`, `with Layer(...)`, `with Plane(...)`) paired with a 100% AI-agent **multimodal Visual Critic Loop**, compiling `.asset.py` modules into production-ready PNGs, animated spritesheets, emissive masks, optional 1D LUT textures, animated GIF/APNG previews, and strictly typed `manifest.json` + `manifest.d.ts` artifacts for **Svelte 5** browser games (or any engine).
+> **Mission:** Build a deterministic, code-drawn indexed pixel art compiler in Python (`pixelforge` SDK + CLI) using a `build123d`-inspired compositional context-manager API (`with Asset(...)`, `with Layer(...)`, `with Plane(...)`) paired with a 100% AI-agent **multimodal Visual Critic Loop**, compiling `.asset.py` modules into production-ready PNGs, animated spritesheets, emissive masks, optional 1D LUT textures, animated GIF/APNG previews, strictly typed `manifest.json` + `manifest.d.ts`, and optional **`--indexed-ts`** `Uint8Array` framebuffer bundles for **Svelte 5** browser games (including `idle-datacenter`'s live-graded `320×200` indexed renderer) or any engine.
 
 ---
 
@@ -18,7 +18,7 @@ type: architecture-design
 Inspired by **`build123d`** (where expressive Python CAD compiles to standard `.step`/`.stl`/`.glb` artifacts consumed by external runtimes), `pixelforge` v2 cleanly separates **asset authoring (build-time)** from **game execution (runtime)**:
 
 - **Build-Time (Python Compiler — `pixelforge`):** Multimodal AI agents author concise, parametric `.asset.py` modules, validate them via stdlib `ast` + runtime guards, inspect coordinate-ruled `.contact.png` sheets, and apply surgical edits.
-- **Runtime (Svelte 5 Browser Game):** Consumes zero-overhead compiled artifacts — pixel-perfect 1× PNGs, spritesheets, emissive masks, optional indexed + 1D LUT textures for 60 FPS WebGL2 palette swaps, and auto-generated **`manifest.d.ts`** for full TypeScript autocomplete.
+- **Runtime (Svelte 5 Browser Game):** Consumes zero-overhead compiled artifacts — either standard 1× PNGs / spritesheets / emissive masks / 1D LUTs + `manifest.d.ts`, or direct **`--indexed-ts`** `Uint8Array` buffers (`0..254`, `255 = transparent`) + `palette.generated.ts` (`EMISSIVE`, `BRIGHT`, `REFL`) for CPU-composited indexed framebuffers with real-time reactive palette grading (day/night, weather, overload) and unified WebGL2 post-processing.
 
 ```mermaid
 flowchart LR
@@ -29,8 +29,8 @@ flowchart LR
     Core --> Sheet["Diagnostic Contact Sheet (.contact.png + GIF/APNG)"]
     Sheet --> Critic["Multimodal Visual Critic (2-4 Surgical Passes)"]
     Critic -->|"Parametric or 1px Fixes"| Agent
-    Core --> Export["pixelforge.export (PNG, Sheet, Emissive, LUT, manifest.json + manifest.d.ts)"]
-    Export --> Svelte["Svelte 5 Browser Game (WebGL2 / Canvas / Hot-Reload via watch)"]
+    Core --> Export["pixelforge.export (PNG, Sheet, Emissive, LUT, Indexed-TS, manifest.d.ts)"]
+    Export --> Svelte["Svelte 5 Game (Framebuffer / WebGL2 / Hot-Reload via watch)"]
 ```
 
 ---
@@ -68,6 +68,7 @@ pixelforge/
 │       │   ├── png.py               # Surface -> RGBA / indexed / 1D LUT -> Pillow PNG bytes
 │       │   ├── bundle.py            # State PNGs, horizontal sheet, emissive sheet, GIF/APNG, manifest.json
 │       │   ├── svelte_types.py      # Auto-generator for manifest.d.ts (typed IDs, states, anchors, hitboxes)
+│       │   ├── indexed_ts.py        # Direct Uint8Array RLE/base64 + palette (EMISSIVE/BRIGHT/REFL) + manifest TS export
 │       │   ├── contact_sheet.py     # 1x dark/light, zoomed ruler grid, hitboxes, anchors, untruncated swatches, metrics
 │       │   └── diff.py              # Side-by-side + magenta pixel-diff PNG generator
 │       ├── guard/
@@ -77,7 +78,7 @@ pixelforge/
 │       └── cli/
 │           └── main.py              # Thin CLI: init, render, check, diff, watch, analyze-ref
 ├── styles/
-│   └── homelab_16bit.style.py       # Pilot StylePack (fixing WINDOW_SKY emissive semantics)
+│   └── homelab_16bit.style.py       # Canonical 64-color StylePack (emissive, bright, reflections) aligned with idle-datacenter
 ├── assets/
 │   ├── homelab/                     # Ported pilot pack (old_laptop, used_gpu_rig, ai_cluster_node, bedroom_desk_iso)
 │   └── thinkpad/                    # Ported ThinkPad showcase assets
@@ -140,6 +141,7 @@ def render(a: Asset) -> None:
 ### Key Compositional Primitives
 - **`with a.layer(name, *, offset=(0, 0), outline=None, sel_out=None, mirror_x=False)`**: draws onto an isolated local `IndexedSurface`, applies optional mirroring/outline/bevel on exit, and composites non-transparent pixels onto the parent surface.
 - **`with a.plane(p0, p1, p2)`**: maps normalized `(u, v)` coordinates onto any angled/isometric quadrilateral via integer affine projection (`rect`, `grid`, `line`, `dot`, `anchor`).
+- **Token Overrides & Multi-Anchor Scenes**: supports deterministic token-remap helpers (so avatar styles can share a base silhouette with per-style shirt/hair/skin/accent swaps) and named multi-anchor layouts for full `320×200` static room/rack scenes (`hw_slot_0..N`, `window`, `solar_panel`, `breaker`, `bed`, `desk`, `door`).
 - **Pixel Primitives**: `put`, `erase`, `get`, `rect`, `rounded_rect`, `line`, `circle`, `ellipse`, `polygon`, `quad`, `fill`, `dither` (Bayer 2×2, Bayer 4×4, checker), `spr` (ASCII grid), `scatter` (deterministic masked placement), `auto_outline`, `sel_out`, `edge_mask`, `mirror_x`, `flip_x`, `flip_y`, `iso_box`, `iso_tile`.
 
 ---
@@ -169,6 +171,7 @@ def render(a: Asset) -> None:
 - `sprites/<id>_sheet.png` — Horizontal spritesheet (`frames * width` × `states * height`) when `frames > 1`.
 - `sprites/<id>_<state>_emissive.png` & `sprites/<id>_sheet_emissive.png` — Emissive-only masks for WebGL2 bloom.
 - `sprites/<id>_<state>_idx.png` & `sprites/<style>_lut.png` (when `--lut` is passed) — Indexed texture + 1D palette LUT for 60 FPS WebGL2 palette swaps in Svelte.
+- `indexed/sprites.generated.ts`, `indexed/palette.generated.ts`, & `indexed/manifest.generated.ts` (when `--indexed-ts` is passed) — Compact RLE/base64 `Uint8Array` index buffers (`0..254`, `255 = transparent`) paired with `PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, and `REFL` tables for direct `blit()` into CPU-composited indexed framebuffers (such as `idle-datacenter`'s `320×200` stage) while preserving live reactive palette grading (`buildPalette32()`), floor reflections, and unified WebGL2 post-processing.
 - `.pixelforge/sheets/<id>.contact.png` (when `--sheet` is passed) — Diagnostic contact sheet with full untruncated palette token names + `[E]` markers, hitbox overlays, anchor crosshairs, 1× dark/light strips, zoomed ruler, state/frame matrix, and pixel metrics.
 - `.pixelforge/previews/<id>_<state>.gif` (or `.apng`, when `--animate` is passed and `frames > 1`) — Animated preview to verify zero animation jitter.
 - `manifest.json` + **`manifest.d.ts`** — Deterministic JSON manifest (with per-state/per-frame anchor support when coordinates vary) paired with a generated TypeScript declaration file so Svelte 5 games get strict compile-time typing for every sprite ID, state, frame count, FPS, anchor, and hitbox.
@@ -179,10 +182,10 @@ def render(a: Asset) -> None:
 
 ```bash
 pixelforge init [--style homelab-16bit] [--force]
-pixelforge render [asset-id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--scale 1] [--variant <name>]
+pixelforge render [asset-id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--scale 1] [--variant <name>]
 pixelforge check [asset-id] [--strict-orphans]
 pixelforge diff <asset-id> [--base HEAD] [--out .pixelforge/diffs]
-pixelforge watch [asset-id] [--out ../my-svelte-game/static/sprites] [--sheet] [--emissive]
+pixelforge watch [asset-id] [--out ../my-svelte-game/static/sprites] [--sheet] [--emissive] [--indexed-ts]
 pixelforge analyze-ref <image-path> --style homelab-16bit --size 64x64   # Ephemeral sketch/proportion guide (Phase 5)
 ```
 
