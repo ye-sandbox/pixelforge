@@ -14,40 +14,41 @@
 
 ---
 
-## Active Contracts
+## Active Contracts (`v2-py`)
 
 ### 1. Core Module & Output Contracts
 
-Full specification lives in [`docs/DESIGN_MVP.md`](../docs/DESIGN_MVP.md). High-level contracts:
+Full V2 specification lives in [`docs/DESIGN_V2.md`](../docs/DESIGN_V2.md). High-level contracts:
 
 | Interface / Artifact | Producer | Consumer | Schema / Contract | Notes |
 |---|---|---|---|---|
-| `StylePack` (`styles/*.style.ts`) | Style Author / Agent | `src/core`, `src/export`, `src/guard` | `{ id, perspective, lightingAngle, outlineIndex, palette[0..254], variants? }` | Index `255` permanently reserved as `TRANSPARENT_INDEX` (binary alpha 0) |
-| `AssetModule` (`assets/**/*.asset.ts`) | Asset Author / Agent | `src/cli`, `src/export`, `src/guard` | `{ id, styleId, width, height, perspective, states, frames, fps?, seed?, render(ctx) }` | Pure deterministic function; zero DOM, zero `Math.random`, zero image imports |
-| Sprite PNG (`dist/sprites/<id>_<state>.png`) | `src/export/bundle.ts` | Downstream Games / UIs | 1× pixel-perfect RGBA PNG, binary alpha (`0` or `255`) | Optional horizontal spritesheet (`<id>_sheet.png`) when `frames > 1` |
-| Emissive Mask (`dist/sprites/<id>_<state>_emissive.png`) | `src/export/bundle.ts` | WebGL2 Bloom / Shaders | RGBA PNG containing only pixels with palette flag `emissive` | Generated when `--emissive` flag is active or StylePack defines emissives |
-| Manifest (`dist/manifest.json`) | `src/export/bundle.ts` | Game Engines / Frontend Manifests | `{ id, styleId, width, height, states, frames, fps, files, anchors[], hitboxes[], sha256 }` | Anchors/hitboxes emitted directly by `ctx.anchor()` / `ctx.hitbox()` during render |
-| Contact Sheet (`.pixelforge/sheets/<id>.contact.png`) | `src/export/contact-sheet.ts` | Multimodal Agent Critic / Human | Composite PNG: 1× dark/light previews + 4×/8× grid with `(x,y)` ruler + state/frame matrix + palette swatches | Ephemeral visual-critic artifact (git-ignored under `.pixelforge/`) |
-| CLI (`pixelforge`) | `src/cli/main.ts` | Developers / AI Agents / CI | `init`, `render`, `check`, `diff` | Exit code `0` on pass; non-zero with `file:line [rule] detail` on guard violations |
+| `StylePack` (`styles/*.style.py`) | Style Author / Agent | `pixelforge.core`, `export`, `guard` | `{ id, perspective, lighting_angle, outline_index, palette[0..254], variants? }` | Index `255` permanently reserved as `TRANSPARENT_INDEX` (binary alpha 0) |
+| `Asset` Module (`assets/**/*.asset.py`) | Asset Author / Agent | `pixelforge.cli`, `export`, `guard` | `SPEC: AssetSpec` + `render(a: Asset) -> None` (`with a.layer`, `with a.plane`, plus 1px `put`/`erase`/`spr`) | Pure deterministic Python; zero `random`, zero I/O, zero raw hex, zero external images |
+| Sprite PNG (`dist/sprites/<id>_<state>.png`) | `pixelforge.export.bundle` | Svelte 5 Game / Any Engine | 1× pixel-perfect RGBA PNG, binary alpha (`0` or `255`) | Horizontal spritesheet (`<id>_sheet.png`) when `frames > 1` |
+| Emissive Mask (`dist/sprites/<id>_<state>_emissive.png`) | `pixelforge.export.bundle` | WebGL2 Bloom / Shaders | RGBA PNG containing only pixels with palette flag `emissive` | Also emits `<id>_sheet_emissive.png` when `frames > 1` |
+| Indexed + LUT PNG (`<id>_<state>_idx.png`, `<style>_lut.png`) | `pixelforge.export.png` | Svelte 5 WebGL2 Palette Swap | Optional (`--lut`): R channel = palette index `0..254`, A = `0/255`, paired with `256×N` 1D LUT PNG | Enables 60 FPS runtime day/night/status swaps in browser without executing `.asset.py` |
+| Animated Preview (`.pixelforge/previews/<id>_<state>.gif`) | `pixelforge.export.bundle` | Human / Agent Critic | Optional (`--animate`): looping nearest-neighbor GIF/APNG when `frames > 1` | Ephemeral QA artifact (git-ignored under `.pixelforge/`) |
+| Manifest (`dist/manifest.json` + `dist/manifest.d.ts`) | `pixelforge.export.bundle` & `svelte_types` | Svelte 5 Game / Engines | `{ id, styleId, width, height, states, frames, fps, files, anchors[], hitboxes[], sha256 }` + TS `.d.ts` | Generated `.d.ts` provides strict compile-time autocomplete in Svelte 5 |
+| Contact Sheet (`.pixelforge/sheets/<id>.contact.png`) | `pixelforge.export.contact_sheet` | Multimodal Agent Critic / Human | 1× dark/light + zoomed grid with `(x,y)` ruler + anchors + hitboxes + state/frame matrix + full swatches + metrics | Ephemeral visual-critic artifact (git-ignored under `.pixelforge/`) |
+| CLI (`pixelforge`) | `pixelforge.cli.main` | Developers / AI Agents / CI | `init`, `render`, `check`, `diff`, `watch`, `analyze-ref` | Exit `0` on pass; `file:line [rule] detail` on guard violations; honors `PIXELFORGE_*` env vars |
 
 ### 2. Multi-Agent Collaboration Contracts (Optional)
 
-> Canonical 3-tier subagent topology, Tier 2 (`dev-harness`) micro-contracts (`files_read`, `files_edit`, `verify`), and model tiers (`default-tier` / `escalation-tier`). If operating single-agent, leave as default.
-
 | Role | Interface / Channel | Responsibilities | Boundary & Invariants |
 |---|---|---|---|
-| **`Lead / Orchestrator`** | `.agent/TASK.md` / Interactive Prompt | Decomposes tasks, manages lifecycle, routes `default-tier` / `escalation-tier`, interacts with human. | Sole manager of `TASK.md` and commit log. |
+| **`Lead / Orchestrator`** | `.agent/TASK.md` / Interactive Prompt | Decomposes tasks, manages lifecycle, interacts with human. | Sole manager of `TASK.md` and commit log. |
 | **`Worker / Implementer`** | Worktree / Target Workspace | Executes atomic changes adhering to micro-contract (`files_read`, `files_edit`, `verify`). | Restricted to `files_edit`. Adheres to DoD in `AGENTS.md`. |
-| **`Reviewer / Visual Critic`** | Diffs / `.contact.png` / `pixelforge check` | Read-only inspection of guard results, diffs, and rendered contact sheets. | Read-only; reports structured Pass/Fail and exact coordinate fixes. |
+| **`Reviewer / Visual Critic`** | Diffs / `.contact.png` / `pixelforge check` | Read-only inspection of guard results, diffs, and rendered contact sheets/GIFs. | Read-only; reports structured Pass/Fail and exact coordinate or parametric fixes. |
 
 ---
 
 ## Gotchas & Pitfalls
 
-- **Transparent Index Sentinel (`255`):** Never allocate palette color index `255` in any `StylePack`; `IndexedSurface` treats `255` as transparent (`alpha = 0`) across `put`, `spr`, `blitLayer`, and `autoOutline`.
-- **Integer Coordinate Rounding:** Always truncate or round coordinates before surface writes (`x | 0`, `y | 0`) and clamp out-of-bounds pixels silently rather than wrapping across scanlines.
-- **Git Hygiene for Scratch Visuals:** Contact sheets (`.pixelforge/sheets/*.contact.png`) and reference photos MUST stay untracked (`.pixelforge/` is git-ignored). Never commit third-party reference photos.
-- **No Browser Required for MVP Rendering:** Do not add Playwright or headless Chromium for static sprite/contact-sheet exports; Node-native indexed-to-PNG encoding keeps the visual critic loop under 50 ms per asset.
+- **Transparent Index Sentinel (`255`):** Never allocate palette color index `255` in any `StylePack`; `IndexedSurface` treats `255` as transparent (`alpha = 0`) across all drawing, blitting, masking, and outline ops.
+- **Keep Emissive Tokens Separate from Paint Tokens:** Never reuse an `emissive`-flagged token (like `WINDOW_SKY`) for non-glowing painted surfaces (like blue keycaps or badges), or they will bleed into WebGL2 bloom masks.
+- **Avoid Pure-Python Per-Pixel Loops in Large Assets:** Prefer vectorized core primitives (`plane.rect`, `iso_box`, `dither`, `scatter`, `spr`) backed by `numpy.ndarray(uint8)` so renders stay `< 40 ms`.
+- **Git Hygiene for Scratch Visuals:** Contact sheets (`.pixelforge/sheets/`), diffs (`.pixelforge/diffs/`), animated previews (`.pixelforge/previews/`), and reference photos MUST stay untracked (`.pixelforge/` is git-ignored). Never commit third-party reference photos.
+- **No Browser Required for Asset Compilation:** Keep compilation 100% headless in Python (`numpy` + `Pillow`). Live preview in Svelte 5 uses `pixelforge watch --out <svelte-app>/static/sprites`.
 
 ---
 
@@ -55,4 +56,4 @@ Full specification lives in [`docs/DESIGN_MVP.md`](../docs/DESIGN_MVP.md). High-
 
 | Debt | Rationale | Revisit When |
 |---|---|---|
-| Single-package layout (`src/core`, `src/export`, `src/guard`, `src/cli`) | Avoids premature monorepo workspace overhead during MVP iteration | Phase 2 (when Svelte 5 Web Studio is introduced) |
+| Legacy V1 TypeScript files remain temporarily on `v2-py` until `[00.1]` executes | Preserves reference context during bootstrap plan approval; V1 stays permanently preserved on `main` | Task `[00.1]` (clean removal on `v2-py` once `uv` toolchain is initialized) |

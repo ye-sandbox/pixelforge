@@ -1,27 +1,28 @@
 # INVARIANTS.md — System Invariants and Untouchable Rules
 
-> Runtime-aware guardrails and inviolable rendering contracts for `pixelforge`.
+> Runtime-aware guardrails and inviolable rendering contracts for `pixelforge` (`v2-py`).
 > Record project-specific invariants here as they are discovered; preserve the shared Invariant 7 section verbatim.
 
 ---
 
 ## 1. Indexed Framebuffer & Binary Alpha Invariant
 
-- **Zero Mixels & Integer Grid:** All pixel writes operate on integer coordinates inside a `Uint8Array` buffer of exact `width * height` size. Sub-pixel blending and anti-aliasing are prohibited in `src/core/`.
+- **Zero Mixels & Integer Grid:** All pixel writes operate on integer coordinates inside a `numpy.ndarray(shape=(height, width), dtype=np.uint8)` buffer of exact `height x width` dimensions. Sub-pixel blending and anti-aliasing are prohibited in `src/pixelforge/core/`.
 - **Binary Alpha (`0` or `255`):** Index `255` (`TRANSPARENT_INDEX`) maps exclusively to alpha `0`. Palette indices `0..254` map exclusively to alpha `255`. Exported PNGs must never contain intermediate alpha values (`1..254`).
 
 ---
 
 ## 2. Deterministic Rendering & Closed Palette Invariant
 
-- **Seeded Randomness Only:** `Math.random()`, `Date.now()`, and wall-clock/locale APIs are strictly forbidden inside `src/core/`, `styles/`, and `assets/`. Random variation must flow exclusively through the seeded PRNG (`mulberry32` / `hashf`).
+- **Seeded Randomness Only:** Python `random`, `secrets`, `numpy.random`, `time`, `datetime`, `open()`, `eval()`, and `exec()` are strictly forbidden inside `src/pixelforge/core/`, `styles/`, and `assets/` (enforced by stdlib `ast` static guards). Random variation must flow exclusively through the seeded PRNG (`mulberry32` / `hashf`).
 - **Closed Semantic Palette:** Asset modules must draw solely via declared `StylePack` indices; raw `#rrggbb` literals and external raster image imports are prohibited inside `assets/**`.
 
 ---
 
-## 3. Code-Coupled Metadata Invariant
+## 3. Code-Coupled Metadata & Escape Hatch Invariant
 
-- **Single Source of Coordinates:** Anchors (`foot`, `led`, `socket`) and hitboxes exported in `manifest.json` must be emitted directly by the asset's `render(ctx)` execution so geometry and metadata can never drift out of sync.
+- **Single Source of Coordinates:** Anchors (`foot`, `led`, `socket`) and hitboxes exported in `manifest.json` and `manifest.d.ts` must be emitted directly by the asset's `render(a)` execution (including local `Layer`/`Plane` transforms) so geometry and metadata can never drift out of sync.
+- **Parametric + 1px Surgical Control:** Compositional `build123d`-style layers and planes must never lock out direct integer pixel refinement (`put`, `erase`, `spr`).
 
 ---
 
