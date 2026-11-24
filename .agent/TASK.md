@@ -7,16 +7,7 @@
 
 ## Active Task
 
-### [03.1] Pilot Validation Benchmark (`homelab-16bit`)
-
-Objective: implement the `homelab-16bit` `StylePack` and pilot assets (`old_laptop`, `used_gpu_rig`, `ai_cluster_node`, `bedroom_desk_iso`) using the `create-pixel-asset` skill and verify with `pixelforge check` + `pixelforge render --sheet`.
-
-- [ ] Implement `styles/homelab-16bit.style.ts` with semantic palette, `emissive`/`outline`/`shadow`/`metal` flags, and variants
-- [ ] Implement `assets/homelab/old_laptop.asset.ts` (`32×32`, `front-2.5d`, `healthy`/`dusty`/`faulty`, 2 frames)
-- [ ] Implement `assets/homelab/used_gpu_rig.asset.ts` (`64×48`, `front-2.5d`, `healthy`/`dusty`/`faulty`, 2 frames)
-- [ ] Implement `assets/homelab/ai_cluster_node.asset.ts` (`64×48`, `front-2.5d`, `healthy`/`dusty`/`faulty`, 2 frames, emissive cyan manifold)
-- [ ] Implement `assets/homelab/bedroom_desk_iso.asset.ts` (`320×200`, `iso-2:1`, `day`/`night`, 1 frame, `hardwareAnchors` & `breakerAnchor`)
-- [ ] Run `pixelforge check` and visually inspect `.contact.png` sheets across 2–4 surgical passes
+*(All MVP roadmap tasks `[00.1]`–`[03.1]` are complete. Await human direction to promote a Phase 2 item from Future Backlog or tag a release.)*
 
 ---
 
@@ -30,6 +21,7 @@ Objective: implement the `homelab-16bit` `StylePack` and pilot assets (`old_lapt
 | `[01.2]` | Headless Exporter & Coordinate-Ruled Contact Sheet (`fast-png`, bundle, manifest, `.contact.png`) | `5934755` | 2026-11-24 |
 | `[02.1]` | Guard Suite & `pixelforge` CLI (`rules`, `runner`, `diff`, `init`/`render`/`check`/`diff`) | `3ea44d0` | 2026-11-24 |
 | `[02.2]` | Hermetic Agent Skill (`create-pixel-asset` planning, guards, Visual Critic Loop) | `061be36` | 2026-11-24 |
+| `[03.1]` | Pilot Validation Benchmark (`homelab-16bit` StylePack + 4 pilot assets) | `4660738` | 2026-11-24 |
 
 ---
 
