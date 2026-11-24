@@ -3,14 +3,18 @@
 .env.*
 !.env.example
 
-# High-frequency junk (safe before you pick a stack)
+# Build & package outputs
 node_modules/
-.venv/
-venv/
-__pycache__/
 dist/
 build/
+coverage/
 *.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Ephemeral visual critic sheets & reference scratch (never commit reference photos)
+.pixelforge/
+shots/
 
 # OS / IDE / agent scratch
 .DS_Store
@@ -30,19 +34,3 @@ Thumbs.db
 .harness/queue/done/
 .harness/queue/escalated/
 .harness/worktrees/
-
-# Uncomment extras for your stack:
-# --- Python ---
-# *.py[cod]
-# .pytest_cache/
-# .mypy_cache/
-# .ruff_cache/
-# htmlcov/
-# .coverage
-# *.egg-info/
-# --- Node ---
-# .next/
-# .nuxt/
-# .turbo/
-# .parcel-cache/
-# npm-debug.log*

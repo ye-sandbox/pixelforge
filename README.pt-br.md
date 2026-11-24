@@ -1,252 +1,89 @@
-# template-agent
+# pixelforge
 
-Hub de governança técnica e starters isolados por branch para engenharia de software colaborativa com agentes de IA.
+Motor determinístico de pixel art indexada em código, CLI/SDK e ciclo de auto-crítica visual por agentes multimodais de IA para gerar PNGs pixel-perfect, spritesheets animados, máscaras emissivas e manifestos tipados sem mixels.
 
 **[English](README.md)** | **[Português (Brasil)](README.pt-br.md)**
 
-[![CI](https://github.com/ye-sandbox/template-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ye-sandbox/template-agent/actions)
-[![Release](https://img.shields.io/github/v/release/ye-sandbox/template-agent?color=blue)](https://github.com/ye-sandbox/template-agent/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/license/mit)
-[![Arquitetura: Starters Isolados](https://img.shields.io/badge/Arquitetura-Starters_Isolados-purple.svg)](#arquitetura)
+[![Runtime: Node 26 LTS](https://img.shields.io/badge/Node-26_LTS_(floor_24)-339933.svg)](https://nodejs.org/)
+[![Linguagem: TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6.svg)](https://www.typescriptlang.org/)
+[![Status: MVP Greenfield](https://img.shields.io/badge/Status-MVP_Greenfield-amber.svg)](docs/DESIGN_MVP.md)
 
 ---
 
 ## Visão Geral
 
-O `template-agent` é o hub central de starters e protocolos de governança de engenharia para desenvolvimento colaborativo com agentes de IA (Antigravity, Claude Code, Cursor, Windsurf, Roo Code, Aider).
+O `pixelforge` elimina os modos de falha estruturais de geradores de pixel art baseados em difusão raster (mixels, halos semi-transparentes, deriva de paleta entre sprites, instabilidade entre frames de animação e PNGs sem metadados de âncoras) ao modelar cada asset como um módulo TypeScript determinístico sobre um framebuffer indexado (`Uint8Array`).
 
-A estrutura resolve os quatro principais modos de falha em fluxos de trabalho autônomos e agentic:
-- **Degradação de Contexto:** Carregamento com orçamento fixo de contexto (`AGENTS.md`, `.agent/TASK.md`, `.agent/NOTES.md`) elimina a saturação da janela em tarefas complexas.
-- **Desvio de Contrato e Alucinação:** Definições de conclusão verificáveis (DoD), testes de caracterização e esquemas validáveis por máquina restringem as saídas do agente.
-- **Refatoração Destrutiva:** Cercas de Chesterton (`INVARIANTS.md`) e restrições cirúrgicas de diff impedem refatorações não solicitadas em bases legadas.
-- **Isolamento de Branches:** Os starters residem na raiz de branches git limpas e desacopladas, evitando monorepos inflados.
-
-Playbooks transversais que abrangem múltiplos repositórios (contratos de UI, prototipagem HTML, auditoria de QA com navegador externo, padrões de documentação) são centralizados no catálogo organizacional de playbooks (`agent-skills`). Habilidades específicas e fluxos de onboarding permanecem integrados diretamente nas suas respectivas branches de template.
+Capacidades previstas no MVP ([`docs/DESIGN_MVP.md`](docs/DESIGN_MVP.md)):
+- **Framebuffer Indexado Sem Mixels:** Superfícies `Uint8Array` em coordenadas inteiras (índices semânticos `0..254`, com `255` reservado para alpha binário `0`), com primitivas 2D e isométricas `2:1` (`rect`, `line`, `dither`, `spr`, `autoOutline`, `isoBox`, `edgeMask`).
+- **Paletas Semânticas e Troca por LUT:** Tokens nomeados com flags de material (`outline`, `emissive`, `shadow`, `metal`, `accent`) permitindo alternância sem perdas entre estados/horários (`healthy`/`dusty`/`faulty`, `day`/`night`) sem redesenhar a geometria.
+- **Exportação Headless em Milissegundos:** Codificação nativa em Node.js (`< 50ms` por sprite, sem dependência de navegador) gerando PNGs 1x, spritesheets horizontais, máscaras emissivas e `manifest.json` sincronizado com âncoras e hitboxes emitidos pelo código.
+- **Ciclo de Crítica Visual Multimodal:** Gera folhas diagnósticas `.contact.png` (previews 1x em fundo claro/escuro, zoom 4x/8x com grade e régua de coordenadas `(x, y)`, matriz de estados/frames e swatches da paleta) para que agentes de IA inspecionem os pixels renderizados e apliquem correções cirúrgicas por coordenada.
+- **Guard Tests Determinísticos:** Checagens estáticas e em tempo de execução bloqueando `Math.random`, imports de imagens externas, hex literais fora da paleta, alpha intermediário e saídas não determinísticas.
 
 ## Arquitetura
 
-Os templates são isolados em raízes de branches dedicadas e independentes. Merges entre branches especializadas são estritamente proibidos; melhorias canônicas compartilhadas propagam-se exclusivamente via cherry-picks atômicos.
-
 ```mermaid
-flowchart TD
-    Main["main (Governança e Hub)"]
-    Main -.->|"Sincronização seletiva / Cherry-pick"| Greenfield["greenfield (Projetos do Zero)"]
-    Main -.->|"Sincronização seletiva / Cherry-pick"| Brownfield["brownfield (Adoção em Legados)"]
-    Main -.->|"Sincronização seletiva / Cherry-pick"| Blackbox["blackbox (Engenharia Reversa)"]
-    Main -.->|"Sincronização seletiva / Cherry-pick"| Infra["infra (Serviços e Homelab)"]
-    Main -.->|"Sincronização seletiva / Cherry-pick"| Baremetal["baremetal (Workstation e Tuning)"]
+flowchart LR
+    Spec["Prompt / Referência + StylePack"] --> Agent["Agente IA (Skill create-pixel-asset)"]
+    Agent --> Asset["Módulo de Asset (*.asset.ts)"]
+    Asset --> Core["src/core (IndexedSurface, Paleta, PRNG, Primitivas)"]
+    Asset --> Guard["src/guard (Regras Estáticas e de Runtime)"]
+    Core --> Export["src/export (PNG, Spritesheet, Emissive, Manifest)"]
+    Core --> Sheet["src/export/contact-sheet (1x + Grid 4x + Régua XY)"]
+    Sheet --> Critic["Visual Critic (Inspeciona PNG e Corrige Coordenadas)"]
+    Critic -->|"2-4 Iterações Cirúrgicas"| Agent
 ```
 
-### Matriz de Branches dos Starters
-
-| Branch | Escopo Alvo | Artefatos Principais | Mecanismo Primário |
-| :--- | :--- | :--- | :--- |
-| **`greenfield`** | Projetos novos construídos do zero | `docs/adr/decisions.md`, `.agent/skills/`, `init.sh` | Raiz Git limpa, diário de decisões ADR, setup arquitetural aberto. |
-| **`brownfield`** | Bases de código existentes e legados | `.agent/INVARIANTS.md`, `.agent/ECOSYSTEM.md`, `install.sh` | Injeção não destrutiva, cercas de Chesterton, Task 00 Discovery. |
-| **`blackbox`** | Engenharia reversa e APIs fechadas | `.agent/ENDPOINTS.md`, `.agent/skills/reverse-engineering/`, `init.sh` | Catálogo de rotas descobertas, fixtures de replay, rate limits defensivos. |
-| **`infra`** | Docker Compose, serviços e Homelab | `.agent/SERVICES.md`, `.agent/skills/compose-service/`, `compose.yaml.example` | Topologia de serviços, healthchecks estritos, limites de memória. |
-| **`baremetal`** | Otimização de workstation e SO | `.agent/BASELINE.md`, `.agent/INVARIANTS.md`, `.agent/TUNINGS.md`, `init.sh` | Scripts rollback-first, inventário de sistema, proteção de kernel. |
-| **`main`** | Governança do hub e matriz geral | `AGENTS.md`, `.agent/TASK.md`, `.github/workflows/ci.yml` | Documentação central, auditoria de deriva e roadmap do ecossistema. |
+As decisões arquiteturais estão registradas em [`docs/adr/decisions.md`](docs/adr/decisions.md) e a especificação completa de contratos está em [`docs/DESIGN_MVP.md`](docs/DESIGN_MVP.md).
 
 ## Início Rápido
 
+> Estado atual do repositório: especificação greenfield concluída (`[00.0]`). O bootstrap de toolchain e o esqueleto da CLI começam na Tarefa `[00.1]` ([`.agent/TASK.md`](.agent/TASK.md)).
+
 ### Pré-requisitos
 
-- Git 2.30+
-- Bash 4.0+
-- `curl` 7.60+
+- Node.js `>= 24` (recomendado: **Node.js 26 Active LTS**)
+- `pnpm`
 
-### 1. Criando um Projeto do Zero (Greenfield)
-
-Inicialize um novo repositório limpo a partir do starter greenfield:
+### Fluxo Local Previsto (após `[00.1]`)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/greenfield/init.sh | bash -s -- meu-novo-projeto
-cd meu-novo-projeto
+cp .env.example .env
+pnpm install --frozen-lockfile
+pnpm test
+pnpm build
 ```
-
-*Alternativa via clone do Git:*
-```bash
-git clone --depth 1 -b greenfield https://github.com/ye-sandbox/template-agent.git meu-novo-projeto
-cd meu-novo-projeto
-rm -rf .git && git init -b main && git add . && git commit -m "chore: initial setup"
-```
-
-**Primeiro prompt para o agente:**
-> "Leia AGENTS.md, .agent/TASK.md, .agent/NOTES.md e as skills em .agent/skills/. Apresente seu plano de implementação para a Tarefa Ativa do TASK.md antes de alterar qualquer código."
-
-### 2. Adotando em um Projeto Existente (Brownfield)
-
-Injete a estrutura de governança do agente diretamente na raiz do repositório existente:
-
-```bash
-# Execute a partir da raiz do repositório legado:
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/brownfield/install.sh | bash
-```
-
-*Execução não interativa:*
-```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/brownfield/install.sh | bash -s -- -y
-```
-
-*Modo Stealth Corporativo (`--local-only`):*
-```bash
-# Impede que arquivos de governança de IA apareçam no git status ou no histórico compartilhado:
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/brownfield/install.sh | bash -s -- --local-only
-```
-
-**Primeiro prompt para o agente:**
-> "Leia AGENTS.md e o .agent/TASK.md. Apresente seu plano de implementação para a Tarefa [00.1] Auditoria e Discovery do Projeto antes de alterar qualquer código."
-
-### 3. Engenharia Reversa e Sistemas Fechados (Blackbox)
-
-Inicialize um ambiente blackbox para descoberta de rotas, scrapers ou integrações com APIs fechadas:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/blackbox/init.sh | bash -s -- meu-projeto-blackbox
-cd meu-projeto-blackbox
-```
-
-*Alternativa via clone do Git:*
-```bash
-git clone --depth 1 -b blackbox https://github.com/ye-sandbox/template-agent.git meu-projeto-blackbox
-cd meu-projeto-blackbox
-rm -rf .git && git init -b main && git add . && git commit -m "chore: initial setup"
-```
-
-**Primeiro prompt para o agente:**
-> "Leia AGENTS.md, .agent/TASK.md, .agent/ENDPOINTS.md e a skill em .agent/skills/reverse-engineering/SKILL.md. Apresente seu plano para a Tarefa [00.1] Descoberta de Autenticação antes de executar requisições ativas."
-
-### 4. Provisionando Infraestrutura e Serviços (Infra)
-
-Inicialize um repositório para orquestração de serviços com Docker Compose e Homelab:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/infra/init.sh | bash -s -- meu-homelab
-cd meu-homelab
-```
-
-*Alternativa via clone do Git:*
-```bash
-git clone --depth 1 -b infra https://github.com/ye-sandbox/template-agent.git meu-homelab
-cd meu-homelab
-rm -rf .git && git init -b main && git add . && git commit -m "chore: initial setup"
-```
-
-**Primeiro prompt para o agente:**
-> "Leia AGENTS.md, .agent/SERVICES.md, .agent/TASK.md e a skill em .agent/skills/compose-service/SKILL.md. Apresente seu plano para a Tarefa [00.1] Provisionamento de Serviços Base antes de alterar arquivos de configuração."
-
-### 5. Otimização de PC e Workstation (Baremetal)
-
-Inicialize repositório de administração de host e tuning de SO com garantias de rollback:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/baremetal/init.sh | bash -s -- meu-workstation-ops
-cd meu-workstation-ops
-```
-
-*Alternativa via clone do Git:*
-```bash
-git clone --depth 1 -b baremetal https://github.com/ye-sandbox/template-agent.git meu-workstation-ops
-cd meu-workstation-ops
-rm -rf .git && git init -b main && git add . && git commit -m "chore: initial setup"
-```
-
-**Primeiro prompt para o agente:**
-> "Leia AGENTS.md, .agent/BASELINE.md, .agent/INVARIANTS.md e a skill em .agent/skills/baremetal-tuning/SKILL.md. Apresente seu plano de implementação para a Tarefa [00.1] Auditoria de Baseline e Descoberta de Performance antes de executar modificações ou comandos privilegiados."
 
 ## Configuração
 
-Variáveis de configuração definidas no `.env.example` e variáveis em nível de hub:
+Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example):
 
-| Variável | Descrição | Padrão | Obrigatório |
+| Variável | Descrição | Padrão | Obrigatória |
 | :--- | :--- | :--- | :--- |
-| `APP_ENV` | Modo de ambiente de execução da aplicação (`development`, `production`, `test`) | `development` | Não |
-| `APP_PORT` | Porta de escuta do servidor HTTP | `8000` | Não |
-| `APP_SECRET_KEY` | Chave criptográfica para assinatura e cifragem de sessões | `change-me-in-production` | Sim (em produção) |
-| `DATABASE_URL` | String de conexão PostgreSQL do banco de dados persistente principal | `postgresql://user:password@localhost:5432/dbname` | Não |
-| `REDIS_URL` | String de conexão Redis para broker de fila, cache e mensageria | `redis://localhost:6379/0` | Não |
-| `LLM_BASE_URL` | URL base do gateway LLM compatível com OpenAI v1 (Hydra LLM Router) | `http://hydra-llm-router:3000/v1` | Não |
-| `LLM_API_KEY` | Token de autenticação do gateway correspondente ao tier alocado | `sk-replace-with-hydra-tier-token` | Sim (ao usar LLM) |
-| `LLM_MODEL_FAST` | Alias do modelo virtual de baixa latência para classificação e parsing | `fast` | Não |
-| `LLM_MODEL_DEEP` | Alias do modelo virtual para raciocínio profundo com orçamento de reasoning | `deep` | Não |
-| `LLM_TIMEOUT_SECONDS` | Timeout do cliente HTTP em segundos para chamadas de reasoning | `180` | Não |
-| `TEMPLATE_REPO_URL` | Sobrescrita de URL do repositório upstream para mirrors corporativos e forks | `https://github.com/ye-sandbox/template-agent.git` | Não |
+| `PIXELFORGE_OUT_DIR` | Diretório de saída para PNGs exportados, spritesheets, máscaras emissivas e `manifest.json` | `dist` | Não |
+| `PIXELFORGE_SHEETS_DIR` | Diretório de folhas efêmeras `.contact.png` de crítica visual (ignorado no Git) | `.pixelforge/sheets` | Não |
+| `PIXELFORGE_DEFAULT_STYLE` | Identificador padrão de `StylePack` usado pelo comando `pixelforge init` | `homelab-16bit` | Não |
+| `LLM_BASE_URL` | Endpoint opcional de gateway OpenAI v1 (`hydra-llm-router`) para modo crítico automatizado na Fase 3 | `http://127.0.0.1:3000/v1` | Não |
+| `LLM_API_KEY` | Token opcional do gateway quando o modo crítico automatizado da Fase 3 estiver ativo | `sk-replace-with-hydra-tier-token` | Apenas no modo automatizado (Fase 3) |
+| `LLM_MODEL_FAST` | Alias virtual de baixa latência no gateway LLM | `fast` | Não |
+| `LLM_MODEL_DEEP` | Alias virtual de raciocínio profundo no gateway LLM | `deep` | Não |
+| `LLM_TIMEOUT_SECONDS` | Timeout HTTP em segundos para chamadas de raciocínio profundo no gateway | `180` | Não |
 
-A tabela apresenta os valores padrão de `main`. Cada starter mantém seu próprio `.env.example`; a auditoria de deriva compara os aliases com o contrato de roteamento da respectiva branch. `TEMPLATE_REPO_URL` é uma opção dos instaladores, não uma entrada no `.env.example` do hub.
-
-## Matriz de Governança e Decisão
-
-```mermaid
-flowchart TD
-    A{"Qual o cenário do projeto?"}
-    A -->|"Projeto Novo do Zero"| B["branch greenfield"]
-    B --> B1["Decisões registradas em ADRs formais"]
-    B --> B2["Setup arquitetural e stack livre"]
-    B --> B3["Skills de projeto em .agent/skills/"]
-
-    A -->|"Código Legado Existente"| C["branch brownfield"]
-    C --> C1["Sem ADRs retroativas; cercas em INVARIANTS.md"]
-    C --> C2["Task 00 Discovery para mapear a stack"]
-    C --> C3["Testes de caracterização obrigatórios antes de refatorar"]
-    C --> C4["Diffs cirúrgicos com revisão de gate humana"]
-
-    A -->|"Sistema Fechado / Sem Docs"| D["branch blackbox"]
-    D --> D1["Catálogo de rotas em .agent/ENDPOINTS.md"]
-    D --> D2["Playbook de engenharia reversa passo a passo"]
-    D --> D3["Fixtures de replay e mocks antes do código final"]
-    D --> D4["Taxas defensivas de requisição e proteção de tokens"]
-
-    A -->|"Serviços / Homelab / IaC"| E["branch infra"]
-    E --> E1["Topologia e portas em .agent/SERVICES.md"]
-    E --> E2["Playbook padronizado compose-service"]
-    E --> E3["Healthchecks e limites de memória obrigatórios"]
-    E --> E4["Proteção contra exclusão destrutiva de volumes"]
-
-    A -->|"SO Host / Otimização de PC"| F["branch baremetal"]
-    F --> F1["Inventário do sistema em .agent/BASELINE.md"]
-    F --> F2["Rollback-first: scripts de backup e reversão atômicos"]
-    F --> F3["Modificações auditadas em .agent/TUNINGS.md"]
-    F --> F4["Parâmetros de kernel e host protegidos por INVARIANTS.md"]
-```
-
-## Forks e Ambientes Corporativos
-
-Para instâncias auto-hospedadas (GitHub Enterprise, GitLab, Gitea ou servidores Git barebone), os scripts `init.sh` e `install.sh` aceitam repositórios remotos personalizados via `TEMPLATE_REPO_URL`:
+## Referência da CLI (Superfície Prevista do MVP)
 
 ```bash
-# Greenfield a partir de fork customizado
-TEMPLATE_REPO_URL="https://github.com/SUA_ORGANIZACAO/template-agent.git" \
-curl -fsSL https://raw.githubusercontent.com/SUA_ORGANIZACAO/template-agent/greenfield/init.sh | bash -s -- meu-novo-projeto
+# Inicializar um StylePack e um módulo de asset de exemplo
+pixelforge init --style homelab-16bit
 
-# Brownfield a partir de fork customizado
-TEMPLATE_REPO_URL="https://raw.githubusercontent.com/SUA_ORGANIZACAO/template-agent/brownfield" \
-curl -fsSL https://raw.githubusercontent.com/SUA_ORGANIZACAO/template-agent/brownfield/install.sh | bash
+# Renderizar PNGs 1x, spritesheets horizontais, máscaras emissivas, manifest.json e contact sheet
+pixelforge render old_laptop --sheet --emissive
 
-# Blackbox a partir de fork customizado
-TEMPLATE_REPO_URL="https://github.com/SUA_ORGANIZACAO/template-agent.git" \
-curl -fsSL https://raw.githubusercontent.com/SUA_ORGANIZACAO/template-agent/blackbox/init.sh | bash -s -- meu-projeto-blackbox
+# Executar guard tests estáticos e de runtime (código de saída 0 se aprovado)
+pixelforge check
 
-# Infra a partir de fork customizado
-TEMPLATE_REPO_URL="https://github.com/SUA_ORGANIZACAO/template-agent.git" \
-curl -fsSL https://raw.githubusercontent.com/SUA_ORGANIZACAO/template-agent/infra/init.sh | bash -s -- meu-homelab
-```
-
-### Sincronização de Forks com o Upstream
-
-Mantenha seu fork atualizado preservando o isolamento estrito entre branches:
-
-```bash
-git remote add upstream https://github.com/ye-sandbox/template-agent.git
-git fetch upstream
-
-# Atualize cada branch isoladamente (nunca faça merge entre branches de starters diferentes):
-git checkout main && git merge upstream/main
-git checkout greenfield && git merge upstream/greenfield
-git checkout brownfield && git merge upstream/brownfield
-git checkout blackbox && git merge upstream/blackbox
-git checkout infra && git merge upstream/infra
-git checkout baremetal && git merge upstream/baremetal
+# Gerar comparação lado a lado + diff de pixels contra uma ref Git
+pixelforge diff old_laptop --base HEAD
 ```
 
 ## Desenvolvimento
@@ -255,107 +92,36 @@ git checkout baremetal && git merge upstream/baremetal
 
 ```text
 ├── .agent/
-│   ├── TASK.md               # Tarefa ativa, status de execução e log de roadmap
-│   ├── NOTES.md              # Contratos arquiteturais e gotchas de runtime
-│   ├── ARCHIVE.md            # Tarefas arquivadas de ciclos anteriores
-│   ├── hooks/                # Hooks padronizados de ciclo de vida (post-worktree-create, pre-verify)
-│   └── knowledge/            # Cards modulares de runtime e plataforma
-├── .github/
-│   ├── workflows/ci.yml      # Workflow de CI para matriz multibranch
-│   └── scripts/              # Validação de drift, bootstrap fast-link, contratos e linter de LLM
+│   ├── TASK.md              # Checklist da tarefa ativa e roadmap
+│   ├── NOTES.md             # Contratos ativos de módulos/CLI e gotchas
+│   ├── INVARIANTS.md        # Guardrails de renderização e verificação de interface
+│   ├── ARCHIVE.md           # Ciclos de tarefas arquivados
+│   ├── hooks/               # Hooks de ciclo de vida para worktrees e verificação
+│   ├── knowledge/           # Cards atômicos de gotchas de plataforma/runtime
+│   └── skills/              # Skills herméticas do projeto (create-pixel-asset em [02.2])
 ├── docs/
-│   ├── adr/decisions.md      # Registros consolidados de decisão arquitetural
-│   ├── agent-sandbox.md      # Especificações de sandbox hermético via Bubblewrap e contêineres
-│   ├── llm-gateway.md        # Integração com gateway OpenAI v1, modelos virtuais e isolamento de rede
-│   ├── subagent-topology.md  # Papéis de subagentes em 3 tiers e contratos de delegação
-│   └── worktree-isolation.md # Ciclo de vida de worktree, CLI fast-link e hooks de ciclo de vida
-├── .env.example              # Esquema canônico de variáveis de ambiente
-├── AGENTS.md                 # Constituição do repositório e regras de engenharia
-├── CHANGELOG.md              # Notas de versão e histórico do ecossistema
-├── README.md                 # Documentação em inglês
-└── README.pt-br.md           # Documentação em português (Brasil)
+│   ├── DESIGN_MVP.md        # Especificação canônica do MVP e contratos
+│   └── adr/decisions.md     # Diário de Decisões Arquiteturais (ADRs)
+├── src/                     # Motor core, exportador, guard runner e CLI (criado em [00.1]+)
+├── styles/                  # Definições de StylePack (piloto homelab-16bit em [03.1])
+├── assets/                  # Módulos *.asset.ts desenhados em código (pacote piloto em [03.1])
+├── tests/                   # Suítes herméticas Vitest (unitários e guard tests)
+├── .env.example             # Modelo de variáveis de ambiente
+└── AGENTS.md                # Constituição de engenharia e regras para agentes
 ```
-
-### Verificação Adaptativa de Interfaces
-
-Os cinco starters incluem a [skill interface-testing](.agent/skills/interface-testing/SKILL.md) e o [Invariante 7](.agent/INVARIANTS.md#7-adaptive-interface-verification--ui-protocol) compartilhado. A injeção Brownfield instala a skill nos modos padrão e stealth, preservando arquivos existentes quando nenhuma opção de sobrescrita é fornecida.
-
-Carregue a skill apenas para tarefas de UI, preview ou componentes frontend. No T3 Code, o contrato cobre verificações de preview/device, localizadores de snapshots e encerramento das sessões. Em CLI/CI headless, use builds não bloqueantes, testes de componentes e E2E headless. Pesquisas de documentação estática usam ferramentas HTTP/busca.
-
-A auditoria de deriva compara a skill byte a byte e compara somente o Invariante 7, preservando as demais restrições de cada starter. As asserções dos projetos gerados verificam a instalação da skill, das quatro restrições e das diretrizes de contexto/DoD para UI.
-
-### Rigor Progressivo em 2 Níveis e Skills Herméticas
-
-O trabalho interativo (Tier 1, padrão) acompanha a tarefa ativa como um checklist enxuto `- [ ]` em `.agent/TASK.md`, validado pelos comandos canônicos de validação do repositório e pelo Definition of Done do `AGENTS.md`. O trabalho autônomo (Tier 2) usa micro-contratos estritos (`files_read`, `files_edit`, `verify`) em `.harness/queue/<id>.{md,yaml}` ou em Issues do GitHub com `harness:ready`, consumidos pelo `dev-harness`. Os hooks de ciclo de vida em `.agent/hooks/` (`post-worktree-create`, `pre-verify`, `post-worktree-teardown`) mantêm todo starter compatível com o `dev-harness`, e o `.gitignore` de cada starter ignora `.harness/queue/done/`, `.harness/queue/escalated/` e `.harness/worktrees/`.
-
-O fluxo anterior com `[BATCH: Bx]` / `[PARALLEL: Wx]` / `.agent/scratch/specs/` para projetos pesados de swarm no T3 Code está preservado em [`ye-sandbox/template-agent-swarm`](https://github.com/ye-sandbox/template-agent-swarm). Os scripts `verify-microcontract.sh` e `bootstrap-worktree.sh` e os guias [`docs/subagent-topology.md`](docs/subagent-topology.md) e [`docs/worktree-isolation.md`](docs/worktree-isolation.md) permanecem para esse fluxo.
-
-Pelo Contrato de Skills Herméticas, skills procedurais devem estar contidas em `.agent/skills/` ou ser injetadas diretamente no prompt da tarefa, sem varreduras no filesystem do host. O script `.github/scripts/check-branch-drift.sh` audita os marcadores Tier 1/Tier 2, a estrutura enxuta do `TASK.md` (tabela `Task | Title | Commit(s) | Date`, checklist `- [ ]`, sem cerimônia de orquestração), as regras de ignore de `.harness/`, as diretrizes de Skills Herméticas e a política `No Agent Attribution Trailers` entre a `main` e os cinco starters.
-
-### Ferramentas de Governança do Ecossistema
-
-As ferramentas exigem Python 3. Execute-as a partir de um checkout da branch `main` do hub: a auditoria de interfaces e a migração opt-in leem a skill e os invariantes canônicos desse checkout. O auditor lê os arquivos dos projetos sem alterá-los; sua pontuação heurística não certifica o comportamento da aplicação.
-
-```bash
-python3 .github/scripts/audit-ecosystem-standards.py /path/to/project --format markdown --output /tmp/governance-audit.md
-python3 .github/scripts/audit-ecosystem-standards.py /path/to/project --format json --fail-under 90
-python3 .github/scripts/apply-governance-standards.py /path/to/project --dry-run
-```
-
-Ambas as ferramentas aceitam o caminho de um repositório ou de um diretório de repositórios, com `--dir`/`-d` como alternativa ao argumento posicional. Sem caminho, a busca começa em `~/github`. Buscas em diretórios excluem nomes de repositórios que contenham `template-agent`, `agent-skills`, `.github`, `yegear1` ou `org-ye-sandbox`; `--exclude NAME ...` substitui essa lista e `--no-exclude` a desativa. Um repositório apontado diretamente ignora as exclusões por nome. Somente a migração aceita `--repo NAME`, um filtro por nome exato; somente o auditor aceita `--max-depth` (padrão `4`), `--format table|markdown|json`, `--output` e `--verbose`.
-
-A auditoria mantém os campos existentes dos relatórios e acrescenta verificações dos bytes canônicos da skill, dos quatro blocos do Invariante 7, da referência de contexto sob demanda, do DoD de UI para os dois runtimes, dos marcadores 2-Tier, do `TASK.md` enxuto, das regras `.harness/` no `.gitignore`, de Skills Herméticas, de `No Agent Attribution Trailers` e do alinhamento ao `hydra-llm-router`. A pontuação é arredondada a partir de `(pontos legados + pontos de interface + pontos 2-tier) / 140 * 100`: os critérios legados somam 100 pontos, interface soma 20 e 2-Tier/governança soma 20. `--fail-under N` encerra com código `1` quando a média dos repositórios encontrados e incluídos fica abaixo de `N`; um resultado vazio não aciona essa falha.
-
-A migração padrão continua tratando da consolidação de ADRs, limpeza de NOTES, contratos de colaboração (`default-tier` / `escalation-tier`, `files_read` / `files_edit` / `verify`, `hydra-llm-router`) e diretrizes de governança. ADRs legados em Markdown suportados são consolidados sem descartar decisões distintas com o mesmo título; arquivos auxiliares não suportados, caminhos inseguros ou conteúdo ilegível bloqueiam a limpeza dos ADRs e preservam a árvore de origem com diagnósticos. Esse comportamento é separado das flags opt-in descritas abaixo.
-
-Para adicionar contratos de interface e/ou upgrades de Rigor Progressivo 2-Tier, simule e depois aplique as mesmas flags explícitas:
-
-```bash
-python3 .github/scripts/apply-governance-standards.py /path/to/project --include-interface-contracts --dry-run
-python3 .github/scripts/apply-governance-standards.py /path/to/project --include-two-tier --dry-run
-python3 .github/scripts/apply-governance-standards.py /path/to/project --all-standards --dry-run
-python3 .github/scripts/apply-governance-standards.py /path/to/project --all-standards
-```
-
-O opt-in `--include-interface-contracts` instala a [skill interface-testing](.agent/skills/interface-testing/SKILL.md) canônica, adiciona os Invariantes 7.1–7.4 compartilhados ausentes e acrescenta as diretrizes de contexto/DoD adaptadas ao runtime preservando invariantes e limites específicos do projeto. O opt-in `--include-two-tier` atualiza o `AGENTS.md` para Rigor Progressivo 2-Tier, Skills Herméticas e a política `No Agent Attribution Trailers` + par BAD/GOOD (removendo regras obsoletas de `[BATCH: Bx]`, `Pre-Approved` e spec-anchors), limpa cerimônias ativas no `.agent/TASK.md`, adiciona regras `.harness/` no `.gitignore`, provisiona `.agent/hooks/README.md` quando ausente e alinha `.env.example` / `.agent/NOTES.md` ao `hydra-llm-router`. `--all-standards` ativa ambos os opt-ins juntos. O dry-run não grava nada; reaplicar contratos completos e inalterados não gera diff. Ambas as flags também executam as transformações padrão; examine as alterações propostas por elas.
-
-Bytes de skill personalizados, invariantes compartilhados divergentes ou duplicados, diretrizes de interface personalizadas, seções ambíguas e caminhos de interface ilegíveis ou com links simbólicos exigem conciliação manual. Uma falha na pré-validação de interfaces deixa aquele repositório inalterado e informa o caminho ou contrato a revisar; resolva o diagnóstico e repita o dry-run. A CLI encerra com código `1` se alguma migração de interface for bloqueada, mas outros repositórios na mesma busca ainda podem ser processados.
-
-O CI executa os autotestes de auditoria e migração no Ubuntu e no macOS. O autoteste de migração inclui as fixtures descartáveis em [test_interface_migration.py](.github/scripts/tests/test_interface_migration.py), cobrindo preservação, conflitos, dry-run, reaplicação e conformidade com a auditoria de interfaces.
 
 ### Comandos de Validação
 
+Checagens canônicas configuradas em `[00.1]` e obrigatórias antes de concluir qualquer tarefa:
+
 ```bash
-# Validar contratos de governança e deriva de arquivos entre as branches
-.github/scripts/check-branch-drift.sh
-
-# Testar a detecção de deriva em refs Git locais descartáveis
-bash .github/scripts/test-branch-drift.sh
-
-# Validar definições de micro-contrato e guardrails de isolamento por worktree
-.github/scripts/verify-microcontract.sh
-
-# Auditar segurança de comandos e guardrails de raio de explosão
-.github/scripts/audit-command-security.sh
-
-# Bootstrap fast-link de dependências (.venv, node_modules) e hooks de ciclo de vida
-.github/scripts/bootstrap-worktree.sh --self-test
-
-# Validar contratos do LLM gateway, isolamento de rede e roteamento de modelos virtuais
-.github/scripts/verify-llm-contract.sh self-test
-
-# Validar auditoria e migração do ecossistema com fixtures herméticas
-python3 .github/scripts/audit-ecosystem-standards.py --self-test
-python3 .github/scripts/apply-governance-standards.py --self-test
-python3 .github/scripts/audit-ecosystem-standards.py . --no-exclude --fail-under 90
-
-# Executar suíte de testes de ponta a ponta dos starters
-.github/scripts/test-all-starters.sh
-
-# Verificar integridade de formatação e espaços em branco
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 git diff --check
 ```
 
 ## Licença
 
-Distribuído sob a licença [MIT](https://opensource.org/license/mit).
+Privado / Interno (`ye-sandbox`).
