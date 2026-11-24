@@ -7,13 +7,7 @@
 
 ## Active Task
 
-### [04.2] Typed Palette Lookup Helper (`createPaletteLookup`)
-
-Objective: eliminate per-asset palette lookup boilerplate by exporting a typed `createPaletteLookup(ctx)` helper from `src/core/`.
-
-- [ ] Export a typed `createPaletteLookup(ctx)` (or `paletteMap(ctx)`) helper from `src/core/` (`src/index.ts`) that resolves `StylePack` token names to `PaletteIndex` with explicit missing-token errors
-- [ ] Update `.agent/skills/create-pixel-asset/SKILL.md` and `src/cli/main.ts` (`init` template) to use the shared helper, eliminating ~25 lines of boilerplate per asset
-- [ ] Add unit tests in `tests/core/` and verify `pnpm typecheck && pnpm test && pnpm lint && pnpm build` exit 0
+*(No active task — backlog is empty. See Future Backlog below or queue a new task.)*
 
 ---
 
@@ -29,6 +23,7 @@ Objective: eliminate per-asset palette lookup boilerplate by exporting a typed `
 | `[02.2]` | Hermetic Agent Skill (`create-pixel-asset` planning, guards, Visual Critic Loop) | `061be36` | 2026-11-24 |
 | `[03.1]` | Pilot Validation Benchmark (`homelab-16bit` StylePack + 4 pilot assets) | `4660738` | 2026-11-24 |
 | `[04.1]` | Tilted-Plane & Quadrilateral Primitives (`quad` / `planeProject`) | `5dced5a` | 2026-11-24 |
+| `[04.2]` | Typed Palette Lookup Helper (`createPaletteLookup`) | `2889e3e` | 2026-11-24 |
 
 ---
 
