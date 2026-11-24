@@ -7,14 +7,13 @@
 
 ## Active Task
 
-### [02.1] Guard Suite & `pixelforge` CLI
+### [02.2] Hermetic Agent Skill (`create-pixel-asset`)
 
-Objective: implement static and runtime guard rules (`no-math-random`, `no-external-assets`, `no-raw-hex`, `closed-palette`, `exact-dimensions`, `binary-alpha`, `bit-determinism`, `valid-anchors`) and wire the `pixelforge` CLI (`init`, `render`, `check`, `diff`).
+Objective: author `.agent/skills/create-pixel-asset/SKILL.md` codifying the planning, authoring, guard-check, and multimodal Visual Critic Loop protocol.
 
-- [ ] Implement static source and runtime guard rules (`src/guard/rules.ts`)
-- [ ] Implement guard runner and structured `file:line [rule] detail` reporter (`src/guard/runner.ts`)
-- [ ] Implement pixel-diff PNG generator (`src/export/diff.ts`) and wire `pixelforge` CLI commands (`init`, `render`, `check`, `diff`) in `src/cli/main.ts`
-- [ ] Add hermetic unit tests for guard violations, CLI exit codes, and pixel-diff output (`pnpm test` exits 0)
+- [ ] Define silhouette, layering, and anchor planning checklist
+- [ ] Document `pixelforge check` and `pixelforge render --sheet` iteration loop (2–4 surgical passes)
+- [ ] Verify skill completeness against `docs/DESIGN_MVP.md` and `AGENTS.md`
 
 ---
 
@@ -26,12 +25,12 @@ Objective: implement static and runtime guard rules (`no-math-random`, `no-exter
 | `[00.1]` | Project Bootstrap & Toolchain Setup (`fast-png`, Biome, Vitest, TS strict, CLI skeleton) | `a07b3fe` | 2026-11-24 |
 | `[01.1]` | Core Indexed Framebuffer Engine (`IndexedSurface`, `StylePack`, PRNG, `isoBox`/`isoTile`) | `c729089` | 2026-11-24 |
 | `[01.2]` | Headless Exporter & Coordinate-Ruled Contact Sheet (`fast-png`, bundle, manifest, `.contact.png`) | `5934755` | 2026-11-24 |
+| `[02.1]` | Guard Suite & `pixelforge` CLI (`rules`, `runner`, `diff`, `init`/`render`/`check`/`diff`) | `3ea44d0` | 2026-11-24 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- `[02.2]` Hermetic agent skill `.agent/skills/create-pixel-asset/SKILL.md` codifying the planning + multimodal Visual Critic Loop protocol
 - `[03.1]` Pilot validation benchmark (`homelab-16bit` StylePack + `old_laptop`, `used_gpu_rig`, `ai_cluster_node`, and `bedroom_desk_iso` 320×200 scene)
 
 ---
