@@ -13,5 +13,11 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "styles/**/*.ts",
+    "assets/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ]
 }
