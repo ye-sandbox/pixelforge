@@ -7,7 +7,13 @@
 
 ## Active Task
 
-*(All MVP roadmap tasks `[00.1]`–`[03.1]` are complete. Await human direction to promote a Phase 2 item from Future Backlog or tag a release.)*
+### [04.2] Typed Palette Lookup Helper (`createPaletteLookup`)
+
+Objective: eliminate per-asset palette lookup boilerplate by exporting a typed `createPaletteLookup(ctx)` helper from `src/core/`.
+
+- [ ] Export a typed `createPaletteLookup(ctx)` (or `paletteMap(ctx)`) helper from `src/core/` (`src/index.ts`) that resolves `StylePack` token names to `PaletteIndex` with explicit missing-token errors
+- [ ] Update `.agent/skills/create-pixel-asset/SKILL.md` and `src/cli/main.ts` (`init` template) to use the shared helper, eliminating ~25 lines of boilerplate per asset
+- [ ] Add unit tests in `tests/core/` and verify `pnpm typecheck && pnpm test && pnpm lint && pnpm build` exit 0
 
 ---
 
@@ -22,12 +28,13 @@
 | `[02.1]` | Guard Suite & `pixelforge` CLI (`rules`, `runner`, `diff`, `init`/`render`/`check`/`diff`) | `3ea44d0` | 2026-11-24 |
 | `[02.2]` | Hermetic Agent Skill (`create-pixel-asset` planning, guards, Visual Critic Loop) | `061be36` | 2026-11-24 |
 | `[03.1]` | Pilot Validation Benchmark (`homelab-16bit` StylePack + 4 pilot assets) | `4660738` | 2026-11-24 |
+| `[04.1]` | Tilted-Plane & Quadrilateral Primitives (`quad` / `planeProject`) | `5dced5a` | 2026-11-24 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-*(No remaining MVP backlog items after `[03.1]`; see Future Backlog below.)*
+*(No queued tasks — see Future Backlog below)*
 
 ---
 
