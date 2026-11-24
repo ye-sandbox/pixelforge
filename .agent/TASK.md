@@ -7,14 +7,15 @@
 
 ## Active Task
 
-### [00.1] Project Bootstrap & Toolchain Setup
+### [01.1] Core Indexed Framebuffer Engine
 
-Objective: initialize the Node.js 26 LTS / TypeScript strict / `pnpm` / Vitest / linter toolchain and CLI skeleton so all canonical validation commands (`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`) exit with code 0.
+Objective: implement the deterministic `Uint8Array` `IndexedSurface`, `StylePack`/semantic palette types, seeded PRNG, 2D & isometric 2:1 primitives, `autoOutline`, `edgeMask`, and anchors/hitboxes metadata emitter.
 
-- [ ] Propose consultative dependency choices (PNG encoder, lint/format choice: ESLint+Prettier vs Biome, CLI arg parsing) and await human approval before installing packages
-- [ ] Initialize `package.json`, `tsconfig.json` (`strict: true`, Node ESM), Vitest config, and linter/formatter config
-- [ ] Scaffold minimal `src/` directory layout (`core/`, `export/`, `guard/`, `cli/`, `index.ts`) with a passing smoke test
-- [ ] Verify `pnpm typecheck && pnpm lint && pnpm test && pnpm build && git diff --check` exit with code 0
+- [ ] Define `StylePack`, `PaletteEntry`, `PerspectiveMode`, `Anchor`, and `Hitbox` contracts in `src/core/types.ts`
+- [ ] Implement seeded deterministic PRNG (`mulberry32` / `xorshift32`) in `src/core/prng.ts`
+- [ ] Implement `IndexedSurface` (`Uint8Array` buffer, `TRANSPARENT_INDEX = 255`, integer truncation/clamping, `put`, `get`, `rect`, `line`, `circle`, `fill`, `spr`, `blitLayer`, `autoOutline`, `edgeMask`) in `src/core/surface.ts`
+- [ ] Implement isometric 2:1 projection helpers (`isoProject`, `isoBox`, `isoTile`) in `src/core/iso.ts`
+- [ ] Add comprehensive unit tests for determinism, clipping, binary alpha sentinel (`255`), and isometric primitives (`pnpm test` exits 0)
 
 ---
 
@@ -23,12 +24,12 @@ Objective: initialize the Node.js 26 LTS / TypeScript strict / `pnpm` / Vitest /
 | Task | Title | Commit(s) | Date |
 |---|---|---|---|
 | `[00.0]` | Initial greenfield scaffolding, MVP design spec & ADRs | `initial` | 2026-11-24 |
+| `[00.1]` | Project Bootstrap & Toolchain Setup (`fast-png`, Biome, Vitest, TS strict, CLI skeleton) | `a07b3fe` | 2026-11-24 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- `[01.1]` Core indexed framebuffer engine (`IndexedSurface`, `StylePack`/semantic palette, seeded PRNG, 2D & isometric 2:1 primitives, `autoOutline`, `edgeMask`, anchors/hitboxes)
 - `[01.2]` Headless exporter (`png`, horizontal spritesheet, emissive mask, `manifest.json`, and 4×/8× coordinate-ruled `.contact.png` generator)
 - `[02.1]` Static + runtime guard suite (`no-math-random`, `closed-palette`, `binary-alpha`, `bit-determinism`) and `pixelforge` CLI (`init`, `render`, `check`, `diff`)
 - `[02.2]` Hermetic agent skill `.agent/skills/create-pixel-asset/SKILL.md` codifying the planning + multimodal Visual Critic Loop protocol
