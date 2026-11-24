@@ -7,15 +7,14 @@
 
 ## Active Task
 
-### [01.1] Core Indexed Framebuffer Engine
+### [01.2] Headless Exporter & Coordinate-Ruled Contact Sheet
 
-Objective: implement the deterministic `Uint8Array` `IndexedSurface`, `StylePack`/semantic palette types, seeded PRNG, 2D & isometric 2:1 primitives, `autoOutline`, `edgeMask`, and anchors/hitboxes metadata emitter.
+Objective: implement pure-Node PNG encoding (`fast-png`), 1× RGBA spritesheet export, emissive mask generation, `manifest.json` emitter with SHA-256 digests, and 4×/8× coordinate-ruled `.contact.png` generator.
 
-- [ ] Define `StylePack`, `PaletteEntry`, `PerspectiveMode`, `Anchor`, and `Hitbox` contracts in `src/core/types.ts`
-- [ ] Implement seeded deterministic PRNG (`mulberry32` / `xorshift32`) in `src/core/prng.ts`
-- [ ] Implement `IndexedSurface` (`Uint8Array` buffer, `TRANSPARENT_INDEX = 255`, integer truncation/clamping, `put`, `get`, `rect`, `line`, `circle`, `fill`, `spr`, `blitLayer`, `autoOutline`, `edgeMask`) in `src/core/surface.ts`
-- [ ] Implement isometric 2:1 projection helpers (`isoProject`, `isoBox`, `isoTile`) in `src/core/iso.ts`
-- [ ] Add comprehensive unit tests for determinism, clipping, binary alpha sentinel (`255`), and isometric primitives (`pnpm test` exits 0)
+- [ ] Implement `IndexedSurface` → RGBA/PNG encoder (`src/export/png.ts`) enforcing binary alpha (`0` or `255`)
+- [ ] Implement bundle exporter (`src/export/bundle.ts`) for 1× state PNGs, horizontal spritesheets (`frames > 1`), emissive masks, and `manifest.json`
+- [ ] Implement 4×/8× coordinate-ruled contact sheet generator (`src/export/contact-sheet.ts`) with 1× dark/light previews, `(x,y)` ruler, state/frame matrix, and palette swatches
+- [ ] Add hermetic unit tests for PNG binary alpha, spritesheet dimensions, manifest SHA-256 determinism, and contact-sheet layout (`pnpm test` exits 0)
 
 ---
 
@@ -25,12 +24,12 @@ Objective: implement the deterministic `Uint8Array` `IndexedSurface`, `StylePack
 |---|---|---|---|
 | `[00.0]` | Initial greenfield scaffolding, MVP design spec & ADRs | `initial` | 2026-11-24 |
 | `[00.1]` | Project Bootstrap & Toolchain Setup (`fast-png`, Biome, Vitest, TS strict, CLI skeleton) | `a07b3fe` | 2026-11-24 |
+| `[01.1]` | Core Indexed Framebuffer Engine (`IndexedSurface`, `StylePack`, PRNG, `isoBox`/`isoTile`) | `c729089` | 2026-11-24 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- `[01.2]` Headless exporter (`png`, horizontal spritesheet, emissive mask, `manifest.json`, and 4×/8× coordinate-ruled `.contact.png` generator)
 - `[02.1]` Static + runtime guard suite (`no-math-random`, `closed-palette`, `binary-alpha`, `bit-determinism`) and `pixelforge` CLI (`init`, `render`, `check`, `diff`)
 - `[02.2]` Hermetic agent skill `.agent/skills/create-pixel-asset/SKILL.md` codifying the planning + multimodal Visual Critic Loop protocol
 - `[03.1]` Pilot validation benchmark (`homelab-16bit` StylePack + `old_laptop`, `used_gpu_rig`, `ai_cluster_node`, and `bedroom_desk_iso` 320×200 scene)
