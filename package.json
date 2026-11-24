@@ -1,0 +1,35 @@
+{
+  "name": "pixelforge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Code-drawn indexed pixel art engine, CLI/SDK, and multimodal agent visual critic loop",
+  "bin": {
+    "pixelforge": "./dist/cli/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fast-png": "^8.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}
