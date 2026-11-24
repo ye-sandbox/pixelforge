@@ -1,4 +1,16 @@
-// INVARIANT: Index 255 is permanently reserved as binary transparent alpha (0); indices 0..254 map to active StylePack colors
-export const TRANSPARENT_INDEX = 255 as const;
-
-export type PaletteIndex = number;
+export { type IsoBoxOptions, type IsoPoint, isoBox, isoProject, isoTile } from './iso.js';
+export { hashf, mulberry32, xorshift32 } from './prng.js';
+export { createSurface, IndexedSurface } from './surface.js';
+export {
+  type AnchorPoint,
+  type AssetModule,
+  type HitboxRect,
+  type LightingAngle,
+  type PaletteColorSpec,
+  type PaletteFlag,
+  type PaletteIndex,
+  type PerspectiveMode,
+  type RenderContext,
+  type StylePack,
+  TRANSPARENT_INDEX,
+} from './types.js';
