@@ -161,7 +161,7 @@ Read `.agent/skills/<name>/SKILL.md` when a task matches the skill domain.
 
 | Skill | Trigger |
 | :--- | :--- |
-| `create-pixel-asset` *(planned in `[02.2]`)* | Authoring or iterating on code-drawn pixel art modules (`assets/**/*.asset.ts`) |
+| `create-pixel-asset` | Authoring or iterating on code-drawn pixel art modules (`assets/**/*.asset.ts`) |
 | `interface-testing` | Phase 2 Web Studio UI, preview, or frontend component tasks (combined with `.agent/INVARIANTS.md` Invariant 7) |
 
 ### Validation Commands
