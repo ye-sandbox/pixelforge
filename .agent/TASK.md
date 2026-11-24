@@ -7,14 +7,14 @@
 
 ## Active Task
 
-### [01.2] Headless Exporter & Coordinate-Ruled Contact Sheet
+### [02.1] Guard Suite & `pixelforge` CLI
 
-Objective: implement pure-Node PNG encoding (`fast-png`), 1× RGBA spritesheet export, emissive mask generation, `manifest.json` emitter with SHA-256 digests, and 4×/8× coordinate-ruled `.contact.png` generator.
+Objective: implement static and runtime guard rules (`no-math-random`, `no-external-assets`, `no-raw-hex`, `closed-palette`, `exact-dimensions`, `binary-alpha`, `bit-determinism`, `valid-anchors`) and wire the `pixelforge` CLI (`init`, `render`, `check`, `diff`).
 
-- [ ] Implement `IndexedSurface` → RGBA/PNG encoder (`src/export/png.ts`) enforcing binary alpha (`0` or `255`)
-- [ ] Implement bundle exporter (`src/export/bundle.ts`) for 1× state PNGs, horizontal spritesheets (`frames > 1`), emissive masks, and `manifest.json`
-- [ ] Implement 4×/8× coordinate-ruled contact sheet generator (`src/export/contact-sheet.ts`) with 1× dark/light previews, `(x,y)` ruler, state/frame matrix, and palette swatches
-- [ ] Add hermetic unit tests for PNG binary alpha, spritesheet dimensions, manifest SHA-256 determinism, and contact-sheet layout (`pnpm test` exits 0)
+- [ ] Implement static source and runtime guard rules (`src/guard/rules.ts`)
+- [ ] Implement guard runner and structured `file:line [rule] detail` reporter (`src/guard/runner.ts`)
+- [ ] Implement pixel-diff PNG generator (`src/export/diff.ts`) and wire `pixelforge` CLI commands (`init`, `render`, `check`, `diff`) in `src/cli/main.ts`
+- [ ] Add hermetic unit tests for guard violations, CLI exit codes, and pixel-diff output (`pnpm test` exits 0)
 
 ---
 
@@ -25,12 +25,12 @@ Objective: implement pure-Node PNG encoding (`fast-png`), 1× RGBA spritesheet e
 | `[00.0]` | Initial greenfield scaffolding, MVP design spec & ADRs | `initial` | 2026-11-24 |
 | `[00.1]` | Project Bootstrap & Toolchain Setup (`fast-png`, Biome, Vitest, TS strict, CLI skeleton) | `a07b3fe` | 2026-11-24 |
 | `[01.1]` | Core Indexed Framebuffer Engine (`IndexedSurface`, `StylePack`, PRNG, `isoBox`/`isoTile`) | `c729089` | 2026-11-24 |
+| `[01.2]` | Headless Exporter & Coordinate-Ruled Contact Sheet (`fast-png`, bundle, manifest, `.contact.png`) | `5934755` | 2026-11-24 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- `[02.1]` Static + runtime guard suite (`no-math-random`, `closed-palette`, `binary-alpha`, `bit-determinism`) and `pixelforge` CLI (`init`, `render`, `check`, `diff`)
 - `[02.2]` Hermetic agent skill `.agent/skills/create-pixel-asset/SKILL.md` codifying the planning + multimodal Visual Critic Loop protocol
 - `[03.1]` Pilot validation benchmark (`homelab-16bit` StylePack + `old_laptop`, `used_gpu_rig`, `ai_cluster_node`, and `bedroom_desk_iso` 320×200 scene)
 
