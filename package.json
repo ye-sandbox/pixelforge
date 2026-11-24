@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pixelforge": "node --experimental-strip-types ./dist/cli/main.js"
   },
   "dependencies": {
     "fast-png": "^8.0.0"
