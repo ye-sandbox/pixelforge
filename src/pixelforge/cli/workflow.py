@@ -9,6 +9,7 @@ from typing import Literal
 
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import StylePack
+from pixelforge.export.atlas import AtlasFormat
 from pixelforge.export.bundle import (
     ExportBundleOptions,
     ExportBundleResult,
@@ -108,6 +109,7 @@ def render_once(
     emissive: bool | None,
     lut: bool,
     indexed_ts: bool,
+    atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
     out: OutputFn,
@@ -132,6 +134,7 @@ def render_once(
         lut=lut,
         animate=animate,
         animate_format=animate_format,
+        atlas=atlas,
     )
 
     all_loaded: list[LoadedAsset] = []
@@ -327,6 +330,7 @@ def watch_loop(
     emissive: bool | None,
     lut: bool,
     indexed_ts: bool,
+    atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
     out: OutputFn,
@@ -349,6 +353,7 @@ def watch_loop(
             emissive=emissive,
             lut=lut,
             indexed_ts=indexed_ts,
+            atlas=atlas,
             scale=scale,
             variant=variant,
             out=out,
@@ -382,6 +387,7 @@ def watch_loop(
                     emissive=emissive,
                     lut=lut,
                     indexed_ts=indexed_ts,
+                    atlas=atlas,
                     scale=scale,
                     variant=variant,
                     out=out,

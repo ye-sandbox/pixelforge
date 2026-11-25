@@ -16,6 +16,13 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from pixelforge.core.builder import Asset
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import AnchorPoint, AssetSpec, HitboxRect, StylePack
+from pixelforge.export.atlas import (
+    AtlasFormat,
+    build_aseprite_atlas,
+    build_texturepacker_atlas,
+    resolve_atlas_image_name,
+    serialize_atlas_json,
+)
 from pixelforge.export.png import (
     frames_to_apng,
     frames_to_gif,
@@ -112,6 +119,7 @@ class ExportBundleOptions(BaseModel):
     lut: bool = False
     animate: bool = False
     animate_format: Literal["gif", "apng"] = "gif"
+    atlas: AtlasFormat | None = None
     token_overrides: dict[str, str | int] | None = None
 
 
@@ -353,6 +361,42 @@ def _export_spritesheet_outputs(
     return (files, sheet_name, sheet_emissive_name)
 
 
+def _export_atlas_outputs(
+    spec: AssetSpec,
+    style: StylePack,
+    rendered_frames: Sequence[RenderedFrame],
+    opts: ExportBundleOptions,
+    *,
+    has_sheet_png: bool,
+) -> dict[str, bytes]:
+    if opts.atlas is None:
+        return {}
+
+    files: dict[str, bytes] = {}
+    image_name = resolve_atlas_image_name(spec)
+    # INVARIANT: Multi-state single-frame assets do not emit `<id>_sheet.png` by default;
+    # emit the sheet PNG alongside the atlas metadata without altering `manifest.json`.
+    if not has_sheet_png and image_name == f"{spec.id}_sheet.png":
+        sheet_surface = build_spritesheet_surface(spec, rendered_frames)
+        files[image_name] = rgba_to_png(
+            surface_to_rgba(sheet_surface, style, variant=opts.variant, scale=opts.scale)
+        )
+
+    if opts.atlas in ("aseprite", "all"):
+        aseprite_doc = build_aseprite_atlas(
+            spec, rendered_frames, scale=opts.scale, image_name=image_name
+        )
+        files[f"{spec.id}.aseprite.json"] = serialize_atlas_json(aseprite_doc)
+
+    if opts.atlas in ("texturepacker", "all"):
+        tp_doc = build_texturepacker_atlas(
+            spec, rendered_frames, scale=opts.scale, image_name=image_name
+        )
+        files[f"{spec.id}.texturepacker.json"] = serialize_atlas_json(tp_doc)
+
+    return files
+
+
 def export_asset_bundle(
     asset: AssetModule,
     style: StylePack,
@@ -385,7 +429,14 @@ def export_asset_bundle(
         opts,
         include_emissive=include_emissive,
     )
-    files = {**state_out.files, **sheet_files}
+    atlas_files = _export_atlas_outputs(
+        spec,
+        style,
+        rendered_frames,
+        opts,
+        has_sheet_png=sheet_name is not None,
+    )
+    files = {**state_out.files, **sheet_files, **atlas_files}
 
     lut_name: str | None = None
     if opts.lut:

@@ -415,3 +415,111 @@ def test_cli_compose_mounts_props_and_validates_anchors(
     assert bad_rc == 1
     bad_captured = capsys.readouterr()
     assert "Anchor 'nonexistent_anchor' not found" in bad_captured.err
+
+
+def test_cli_compose_validates_perspective(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `compose` warns on perspective mismatch and fails under `--strict-perspective`."""
+    repo_root = Path(__file__).resolve().parents[2]
+    warn_rc = main(
+        [
+            "compose",
+            "bedroom_desk_iso",
+            "--mount",
+            "old_laptop@hardware_0:foot",
+            "--out",
+            str(tmp_path / "warn"),
+            "--root",
+            str(repo_root),
+        ]
+    )
+    assert warn_rc == 0
+    warn_captured = capsys.readouterr()
+    assert "warning: Prop 'old_laptop' has perspective 'front-2.5d'" in warn_captured.out
+
+    strict_rc = main(
+        [
+            "compose",
+            "bedroom_desk_iso",
+            "--mount",
+            "old_laptop@hardware_0:foot",
+            "--strict-perspective",
+            "--out",
+            str(tmp_path / "strict"),
+            "--root",
+            str(repo_root),
+        ]
+    )
+    assert strict_rc == 1
+    strict_captured = capsys.readouterr()
+    assert "Prop 'old_laptop' has perspective 'front-2.5d'" in strict_captured.err
+
+    iso_rc = main(
+        [
+            "compose",
+            "bedroom_desk_iso",
+            "--mount",
+            "old_laptop_iso@hardware_0:foot",
+            "--mount",
+            "used_gpu_rig_iso@hardware_1:foot",
+            "--mount",
+            "ai_cluster_node_iso@hardware_2:foot",
+            "--state",
+            "night",
+            "--strict-bounds",
+            "--strict-perspective",
+            "--out",
+            str(tmp_path / "iso"),
+            "--root",
+            str(repo_root),
+        ]
+    )
+    assert iso_rc == 0
+    iso_captured = capsys.readouterr()
+    assert "3 prop(s)" in iso_captured.out
+    assert "warning:" not in iso_captured.out
+
+
+def test_cli_render_and_watch_with_atlas_flags(tmp_path: Path) -> None:
+    """Verify `render --atlas all` and `watch --atlas aseprite` emit atlas JSON files."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    out_dir = tmp_path / "dist"
+
+    rc = main(["render", "--root", str(tmp_path), "--out", str(out_dir), "--atlas", "all"])
+    assert rc == 0
+
+    aseprite_path = out_dir / "sprites" / "example_crate.aseprite.json"
+    tp_path = out_dir / "sprites" / "example_crate.texturepacker.json"
+    assert aseprite_path.is_file()
+    assert tp_path.is_file()
+
+    aseprite_doc = json.loads(aseprite_path.read_text(encoding="utf-8"))
+    assert aseprite_doc["meta"]["image"] == "example_crate_idle.png"
+    assert aseprite_doc["meta"]["frameTags"] == [
+        {"name": "idle", "from": 0, "to": 0, "direction": "forward"}
+    ]
+
+    tp_doc = json.loads(tp_path.read_text(encoding="utf-8"))
+    assert tp_doc["animations"] == {"idle": ["example_crate/idle/0"]}
+
+    watch_out = tmp_path / "watch_dist"
+    watch_rc = main(
+        [
+            "watch",
+            "--root",
+            str(tmp_path),
+            "--out",
+            str(watch_out),
+            "--atlas",
+            "aseprite",
+            "--interval",
+            "0.01",
+            "--max-cycles",
+            "0",
+        ]
+    )
+    assert watch_rc == 0
+    assert (watch_out / "sprites" / "example_crate.aseprite.json").is_file()
+    assert not (watch_out / "sprites" / "example_crate.texturepacker.json").exists()

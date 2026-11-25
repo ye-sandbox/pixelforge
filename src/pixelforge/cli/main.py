@@ -89,6 +89,7 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         emissive=args.emissive,
         lut=bool(args.lut),
         indexed_ts=bool(args.indexed_ts),
+        atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
         out=_out,
@@ -123,6 +124,7 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         emissive=emissive,
         lut=bool(args.lut),
         indexed_ts=bool(args.indexed_ts),
+        atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
         out=_out,
@@ -263,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
     )
+    render_p.add_argument(
+        "--atlas",
+        choices=("aseprite", "texturepacker", "all"),
+        default=None,
+        help="Emit Aseprite JSON and/or TexturePacker atlas metadata alongside sprites",
+    )
     render_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     render_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
     render_p.add_argument("--root", default=None, help="Project root directory")
@@ -294,6 +302,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--indexed-ts",
         action="store_true",
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
+    )
+    watch_p.add_argument(
+        "--atlas",
+        choices=("aseprite", "texturepacker", "all"),
+        default=None,
+        help="Emit Aseprite JSON and/or TexturePacker atlas metadata alongside sprites",
     )
     watch_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     watch_p.add_argument("--variant", default=None, help="Optional StylePack variant name")

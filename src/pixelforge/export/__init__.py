@@ -1,5 +1,13 @@
 """Export pipeline for PNGs, spritesheets, emissive masks, LUTs, indexed TS, and manifests."""
 
+from pixelforge.export.atlas import (
+    AtlasFormat,
+    AtlasFrameProtocol,
+    build_aseprite_atlas,
+    build_texturepacker_atlas,
+    resolve_atlas_image_name,
+    serialize_atlas_json,
+)
 from pixelforge.export.bundle import (
     AssetModule,
     ExportBundleOptions,
@@ -65,6 +73,8 @@ from pixelforge.export.svelte_types import generate_svelte_manifest_dts
 
 __all__ = [
     "AssetModule",
+    "AtlasFormat",
+    "AtlasFrameProtocol",
     "ContactSheetMetrics",
     "ContactSheetOptions",
     "ContactSheetResult",
@@ -84,8 +94,10 @@ __all__ = [
     "SceneMountSpec",
     "SceneSheetResult",
     "assert_binary_alpha",
+    "build_aseprite_atlas",
     "build_manifest_document",
     "build_spritesheet_surface",
+    "build_texturepacker_atlas",
     "choose_zoom",
     "compose_scene",
     "compute_surface_metrics",
@@ -104,7 +116,9 @@ __all__ = [
     "generate_surface_diff",
     "generate_svelte_manifest_dts",
     "render_asset_frames",
+    "resolve_atlas_image_name",
     "rgba_to_png",
+    "serialize_atlas_json",
     "style_to_lut_png",
     "style_to_lut_rgba",
     "surface_to_indexed_png",
