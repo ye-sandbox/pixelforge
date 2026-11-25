@@ -423,14 +423,15 @@ def generate_contact_sheet(
             _draw_checkerboard(
                 canvas, emit_x, row_y, cell_w, cell_h, _CHECK_DARK_A, _CHECK_DARK_B, 4
             )
-            emit_rgba = surface_to_rgba(
-                by_key[(state, 0)].surface,
-                style,
-                variant=opts.variant,
-                scale=cell_scale,
-                emissive_only=True,
-            )
-            _composite_rgba(canvas, emit_rgba, emit_x, row_y)
+            for frame_idx in range(spec.frames):
+                emit_rgba = surface_to_rgba(
+                    by_key[(state, frame_idx)].surface,
+                    style,
+                    variant=opts.variant,
+                    scale=cell_scale,
+                    emissive_only=True,
+                )
+                _composite_rgba(canvas, emit_rgba, emit_x, row_y)
 
     # Variant strip (if declared)
     if variant_names:

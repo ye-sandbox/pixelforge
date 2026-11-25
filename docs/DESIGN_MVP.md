@@ -9,6 +9,9 @@ type: architecture-design
 
 # `pixelforge` — MVP Design & Architecture Specification
 
+> [!WARNING]
+> **Superseded / Archived:** This V1 TypeScript MVP specification has been superseded by [`docs/DESIGN_V2.md`](DESIGN_V2.md) (Python `build123d`-style architecture). The V1 TypeScript implementation is preserved only on branch `archive/v1-ts`.
+
 > **Mission:** Build a deterministic, code-drawn indexed pixel art generator (`@pixelforge/core` + CLI/SDK) paired with a closed-loop **multimodal AI agent Visual Critic workflow** that produces production-ready PNGs, animated spritesheets, emissive masks, and typed `manifest.json` metadata with zero mixels.
 
 ---

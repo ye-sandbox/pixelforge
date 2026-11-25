@@ -46,7 +46,7 @@ Full V2 specification lives in [`docs/DESIGN_V2.md`](../docs/DESIGN_V2.md). High
 ## Gotchas & Pitfalls
 
 - **Transparent Index Sentinel (`255`):** Never allocate palette color index `255` in any `StylePack`; `IndexedSurface` treats `255` as transparent (`alpha = 0`) across all drawing, blitting, masking, and outline ops.
-- **Keep Emissive Tokens Separate from Paint Tokens:** Never reuse an `emissive`-flagged token (like `WINDOW_SKY`) for non-glowing painted surfaces (like blue keycaps or badges), or they will bleed into WebGL2 bloom masks.
+- **Keep Emissive Tokens Separate from Paint Tokens:** Never reuse an `emissive`-flagged token (like `SOLAR_L`, `LED_C`, or `VISOR_C`) for non-glowing painted surfaces (like blue keycaps, badges, or `WINDOW_SKY`), or they will bleed into WebGL2 bloom masks.
 - **Avoid Pure-Python Per-Pixel Loops in Large Assets:** Prefer vectorized core primitives (`plane.rect`, `iso_box`, `dither`, `scatter`, `spr`) backed by `numpy.ndarray(uint8)` so renders stay `< 40 ms`.
 - **Git Hygiene for Scratch Visuals:** Contact sheets (`.pixelforge/sheets/`), diffs (`.pixelforge/diffs/`), animated previews (`.pixelforge/previews/`), and reference photos MUST stay untracked (`.pixelforge/` is git-ignored). Never commit third-party reference photos.
 - **No Browser Required for Asset Compilation:** Keep compilation 100% headless in Python (`numpy` + `Pillow`). Live preview in Svelte 5 uses `pixelforge watch --out <svelte-app>/static/sprites` (or `--indexed-ts --out <svelte-app>/src/lib/gfx/generated` for CPU indexed framebuffers).

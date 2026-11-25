@@ -25,7 +25,11 @@ def test_cli_init_and_check(tmp_path: Path) -> None:
     assert main(["init", "--root", str(tmp_path)]) == 0
     assert (tmp_path / "styles" / "homelab_16bit.style.py").is_file()
     assert (tmp_path / "assets" / "example_crate.asset.py").is_file()
-    assert (tmp_path / ".env.example").is_file()
+    env_example = tmp_path / ".env.example"
+    assert env_example.is_file()
+    env_text = env_example.read_text(encoding="utf-8")
+    assert "PIXELFORGE_PREVIEWS_DIR=.pixelforge/previews" in env_text
+    assert "PIXELFORGE_DIFFS_DIR=.pixelforge/diffs" in env_text
 
     assert main(["check", "--root", str(tmp_path)]) == 0
 

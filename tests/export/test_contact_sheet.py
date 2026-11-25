@@ -108,6 +108,8 @@ def test_contact_sheet_emissive_column_renders_only_emissive_pixels() -> None:
         a.rect(2, 2, 12, 12, a.pal.CHASSIS_MID_GREY)
         if a.state == "healthy":
             a.put(8, 8, a.pal.STATUS_CYAN_GLOW)
+            if a.frame == 1:
+                a.put(10, 10, a.pal.STATUS_CYAN_GLOW)
 
     asset = LoadedAsset(SPEC=spec, render=render)
     res = generate_contact_sheet(asset, style, ContactSheetOptions(zoom=4, include_variants=False))
@@ -135,6 +137,10 @@ def test_contact_sheet_emissive_column_renders_only_emissive_pixels() -> None:
     # Emissive pixel at (8, 8) -> scaled 2x at (+16, +16) in healthy row must be cyan (#39c5cf)
     cyan_rgb = tuple(int(c) for c in res.rgba[healthy_row_y + 16, emit_x + 16, :3])
     assert cyan_rgb == (0x39, 0xC5, 0xCF)
+
+    # Blinking emissive pixel active only on frame 1 at (10, 10) -> (+20, +20) must also appear
+    blink_rgb = tuple(int(c) for c in res.rgba[healthy_row_y + 20, emit_x + 20, :3])
+    assert blink_rgb == (0x39, 0xC5, 0xCF)
 
     # Non-emissive pixel at (3, 3) -> scaled 2x at (+6, +6) must be dark checkerboard
     non_emit_rgb = tuple(int(c) for c in res.rgba[healthy_row_y + 6, emit_x + 6, :3])

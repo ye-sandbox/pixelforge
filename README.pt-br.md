@@ -63,6 +63,8 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 | :--- | :--- | :--- | :--- |
 | `PIXELFORGE_OUT_DIR` | Diretório de saída para PNGs exportados, spritesheets, máscaras emissivas, `manifest.json`, `manifest.d.ts` e `indexed/` | `dist` | Não |
 | `PIXELFORGE_SHEETS_DIR` | Diretório de folhas efêmeras `.contact.png` de crítica visual (ignorado no Git) | `.pixelforge/sheets` | Não |
+| `PIXELFORGE_PREVIEWS_DIR` | Diretório de prévias animadas efêmeras `.gif` (ignorado no Git) | `.pixelforge/previews` | Não |
+| `PIXELFORGE_DIFFS_DIR` | Diretório de PNGs efêmeros de diff de pixels gerados por `pixelforge diff` (ignorado no Git) | `.pixelforge/diffs` | Não |
 | `PIXELFORGE_DEFAULT_STYLE` | Identificador padrão de `StylePack` usado pelo comando `pixelforge init` | `homelab-16bit` | Não |
 | `LLM_BASE_URL` | Endpoint opcional de gateway OpenAI v1 (`hydra-llm-router`) para modo crítico automatizado na Fase 3 | `http://127.0.0.1:3000/v1` | Não |
 | `LLM_API_KEY` | Token opcional do gateway quando o modo crítico automatizado da Fase 3 estiver ativo | `sk-replace-with-hydra-tier-token` | Apenas no modo automatizado (Fase 3) |

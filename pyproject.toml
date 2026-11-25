@@ -59,7 +59,7 @@ ignore = ["S603"]
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["src", "tests"]
+include = ["src", "tests", "styles", "assets"]
 venvPath = "."
 venv = ".venv"
 

@@ -13,7 +13,7 @@ This skill enforces:
 - **Zero Mixels:** All pixels are authored on an integer grid inside a fixed `height x width` `numpy.ndarray(dtype=np.uint8)` buffer.
 - **Binary Alpha:** Index `255` (`TRANSPARENT_INDEX`) maps strictly to alpha `0`; indices `0..254` map strictly to alpha `255`.
 - **Closed Semantic Palette:** Drawing uses named `StylePack` palette tokens (`P = a.pal`) only—raw `#rrggbb` strings are banned in `assets/**`.
-- **Keep Emissive Tokens Separate from Paint Tokens:** Never reuse an `emissive`-flagged token (such as `WINDOW_SKY`) for non-glowing painted surfaces, or they will bleed into WebGL2 bloom masks.
+- **Keep Emissive Tokens Separate from Paint Tokens:** Never reuse an `emissive`-flagged token (such as `SOLAR_L`, `LED_C`, or `VISOR_C`) for non-glowing painted surfaces (such as `WINDOW_SKY`), or they will bleed into WebGL2 bloom masks.
 - **Bit-for-Bit Determinism:** Identical `(state, frame, seed)` inputs produce identical SHA-256 pixel digests (`a.rng()` / `a.hashf()` / `mulberry32` only; `random`, `secrets`, `numpy.random`, `time`, and `datetime` are banned).
 - **Code-Coupled Metadata:** `a.anchor()` / `plane.anchor()` and `a.hitbox()` are emitted directly by the rendering code.
 - **Surgical Visual Critique:** Agents inspect coordinate-ruled `.contact.png` sheets (and `.gif` previews when `frames > 1`) and apply exact coordinate or parametric fixes over 2–4 passes rather than blind regeneration.
@@ -52,9 +52,9 @@ Before writing code, define the asset's structural blueprint:
    - `states` (e.g., `("healthy", "dusty", "faulty")` or `("day", "night")`), `frames` (`>= 1`), `fps` (required when `frames > 1`), `seed`.
 2. **Silhouette & Proportions:**
    - Ensure the outer contour reads unmistakably at `1×` native resolution.
-   - Reserve at least `1px` margin inside `[0, width) × [0, height)` when using `outline=P.OUTLINE` on `a.layer(...)` or `auto_outline()` so the contour is not clipped at the canvas edge.
+   - Reserve at least `1px` margin inside `[0, width) × [0, height)` when using `outline=P.INK` on `a.layer(...)` or `auto_outline()` so the contour is not clipped at the canvas edge.
 3. **Compositional Layer Order (`with a.layer(...)` / `with a.plane(...)`):**
-   - **Layer 1 — Base Silhouette / Chassis:** Primary volumes (`with a.layer("chassis", outline=P.OUTLINE):`, `with a.plane(p0, p1, p2) as p:`, `iso_box`, `iso_tile`, `rect`, `rounded_rect`).
+   - **Layer 1 — Base Silhouette / Chassis:** Primary volumes (`with a.layer("chassis", outline=P.INK):`, `with a.plane(p0, p1, p2) as p:`, `iso_box`, `iso_tile`, `rect`, `rounded_rect`).
    - **Layer 2 — Structural Recesses & Panels:** Screen bezels, vents, drive bays, keyboards, ports (`plane.rect`, `plane.grid`, `a.line`, `a.spr`).
    - **Layer 3 — Directional Shading & Edge Highlights:** Follow `style.lighting_angle` (default `"top-left"`: top/left faces lit, bottom/right faces shaded; `bevel=(light, dark)`, `edge_mask`, `sel_out`).
    - **Layer 4 — Material Texture & Procedural Detail:** Vectorized `dither` (`"bayer2"`, `"bayer4"`, `"checker"`) or `a.scatter(..., mask="opaque")` using deterministic PRNG (avoid pure-Python per-pixel loops on large canvases so renders stay `< 40 ms`).
@@ -165,24 +165,24 @@ def render(a: Asset) -> None:
     P = a.pal
 
     # 1. Isometric lid/top face with automatic outline on layer exit
-    with a.layer("lid", outline=P.OUTLINE):
+    with a.layer("lid", outline=P.INK):
         with a.plane(p0=(11, 4), p1=(26, 8), p2=(6, 15)) as lid:
-            lid.rect(0.0, 0.0, 1.0, 1.0, fill=P.SLATE_DARK, bevel=(P.SLATE_LIGHT, P.SHADOW))
-            lid.rect(0.12, 0.14, 0.76, 0.72, fill=P.METAL_MID)
+            lid.rect(0.0, 0.0, 1.0, 1.0, fill=P.WALL_D, bevel=(P.METAL_L, P.VOID))
+            lid.rect(0.12, 0.14, 0.76, 0.72, fill=P.METAL_M)
             lid.anchor("top", 0.5, 0.5)
 
     # 2. Front deck with extruded height and keyboard grid
-    with a.layer("deck", outline=P.OUTLINE):
+    with a.layer("deck", outline=P.INK):
         with a.plane(p0=(6, 16), p1=(26, 20), p2=(3, 24)) as deck:
-            deck.rect(0.0, 0.0, 1.0, 1.0, fill=P.SLATE_MID, extrude_y=3, side=P.SHADOW)
-            deck.grid(0.1, 0.12, 0.8, 0.45, cols=6, rows=2, color=P.SLATE_DARK)
+            deck.rect(0.0, 0.0, 1.0, 1.0, fill=P.WALL_M, extrude_y=3, side=P.VOID)
+            deck.grid(0.1, 0.12, 0.8, 0.45, cols=6, rows=2, color=P.WALL_D)
 
     # 3. Deterministic dusty speckles masked to opaque pixels
     if a.state == "dusty":
-        a.scatter(count=8, colors=(P.DUST_LIGHT, P.DUST_DARK), mask="opaque")
+        a.scatter(count=8, colors=(P.DUST_L, P.DUST_D), mask="opaque")
 
     # 4. Emissive status LED (blinks on frame 1 when healthy)
-    led_color = P.FAULT_RED if a.state == "faulty" else P.LED_GREEN if a.frame == 0 else P.SHADOW
+    led_color = P.LED_R if a.state == "faulty" else P.LED_G if a.frame == 0 else P.VOID
     a.put(22, 18, led_color)
     a.anchor("led", 22, 18)
     a.anchor("foot", 16, 27)

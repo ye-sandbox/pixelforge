@@ -143,6 +143,8 @@ def _cmd_init(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     env_content = (
         "PIXELFORGE_OUT_DIR=dist\n"
         "PIXELFORGE_SHEETS_DIR=.pixelforge/sheets\n"
+        "PIXELFORGE_PREVIEWS_DIR=.pixelforge/previews\n"
+        "PIXELFORGE_DIFFS_DIR=.pixelforge/diffs\n"
         f"PIXELFORGE_DEFAULT_STYLE={style_id}\n"
     )
     if _write_if_allowed(env_example, env_content, force=force):
