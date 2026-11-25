@@ -38,6 +38,14 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --frozen
 
+      - name: Setup Node.js and TypeScript compiler
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Install TypeScript compiler
+        run: npm install -g typescript@5
+
       - name: Lint and format check
         run: |
           uv run ruff check .
@@ -51,6 +59,16 @@ jobs:
 
       - name: Run asset guards
         run: uv run pixelforge check
+
+      - name: Validate generated TypeScript (tsc --noEmit)
+        run: |
+          TS_TMP="$(mktemp -d)"
+          trap 'rm -rf "$TS_TMP"' EXIT
+          uv run pixelforge render --emissive --lut --out "$TS_TMP/dist"
+          uv run pixelforge render --indexed-ts --out "$TS_TMP/indexed"
+          uv run pixelforge render --indexed-ts-lazy --out "$TS_TMP/indexed-lazy"
+          tsc --noEmit --strict --noUncheckedIndexedAccess --noUnusedLocals --noUnusedParameters --isolatedModules --target ES2022 --module ESNext --moduleResolution bundler "$TS_TMP/dist/manifest.d.ts" "$TS_TMP/indexed"/*.ts
+          tsc --noEmit --strict --noUncheckedIndexedAccess --noUnusedLocals --noUnusedParameters --isolatedModules --target ES2022 --module ESNext --moduleResolution bundler "$TS_TMP/indexed-lazy"/*.ts
 
       - name: Check git whitespace
         run: git diff-tree --check --root -m HEAD
