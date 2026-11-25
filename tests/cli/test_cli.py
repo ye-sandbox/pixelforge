@@ -7,7 +7,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from pixelforge.cli.main import main
 
@@ -114,3 +116,50 @@ def test_cli_watch_bounded_cycles(tmp_path: Path) -> None:
     assert rc == 0
     assert (tmp_path / "dist" / "manifest.json").is_file()
     assert (tmp_path / "dist" / "indexed" / "sprites.generated.ts").is_file()
+
+
+def test_cli_analyze_ref_ephemeral_and_guardrails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `analyze-ref` prints ephemeral sketch and refuses paths inside assets/ or styles/."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    ref_dir = tmp_path / ".pixelforge" / "refs"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+    ref_png = ref_dir / "crate_ref.png"
+    rgba = np.full((24, 32, 4), (56, 189, 248, 255), dtype=np.uint8)
+    Image.fromarray(rgba, mode="RGBA").save(ref_png, format="PNG")
+
+    before_assets = sorted((tmp_path / "assets").rglob("*"))
+    rc = main(
+        [
+            "analyze-ref",
+            str(ref_png),
+            "--style",
+            "homelab-16bit",
+            "--size",
+            "8x6",
+            "--root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "EPHEMERAL REFERENCE SKETCH" in out
+    assert "32x24" in out
+    assert "4:3" in out
+    assert "ACCENT_CYAN" in out
+    assert sorted((tmp_path / "assets").rglob("*")) == before_assets
+    assert not (tmp_path / "dist").exists()
+
+    # Guardrail: refuse reference images placed inside assets/ or styles/
+    bad_ref = tmp_path / "assets" / "forbidden_ref.png"
+    Image.fromarray(rgba, mode="RGBA").save(bad_ref, format="PNG")
+    assert main(["analyze-ref", str(bad_ref), "--root", str(tmp_path)]) == 1
+    assert "must not be placed in assets/ or styles/" in capsys.readouterr().err
+
+    # Guardrail: missing file and unknown style
+    assert main(["analyze-ref", str(ref_dir / "missing.png"), "--root", str(tmp_path)]) == 1
+    assert main(["analyze-ref", str(ref_png), "--style", "nope", "--root", str(tmp_path)]) == 1

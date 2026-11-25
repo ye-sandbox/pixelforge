@@ -1,4 +1,4 @@
-"""Thin CLI entrypoint for pixelforge (`init`, `render`, `check`, `diff`, `watch`)."""
+"""Thin CLI entrypoint for pixelforge commands."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pixelforge import __version__
 from pixelforge.cli.settings import PixelforgeSettings
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import StylePack
+from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
 from pixelforge.export.bundle import (
     ExportBundleOptions,
     ExportBundleResult,
@@ -432,6 +433,55 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     )
 
 
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    root = _resolve_root(args.root)
+    image_path = Path(args.image_path).resolve()
+
+    if not image_path.is_file():
+        _err(f"reference image not found: {image_path}")
+        return 1
+
+    # INVARIANT: Reference rasters must remain strictly ephemeral and must never live
+    # inside `assets/` or `styles/`.
+    for forbidden_dir in (root / "assets", root / "styles"):
+        if _is_within(image_path, forbidden_dir):
+            _err(
+                f"refusing reference image inside {forbidden_dir.name}/: "
+                "external rasters must not be placed in assets/ or styles/"
+            )
+            return 1
+
+    try:
+        size = parse_sketch_size(str(args.size))
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
+
+    style_id = str(args.style or settings.default_style)
+    styles = load_all_styles(root / "styles")
+    if style_id not in styles:
+        available = ", ".join(sorted(styles)) or "(none)"
+        _err(f"unknown style {style_id!r}; available in {root / 'styles'}: {available}")
+        return 1
+
+    try:
+        analysis = analyze_reference_image(image_path, styles[style_id], size=size)
+    except (OSError, ValueError) as exc:
+        _err(f"failed to analyze reference image {image_path}: {exc}")
+        return 1
+
+    _out(analysis.format_report())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pixelforge CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -500,6 +550,18 @@ def build_parser() -> argparse.ArgumentParser:
     watch_p.add_argument("--max-cycles", type=int, default=None, help="Stop after N poll cycles")
     watch_p.add_argument("--root", default=None, help="Project root directory")
 
+    analyze_p = sub.add_parser(
+        "analyze-ref",
+        help="Extract ephemeral aspect ratio, palette histogram, and ASCII sketch from a reference",
+    )
+    analyze_p.add_argument(
+        "image_path",
+        help="Local reference image path (must not be in assets/ or styles/)",
+    )
+    analyze_p.add_argument("--style", default=None, help="Target StylePack ID")
+    analyze_p.add_argument("--size", default="32x32", help="Sketch dimensions WxH (default: 32x32)")
+    analyze_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -522,6 +584,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_diff(args, settings)
     if args.command == "watch":
         return _cmd_watch(args, settings)
+    if args.command == "analyze-ref":
+        return _cmd_analyze_ref(args, settings)
 
     parser.print_help()
     return 2

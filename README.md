@@ -87,6 +87,9 @@ uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--sca
 
 # Watch .asset.py and .style.py files and hot-reload compiled outputs
 uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
+
+# Extract an ephemeral aspect ratio, palette histogram, and quantized ASCII sketch from a local reference image
+uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--root .]
 ```
 
 ## Svelte 5 Integration
