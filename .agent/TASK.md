@@ -8,10 +8,7 @@
 
 ## Active Task
 
-### `[13.1]` CI TypeScript Validation (`tsc --noEmit`)
-
-- [ ] Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`
-- [ ] Cover generated TypeScript compilation validation in CI / tests without breaking hermetic `uv run pytest`
+_All roadmap tasks in the current cycle are complete. Await new backlog items or human release trigger (`[99.1]`)._
 
 ---
 
@@ -40,6 +37,7 @@
 | `[10.1]` | Aseprite JSON & TexturePacker Atlas Export (`pixelforge.export.atlas`, `--atlas {aseprite,texturepacker,all}`) | `c148fba` | 2026-11-25 |
 | `[11.1]` | Catalog Scalability (`watch` Incremental Rebuild & Lazy `--indexed-ts`) | `fd9a338` | 2026-11-25 |
 | `[12.1]` | Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff) | `1690b36` | 2026-11-25 |
+| `[13.1]` | CI TypeScript Validation (`tsc --noEmit` for `manifest.d.ts` & `--indexed-ts`) | `6f5929f` | 2026-11-25 |
 
 ---
 
