@@ -66,3 +66,10 @@ type: architectural-decision-log
 - **Decision:** Adopt `numpy` (`>=2.5.0`), `pillow` (`>=13.0.0`), `pydantic` (`>=2.11.0`), `pydantic-settings` (`>=2.16.0`), `hatchling`, and `stdlib argparse` for the CLI parser, paired with `ruff` (`>=0.17.0`), `pyright` (`>=1.1.400`), `pytest` (`>=8.4.0`), and `pytest-socket` (`>=0.8.0`).
 - **Alternatives Considered:** `typer` (`0.29.2`) — offers declarative type-hinted subcommands and rich terminal formatting, but pulls in `rich`, `shellingham`, and `annotated-doc` with slower CLI startup and occasional strict `pyright` decorator friction for an AI-agent/CI-first compiler CLI.
 - **Consequences:** Zero extra CLI runtime dependencies, fast startup, strict `pyright` compatibility, and clean separation between `argparse` parsing and domain services in `core/`, `export/`, and `guard/`.
+
+### [2026-11-25] Automated Multimodal Critic in CI via `hydra-llm-router` + `httpx2`
+
+- **Context:** Task `[09.1]` introduces optional automated batch visual regression scoring on changed `.asset.py` / `.style.py` files in CI against the internal `hydra-llm-router` OpenAI v1 endpoint (`POST /v1/chat/completions`).
+- **Decision:** Add `httpx2` (`>=2.16.2`) as a project dependency, implement `pixelforge.guard.critic` restricted strictly to virtual model `fast` (`LLM_MODEL_FAST=fast`), wire `pixelforge critic` into the CLI, and run it in a dedicated `visual-critic` `self-hosted` job in `.github/workflows/ci.yml` gated to trusted repo branches/PRs (`continue-on-error: true` advisory mode) while keeping the primary `ubuntu-24.04` `ci` job isolated and deterministic.
+- **Alternatives Considered:** `stdlib urllib.request` (zero dependency, but requires manual JSON/status/timeout boilerplate and lacks `MockTransport` for clean hermetic `pytest` coverage under `--disable-socket`); adding `openai` SDK (heavier dependency tree for a single `POST /v1/chat/completions` call).
+- **Consequences:** Clean hermetic testability via `httpx2.MockTransport`, zero upstream provider coupling, and isolated homelab runner execution without impacting deterministic `ubuntu-24.04` CI.

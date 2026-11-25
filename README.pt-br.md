@@ -95,6 +95,9 @@ uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32
 
 # Compor props filhos sobre âncoras declaradas de uma cena pai e validar limites/oclusão
 uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--root .]
+
+# Pontuar assets alterados via crítico multimodal interno hydra-llm-router (OpenAI v1, modelo virtual 'fast')
+uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--json] [--root .]
 ```
 
 ## Integração com Svelte 5

@@ -95,6 +95,9 @@ uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32
 
 # Compose child prop assets onto declared parent scene anchors and validate bounds/occlusion
 uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--root .]
+
+# Score changed assets via internal hydra-llm-router multimodal critic (OpenAI v1, virtual model 'fast')
+uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--json] [--root .]
 ```
 
 ## Svelte 5 Integration

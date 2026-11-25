@@ -54,3 +54,44 @@ jobs:
 
       - name: Check git whitespace
         run: git diff-tree --check --root -m HEAD
+
+  visual-critic:
+    needs: ci
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: self-hosted
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup uv and Python 3.14
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: 'uv.lock'
+
+      - name: Install locked dependencies
+        run: uv sync --frozen
+
+      - name: Run multimodal visual critic on changed assets
+        env:
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://hydra-router.homelab.yegear.dev/v1' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL_FAST: fast
+        run: |
+          if [ -z "${LLM_API_KEY:-}" ]; then
+            echo "LLM_API_KEY secret not configured; skipping visual critic."
+            exit 0
+          fi
+          BASE_REF="HEAD~1"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          fi
+          uv run pixelforge critic --base "$BASE_REF" --threshold 70

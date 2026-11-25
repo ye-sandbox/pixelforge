@@ -9,9 +9,10 @@ from pathlib import Path
 
 from pixelforge import __version__
 from pixelforge.cli.scaffold import scaffold_project
-from pixelforge.cli.settings import PixelforgeSettings
+from pixelforge.cli.settings import HydraSettings, PixelforgeSettings
 from pixelforge.cli.workflow import (
     compose_scene_workflow,
+    critic_workflow,
     diff_asset,
     parse_mount_arg,
     render_once,
@@ -188,10 +189,30 @@ def _cmd_compose(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         frame=int(args.frame),
         variant=args.variant,
         strict_bounds=bool(args.strict_bounds),
+        strict_perspective=bool(args.strict_perspective),
         scale=int(args.scale),
         out_dir=_resolve_dir(root, settings.previews_dir, args.out),
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
         sheet=bool(args.sheet),
+        out=_out,
+        err=_err,
+    )
+
+
+def _cmd_critic(args: argparse.Namespace) -> int:
+    root = _resolve_root(args.root)
+    hydra = HydraSettings()
+    return critic_workflow(
+        root,
+        asset_id=args.asset_id,
+        base_ref=args.base,
+        variant=args.variant,
+        base_url=hydra.base_url,
+        api_key=hydra.api_key,
+        model=hydra.model_fast,
+        timeout_seconds=hydra.timeout_seconds,
+        threshold=int(args.threshold),
+        json_output=bool(args.json),
         out=_out,
         err=_err,
     )
@@ -311,10 +332,35 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Fail if any mounted prop clips outside the parent canvas",
     )
+    compose_p.add_argument(
+        "--strict-perspective",
+        action="store_true",
+        help="Fail if any mounted prop's perspective differs from the parent scene",
+    )
     compose_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     compose_p.add_argument("--out", default=None, help="Output directory for composed PNG")
     compose_p.add_argument("--sheet", action="store_true", help="Generate composed .contact.png")
     compose_p.add_argument("--root", default=None, help="Project root directory")
+
+    critic_p = sub.add_parser(
+        "critic",
+        help="Score assets via internal hydra-llm-router multimodal critic (OpenAI v1)",
+    )
+    critic_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
+    critic_p.add_argument(
+        "--base",
+        default=None,
+        help="Git ref baseline; when set, scores only changed assets/styles with diff context",
+    )
+    critic_p.add_argument(
+        "--threshold",
+        type=int,
+        default=70,
+        help="Minimum passing visual score 0-100 (default: 70)",
+    )
+    critic_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    critic_p.add_argument("--json", action="store_true", help="Emit JSON report")
+    critic_p.add_argument("--root", default=None, help="Project root directory")
 
     return parser
 
@@ -342,6 +388,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_analyze_ref(args, settings)
     if args.command == "compose":
         return _cmd_compose(args, settings)
+    if args.command == "critic":
+        return _cmd_critic(args)
 
     parser.print_help()
     return 2
