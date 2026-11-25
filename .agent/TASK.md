@@ -8,17 +8,13 @@
 
 ## Active Task
 
-### `[07.1]` Guard, CLI & Core Contract Bug Fixes
+### `[07.2]` Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync
 
-- [ ] Emit `duplicate-id` guard errors in `src/pixelforge/guard/runner.py` (and fail loudly in loaders) when multiple `.style.py` or `.asset.py` files declare the same ID
-- [ ] Emit `asset-not-found` error (exit code `1`) in `run_checks` when `pixelforge check <asset_id>` matches zero assets
-- [ ] Replace `manifest.json` + `manifest.d.ts` atomically once at the end of unfiltered `pixelforge render` (eliminating stale entries and O(N²) manifest rewrites) while preserving merge behavior for filtered `render <asset_id>`
-- [ ] Prevent silent `dist/indexed/` overwrite when `--indexed-ts` runs across multiple `StylePack`s (namespace per style slug when >1 style is compiled, preserving `dist/indexed/` for single-style runs)
-- [ ] Forward `ContactSheetOptions(variant=variant)` in `cli/main.py` when running `render --sheet --variant <name>`
-- [ ] Expose `--emissive` / `--no-emissive` (`BooleanOptionalAction`) and `--animate-format {gif,apng}` on `pixelforge render`
-- [ ] Expand AST `no-io-or-eval` guard in `src/pixelforge/guard/ast_rules.py` to block `sys`, `importlib`, `shutil`, `tempfile`, `socket`, `urllib`, `http`, and `builtins.*` calls in `assets/`
-- [ ] Move `Asset._layer_stack.append(...)` into `Layer.__enter__` in `src/pixelforge/core/builder.py` so unentered layers cannot corrupt the stack
-- [ ] Add regression tests covering every fix above and verify `ruff`, `pyright`, `pytest`, and `pixelforge check` pass
+- [ ] Composite emissive pixels across all frames of each state in `contact_sheet.py` so blinking LEDs active only on `frame >= 1` are visible in the emissive column
+- [ ] Add `"styles"` and `"assets"` to `[tool.pyright] include` in `pyproject.toml` so strict typechecking covers authored packs automatically
+- [ ] Fix `WINDOW_SKY` emissive drift and outdated V1 token names in `.agent/skills/create-pixel-asset/SKILL.md` and `.agent/NOTES.md`
+- [ ] Sync `PIXELFORGE_PREVIEWS_DIR` and `PIXELFORGE_DIFFS_DIR` across `.env.example`, `_cmd_init`, `README.md`, and `README.pt-br.md`
+- [ ] Add an explicit superseded/archived banner to `docs/DESIGN_MVP.md` pointing to `docs/DESIGN_V2.md`
 
 ---
 
@@ -38,18 +34,11 @@
 | `[06.1]` | Contact Sheet Emissive-Only Preview Column (`contact_sheet.py`) | `6f7287e` | 2026-11-25 |
 | `[06.2]` | Historical `StylePack` Resolution in `pixelforge diff` (`load_style_from_git`) | `5c1dedf` | 2026-11-25 |
 | `[06.3]` | Protect Filtered `render`/`watch --indexed-ts` Against Partial Bundle Overwrites | `cdfefa8` | 2026-11-25 |
+| `[07.1]` | Guard, CLI & Core Contract Bug Fixes | `3f1b3cb` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[07.2]` Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync
-
-- [ ] Composite emissive pixels across all frames of each state in `contact_sheet.py` so blinking LEDs active only on `frame >= 1` are visible in the emissive column
-- [ ] Add `"styles"` and `"assets"` to `[tool.pyright] include` in `pyproject.toml` so strict typechecking covers authored packs automatically
-- [ ] Fix `WINDOW_SKY` emissive drift and outdated V1 token names in `.agent/skills/create-pixel-asset/SKILL.md` and `.agent/NOTES.md`
-- [ ] Sync `PIXELFORGE_PREVIEWS_DIR` and `PIXELFORGE_DIFFS_DIR` across `.env.example`, `_cmd_init`, `README.md`, and `README.pt-br.md`
-- [ ] Add an explicit superseded/archived banner to `docs/DESIGN_MVP.md` pointing to `docs/DESIGN_V2.md`
 
 ### `[07.3]` GitHub Actions CI Workflow
 
