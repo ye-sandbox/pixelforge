@@ -8,7 +8,11 @@
 
 ## Active Task
 
-_None currently active (roadmap complete; ready for next milestone or release `[99.1]` upon instruction)._
+### `[09.1]` Automated Multimodal Critic in CI (`hydra-llm-router` + `httpx2`, `self-hosted`)
+
+- [ ] Design and implement batch visual regression scoring on changed assets via internal-only `hydra-llm-router` OpenAI v1 (`POST /v1/chat/completions`, virtual model `fast`) using `httpx2` (request explicit dependency/budget approval before adding `httpx2` to `pyproject.toml`)
+- [ ] Add a dedicated `self-hosted` homelab runner job in `.github/workflows/ci.yml` gated to trusted repo branches/PRs while keeping the main `ubuntu-24.04` CI job isolated and deterministic
+- [ ] Cover prompt/payload construction and response parsing with hermetic unit tests (`uv run pytest`)
 
 ---
 
@@ -32,12 +36,16 @@ _None currently active (roadmap complete; ready for next milestone or release `[
 | `[07.2]` | Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync | `ce23210` | 2026-11-25 |
 | `[07.3]` | GitHub Actions CI Workflow (`.github/workflows/ci.yml` with pinned SHAs, `uv` caching, Python 3.14) | `4245d1e` | 2026-11-25 |
 | `[90.1]` | Structural Refactoring & Helper Deduplication (`PaletteLookup.with_overrides`, `_canvas.py`, `orphan_pixel_mask`, CLI `scaffold.py`/`workflow.py`) | `ef0cd95` | 2026-11-25 |
+| `[08.1]` | Scene-Composition Helper & Anchor Prop Validation (`compose_scene`, `generate_scene_sheet`, `pixelforge compose`) | `6a821e9` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-_None currently queued._
+1. **`[10.1]` Aseprite JSON & TexturePacker Atlas Export** — Optional atlas metadata export alongside `manifest.json` + `manifest.d.ts` for third-party game engines (Godot, Phaser, PixiJS, Unity).
+2. **`[11.1]` Catalog Scalability (`watch` Incremental Rebuild & Lazy `--indexed-ts`)** — Dependency-tracked incremental recompilation in `pixelforge watch` and optional lazy decoding in generated `--indexed-ts` bundles for larger asset catalogs.
+3. **`[12.1]` Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff)** — Machine-readable `--json` diff summary plus anchor/hitbox coordinate delta detection against `--base`.
+4. **`[13.1]` CI TypeScript Validation (`tsc --noEmit`)** — Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`.
 
 ---
 
@@ -49,9 +57,4 @@ Release/tag only with explicit human request. When triggered, the ID is `[99.1]`
 
 ## Future Backlog / Ideas (Unprioritized)
 
-- Automated multimodal critic scoring via OpenAI v1 gateway (`hydra-llm-router`, using `httpx2`) for batch CI visual regressions
-- Optional Aseprite JSON / TexturePacker atlas export format alongside `manifest.json` + `manifest.d.ts`
-- Scene-composition helper allowing room assets (`bedroom_desk_iso`) to preview/validate child prop assets placed on declared anchors
-- Optional `--json` structured CLI output and anchor/hitbox metadata diffing in `pixelforge diff`
-- Incremental `pixelforge watch` recompilation and lazy decoding in `--indexed-ts` once asset catalogs grow beyond tens of sprites
-- Optional `tsc --noEmit` validation job in CI for generated `manifest.d.ts` and `--indexed-ts` TypeScript modules
+_None currently queued (all items promoted to the active cycle above)._
