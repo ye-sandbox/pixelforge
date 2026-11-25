@@ -367,3 +367,51 @@ def test_cli_render_no_emissive_animate_apng_and_sheet_variant(tmp_path: Path) -
     sheet_rgba = np.asarray(Image.open(sheet_path).convert("RGBA"), dtype=np.uint8)
     amber_mask = np.all(sheet_rgba == np.array([255, 170, 0, 255], dtype=np.uint8), axis=2)
     assert int(np.count_nonzero(amber_mask)) > 0
+
+
+def test_cli_compose_mounts_props_and_validates_anchors(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `compose` mounts props onto parent anchors and rejects invalid anchors."""
+    repo_root = Path(__file__).resolve().parents[2]
+    rc = main(
+        [
+            "compose",
+            "bedroom_desk_iso",
+            "--mount",
+            "old_laptop@hardware_0:foot",
+            "--mount",
+            "ai_cluster_node@hardware_2",
+            "--state",
+            "night",
+            "--strict-bounds",
+            "--sheet",
+            "--out",
+            str(tmp_path / "composed"),
+            "--root",
+            str(repo_root),
+        ]
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "composed " in captured.out
+    assert "2 prop(s)" in captured.out
+    assert (tmp_path / "composed" / "bedroom_desk_iso_night_composed.png").is_file()
+    sheet_path = repo_root / ".pixelforge" / "sheets" / "bedroom_desk_iso_composed.contact.png"
+    assert sheet_path.is_file()
+    sheet_path.unlink(missing_ok=True)
+
+    bad_rc = main(
+        [
+            "compose",
+            "bedroom_desk_iso",
+            "--mount",
+            "old_laptop@nonexistent_anchor",
+            "--root",
+            str(repo_root),
+        ]
+    )
+    assert bad_rc == 1
+    bad_captured = capsys.readouterr()
+    assert "Anchor 'nonexistent_anchor' not found" in bad_captured.err

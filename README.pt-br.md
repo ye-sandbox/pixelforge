@@ -92,6 +92,9 @@ uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [
 
 # Extrair proporção, histograma de paleta e rascunho ASCII quantizado efêmeros de uma imagem de referência local
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--root .]
+
+# Compor props filhos sobre âncoras declaradas de uma cena pai e validar limites/oclusão
+uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--root .]
 ```
 
 ## Integração com Svelte 5

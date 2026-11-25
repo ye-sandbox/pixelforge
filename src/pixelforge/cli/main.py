@@ -10,7 +10,13 @@ from pathlib import Path
 from pixelforge import __version__
 from pixelforge.cli.scaffold import scaffold_project
 from pixelforge.cli.settings import PixelforgeSettings
-from pixelforge.cli.workflow import diff_asset, render_once, watch_loop
+from pixelforge.cli.workflow import (
+    compose_scene_workflow,
+    diff_asset,
+    parse_mount_arg,
+    render_once,
+    watch_loop,
+)
 from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
 from pixelforge.guard.runner import load_all_styles, run_checks
 
@@ -166,6 +172,31 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
     return 0
 
 
+def _cmd_compose(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    root = _resolve_root(args.root)
+    try:
+        mounts = [parse_mount_arg(str(raw)) for raw in (args.mount or ())]
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
+
+    return compose_scene_workflow(
+        root,
+        parent_id=str(args.parent_id),
+        mounts=mounts,
+        state=args.state,
+        frame=int(args.frame),
+        variant=args.variant,
+        strict_bounds=bool(args.strict_bounds),
+        scale=int(args.scale),
+        out_dir=_resolve_dir(root, settings.previews_dir, args.out),
+        sheets_dir=_resolve_dir(root, settings.sheets_dir),
+        sheet=bool(args.sheet),
+        out=_out,
+        err=_err,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pixelforge CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -261,6 +292,30 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_p.add_argument("--size", default="32x32", help="Sketch dimensions WxH (default: 32x32)")
     analyze_p.add_argument("--root", default=None, help="Project root directory")
 
+    compose_p = sub.add_parser(
+        "compose",
+        help="Mount child prop assets onto declared parent scene anchors and render preview",
+    )
+    compose_p.add_argument("parent_id", help="Parent scene asset ID (e.g. bedroom_desk_iso)")
+    compose_p.add_argument(
+        "--mount",
+        action="append",
+        default=[],
+        help="Mount spec 'prop_id@anchor[:prop_anchor]' (repeatable)",
+    )
+    compose_p.add_argument("--state", default=None, help="Parent scene state")
+    compose_p.add_argument("--frame", type=int, default=0, help="Parent scene frame (default: 0)")
+    compose_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    compose_p.add_argument(
+        "--strict-bounds",
+        action="store_true",
+        help="Fail if any mounted prop clips outside the parent canvas",
+    )
+    compose_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
+    compose_p.add_argument("--out", default=None, help="Output directory for composed PNG")
+    compose_p.add_argument("--sheet", action="store_true", help="Generate composed .contact.png")
+    compose_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -285,6 +340,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_watch(args, settings)
     if args.command == "analyze-ref":
         return _cmd_analyze_ref(args, settings)
+    if args.command == "compose":
+        return _cmd_compose(args, settings)
 
     parser.print_help()
     return 2

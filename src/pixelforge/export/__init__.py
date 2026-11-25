@@ -51,6 +51,16 @@ from pixelforge.export.png import (
     surface_to_png,
     surface_to_rgba,
 )
+from pixelforge.export.scene import (
+    MountedPropPlacement,
+    SceneCompositionError,
+    SceneCompositionResult,
+    SceneCompositionSpec,
+    SceneMountSpec,
+    SceneSheetResult,
+    compose_scene,
+    generate_scene_sheet,
+)
 from pixelforge.export.svelte_types import generate_svelte_manifest_dts
 
 __all__ = [
@@ -66,11 +76,18 @@ __all__ = [
     "FrameMetadataEntry",
     "IndexedTsExportResult",
     "LoadedAsset",
+    "MountedPropPlacement",
     "RenderedFrame",
+    "SceneCompositionError",
+    "SceneCompositionResult",
+    "SceneCompositionSpec",
+    "SceneMountSpec",
+    "SceneSheetResult",
     "assert_binary_alpha",
     "build_manifest_document",
     "build_spritesheet_surface",
     "choose_zoom",
+    "compose_scene",
     "compute_surface_metrics",
     "decode_png_to_rgba",
     "decode_rle_bytes",
@@ -82,6 +99,7 @@ __all__ = [
     "generate_indexed_manifest_ts",
     "generate_palette_ts",
     "generate_pixel_diff",
+    "generate_scene_sheet",
     "generate_sprites_ts",
     "generate_surface_diff",
     "generate_svelte_manifest_dts",

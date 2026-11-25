@@ -92,6 +92,9 @@ uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [
 
 # Extract an ephemeral aspect ratio, palette histogram, and quantized ASCII sketch from a local reference image
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--root .]
+
+# Compose child prop assets onto declared parent scene anchors and validate bounds/occlusion
+uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--root .]
 ```
 
 ## Svelte 5 Integration

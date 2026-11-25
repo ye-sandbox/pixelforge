@@ -31,7 +31,7 @@ Full V2 specification lives in [`docs/DESIGN_V2.md`](../docs/DESIGN_V2.md). High
 | Animated Preview (`.pixelforge/previews/<id>_<state>.gif`) | `pixelforge.export.bundle` | Human / Agent Critic | Optional (`--animate`): looping nearest-neighbor GIF/APNG when `frames > 1` | Ephemeral QA artifact (git-ignored under `.pixelforge/`) |
 | Manifest (`dist/manifest.json` + `dist/manifest.d.ts`) | `pixelforge.export.bundle` & `svelte_types` | Svelte 5 Game / Engines | `{ id, styleId, width, height, states, frames, fps, files, anchors[], hitboxes[], sha256 }` + TS `.d.ts` | Generated `.d.ts` provides strict compile-time autocomplete in Svelte 5 |
 | Contact Sheet (`.pixelforge/sheets/<id>.contact.png`) | `pixelforge.export.contact_sheet` | Multimodal Agent Critic / Human | 1× dark/light + zoomed grid with `(x,y)` ruler + anchors + hitboxes + state/frame matrix + full swatches + metrics | Ephemeral visual-critic artifact (git-ignored under `.pixelforge/`) |
-| CLI (`pixelforge`) | `pixelforge.cli.main` | Developers / AI Agents / CI | `init`, `render`, `check`, `diff`, `watch`, `analyze-ref` | Exit `0` on pass; `file:line [rule] detail` on guard violations; honors `PIXELFORGE_*` env vars |
+| CLI (`pixelforge`) | `pixelforge.cli.main` | Developers / AI Agents / CI | `init`, `render`, `check`, `diff`, `watch`, `analyze-ref`, `compose` | Exit `0` on pass; `file:line [rule] detail` on guard violations; honors `PIXELFORGE_*` env vars |
 
 ### 2. Multi-Agent Collaboration Contracts (Optional)
 
