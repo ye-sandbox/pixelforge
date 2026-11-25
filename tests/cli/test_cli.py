@@ -211,3 +211,60 @@ def test_cli_analyze_ref_ephemeral_and_guardrails(
     # Guardrail: missing file and unknown style
     assert main(["analyze-ref", str(ref_dir / "missing.png"), "--root", str(tmp_path)]) == 1
     assert main(["analyze-ref", str(ref_png), "--style", "nope", "--root", str(tmp_path)]) == 1
+
+
+def _add_sibling_asset(root: Path, asset_id: str) -> None:
+    starter = (root / "assets" / "example_crate.asset.py").read_text(encoding="utf-8")
+    sibling = starter.replace('id="example_crate"', f'id="{asset_id}"')
+    (root / "assets" / f"{asset_id}.asset.py").write_text(sibling, encoding="utf-8")
+
+
+def test_cli_filtered_indexed_ts_preserves_sibling_assets(tmp_path: Path) -> None:
+    """Verify filtered `render`/`watch <asset_id> --indexed-ts` never drops sibling assets."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    _add_sibling_asset(tmp_path, "sibling_crate")
+
+    out_dir = tmp_path / "dist"
+    assert main(["render", "--root", str(tmp_path), "--indexed-ts"]) == 0
+    full_sprites = (out_dir / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    full_manifest = (out_dir / "indexed" / "manifest.generated.ts").read_text(encoding="utf-8")
+    assert '"example_crate"' in full_sprites
+    assert '"sibling_crate"' in full_sprites
+    assert '"example_crate"' in full_manifest
+    assert '"sibling_crate"' in full_manifest
+
+    # Remove sibling PNG to verify filtered render only writes PNGs for the requested asset
+    sibling_png = out_dir / "sprites" / "sibling_crate_idle.png"
+    sibling_png.unlink()
+
+    assert main(["render", "example_crate", "--root", str(tmp_path), "--indexed-ts"]) == 0
+    assert not sibling_png.exists()
+    assert (out_dir / "sprites" / "example_crate_idle.png").is_file()
+    filtered_sprites = (out_dir / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    filtered_manifest = (out_dir / "indexed" / "manifest.generated.ts").read_text(encoding="utf-8")
+    assert '"example_crate"' in filtered_sprites
+    assert '"sibling_crate"' in filtered_sprites
+    assert '"example_crate"' in filtered_manifest
+    assert '"sibling_crate"' in filtered_manifest
+
+    # Same invariant holds for `watch <asset_id> --indexed-ts`
+    rc_watch = main(
+        [
+            "watch",
+            "example_crate",
+            "--root",
+            str(tmp_path),
+            "--max-cycles",
+            "1",
+            "--interval",
+            "0.01",
+            "--indexed-ts",
+        ]
+    )
+    assert rc_watch == 0
+    watch_sprites = (out_dir / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    watch_manifest = (out_dir / "indexed" / "manifest.generated.ts").read_text(encoding="utf-8")
+    assert '"example_crate"' in watch_sprites
+    assert '"sibling_crate"' in watch_sprites
+    assert '"example_crate"' in watch_manifest
+    assert '"sibling_crate"' in watch_manifest

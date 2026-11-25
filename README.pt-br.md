@@ -95,7 +95,7 @@ uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32
 ## Integração com Svelte 5
 
 - **Fluxo Padrão PNG + WebGL2:** Execute `pixelforge render --emissive --lut` (ou `pixelforge watch --out ../my-svelte-game/static/sprites`) para emitir `manifest.json` e `manifest.d.ts` com tipagem TypeScript estrita para IDs de sprites, estados, contagem de frames, FPS, âncoras e hitboxes.
-- **Fluxo Framebuffer Indexado em CPU (`--indexed-ts`):** Passe `--indexed-ts` para gerar `dist/indexed/palette.generated.ts` (`PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, `REFL`), `dist/indexed/sprites.generated.ts` (buffers `Uint8Array` em RLE/base64 com `255 = transparente`) e `dist/indexed/manifest.generated.ts` para composição direta via `Framebuffer.blit()`.
+- **Fluxo Framebuffer Indexado em CPU (`--indexed-ts`):** Passe `--indexed-ts` para gerar `dist/indexed/palette.generated.ts` (`PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, `REFL`), `dist/indexed/sprites.generated.ts` (buffers `Uint8Array` em RLE/base64 com `255 = transparente`) e `dist/indexed/manifest.generated.ts` para composição direta via `Framebuffer.blit()`. Execuções filtradas `render <asset_id> --indexed-ts` e `watch <asset_id> --indexed-ts` ainda compilam todos os assets irmãos do `StylePack` afetado em `dist/indexed/` para que execuções parciais nunca trunquem o pacote TypeScript.
 
 ## Desenvolvimento
 

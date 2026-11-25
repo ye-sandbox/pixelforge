@@ -169,6 +169,28 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def _compile_style_indexed_bundles(
+    style: StylePack,
+    rendered_bundles: list[ExportBundleResult],
+    all_loaded: Sequence[LoadedAsset],
+    options: ExportBundleOptions,
+) -> list[ExportBundleResult]:
+    """Return full `StylePack` asset bundles in discovery order for `--indexed-ts`."""
+    # INVARIANT: `dist/indexed/` is a single-bundle TypeScript module per StylePack;
+    # filtered `render`/`watch <asset_id>` must still include sibling assets of that style
+    # so `sprites.generated.ts` and `manifest.generated.ts` are never silently truncated.
+    by_id = {bundle.manifest.id: bundle for bundle in rendered_bundles}
+    full_bundles: list[ExportBundleResult] = []
+    for loaded in all_loaded:
+        if loaded.SPEC.style_id != style.id:
+            continue
+        existing = by_id.get(loaded.SPEC.id)
+        full_bundles.append(
+            existing if existing is not None else export_asset_bundle(loaded, style, options)
+        )
+    return full_bundles
+
+
 def _render_once(
     root: Path,
     *,
@@ -198,11 +220,13 @@ def _render_once(
         animate=animate,
     )
 
+    all_loaded: list[LoadedAsset] = []
     bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
     rendered_count = 0
 
     for asset_path in asset_files:
         loaded = load_asset_module(asset_path)
+        all_loaded.append(loaded)
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
 
@@ -237,7 +261,12 @@ def _render_once(
 
     if indexed_ts:
         for style, style_bundles in bundles_by_style.values():
-            ts_result = export_indexed_ts(style_bundles, style)
+            full_bundles = (
+                _compile_style_indexed_bundles(style, style_bundles, all_loaded, options)
+                if asset_id is not None
+                else style_bundles
+            )
+            ts_result = export_indexed_ts(full_bundles, style)
             write_indexed_ts_bundle(ts_result, out_dir / "indexed")
 
     return 0
