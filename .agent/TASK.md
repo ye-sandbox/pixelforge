@@ -8,9 +8,11 @@
 
 ## Active Task
 
-### `[07.3]` GitHub Actions CI Workflow
+### `[90.1]` Structural Refactoring & Helper Deduplication
 
-- [ ] Add `.github/workflows/ci.yml` (pinned action SHAs, minimal `contents: read` permissions, `uv` caching, Python 3.14) running `ruff check`, `ruff format --check`, `pyright`, `pytest`, and `pixelforge check`
+- [ ] Decompose oversized functions (`generate_contact_sheet`, `export_asset_bundle`, `check_asset_runtime`) and extract CLI scaffold/orchestration helpers out of `src/pixelforge/cli/main.py`
+- [ ] Deduplicate 8-connected orphan-pixel detection (`guard/runtime_rules.py` vs `export/contact_sheet.py`) and RGBA checkerboard/compositing helpers (`export/contact_sheet.py` vs `export/diff.py`)
+- [ ] Replace `object.__setattr__` mutation in `src/pixelforge/core/builder.py` with a dedicated `PaletteLookup.with_overrides(...)` method
 
 ---
 
@@ -32,16 +34,13 @@
 | `[06.3]` | Protect Filtered `render`/`watch --indexed-ts` Against Partial Bundle Overwrites | `cdfefa8` | 2026-11-25 |
 | `[07.1]` | Guard, CLI & Core Contract Bug Fixes | `3f1b3cb` | 2026-11-25 |
 | `[07.2]` | Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync | `ce23210` | 2026-11-25 |
+| `[07.3]` | GitHub Actions CI Workflow (`.github/workflows/ci.yml` with pinned SHAs, `uv` caching, Python 3.14) | `4245d1e` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-### `[90.1]` Structural Refactoring & Helper Deduplication
-
-- [ ] Decompose oversized functions (`generate_contact_sheet`, `export_asset_bundle`, `check_asset_runtime`) and extract CLI scaffold/orchestration helpers out of `src/pixelforge/cli/main.py`
-- [ ] Deduplicate 8-connected orphan-pixel detection (`guard/runtime_rules.py` vs `export/contact_sheet.py`) and RGBA checkerboard/compositing helpers (`export/contact_sheet.py` vs `export/diff.py`)
-- [ ] Replace `object.__setattr__` mutation in `src/pixelforge/core/builder.py` with a dedicated `PaletteLookup.with_overrides(...)` method
+_None currently queued._
 
 ---
 
