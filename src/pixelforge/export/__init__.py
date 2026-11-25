@@ -33,7 +33,15 @@ from pixelforge.export.contact_sheet import (
     generate_contact_sheet,
 )
 from pixelforge.export.diff import (
+    AnchorDelta,
+    AssetDiffReport,
     DiffResult,
+    FrameDiffEntry,
+    HitboxDelta,
+    RemovedFrameRef,
+    diff_anchors,
+    diff_hitboxes,
+    format_metadata_deltas,
     generate_pixel_diff,
     generate_surface_diff,
 )
@@ -72,6 +80,8 @@ from pixelforge.export.scene import (
 from pixelforge.export.svelte_types import generate_svelte_manifest_dts
 
 __all__ = [
+    "AnchorDelta",
+    "AssetDiffReport",
     "AssetModule",
     "AtlasFormat",
     "AtlasFrameProtocol",
@@ -83,10 +93,13 @@ __all__ = [
     "ExportBundleResult",
     "ExportedAssetFiles",
     "ExportedAssetManifestEntry",
+    "FrameDiffEntry",
     "FrameMetadataEntry",
+    "HitboxDelta",
     "IndexedTsExportResult",
     "LoadedAsset",
     "MountedPropPlacement",
+    "RemovedFrameRef",
     "RenderedFrame",
     "SceneCompositionError",
     "SceneCompositionResult",
@@ -103,8 +116,11 @@ __all__ = [
     "compute_surface_metrics",
     "decode_png_to_rgba",
     "decode_rle_bytes",
+    "diff_anchors",
+    "diff_hitboxes",
     "export_asset_bundle",
     "export_indexed_ts",
+    "format_metadata_deltas",
     "frames_to_apng",
     "frames_to_gif",
     "generate_contact_sheet",

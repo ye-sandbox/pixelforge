@@ -85,7 +85,7 @@ uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissi
 uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
 
 # Generate a side-by-side + magenta pixel-diff PNG against a git ref
-uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--root .]
+uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--json] [--root .]
 
 # Watch .asset.py and .style.py files and hot-reload compiled outputs
 uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]

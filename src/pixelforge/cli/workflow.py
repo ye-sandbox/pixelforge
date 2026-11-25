@@ -16,13 +16,22 @@ from pixelforge.export.bundle import (
     ExportBundleResult,
     ExportedAssetManifestEntry,
     LoadedAsset,
+    RenderedFrame,
     export_asset_bundle,
     render_asset_frames,
     write_export_bundle,
     write_manifest,
 )
 from pixelforge.export.contact_sheet import ContactSheetOptions, generate_contact_sheet
-from pixelforge.export.diff import generate_surface_diff
+from pixelforge.export.diff import (
+    AssetDiffReport,
+    FrameDiffEntry,
+    RemovedFrameRef,
+    diff_anchors,
+    diff_hitboxes,
+    format_metadata_deltas,
+    generate_surface_diff,
+)
 from pixelforge.export.indexed_ts import export_indexed_ts, write_indexed_ts_bundle
 from pixelforge.export.png import surface_to_png
 from pixelforge.export.scene import (
@@ -245,10 +254,11 @@ def diff_asset(
     out_dir: Path,
     scale: int,
     variant: str | None,
+    json_output: bool = False,
     out: OutputFn,
     err: OutputFn,
 ) -> int:
-    """Generate side-by-side + magenta pixel-diff PNGs against a git ref baseline."""
+    """Generate side-by-side + magenta pixel-diff PNGs and metadata deltas against a git ref."""
     styles: dict[str, StylePack] = {}
     style_paths: dict[str, Path] = {}
     for style_path in discover_style_files(root / "styles"):
@@ -284,9 +294,9 @@ def diff_asset(
         variant=variant,
     )
     current_frames = render_asset_frames(current_asset, style, variant=variant)
-    baseline_map = (
+    baseline_frames: dict[tuple[str, int], RenderedFrame] = (
         {
-            (f.state, f.frame): f.surface
+            (f.state, f.frame): f
             for f in render_asset_frames(baseline_asset, base_style, variant=variant)
         }
         if baseline_asset is not None
@@ -294,10 +304,20 @@ def diff_asset(
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    frame_entries: list[FrameDiffEntry] = []
+    total_changed_pixels = 0
+    total_pixels = 0
+    has_metadata_changes = False
+    seen_keys: set[tuple[str, int]] = set()
+
     for frame in current_frames:
-        base_surface = baseline_map.get(
-            (frame.state, frame.frame),
-            IndexedSurface(frame.surface.width, frame.surface.height),
+        key = (frame.state, frame.frame)
+        seen_keys.add(key)
+        base_frame = baseline_frames.get(key)
+        base_surface = (
+            base_frame.surface
+            if base_frame is not None
+            else IndexedSurface(frame.surface.width, frame.surface.height)
         )
         diff = generate_surface_diff(
             base_surface,
@@ -307,6 +327,17 @@ def diff_asset(
             scale=scale,
             baseline_style=base_style,
         )
+        anchor_deltas = diff_anchors(
+            base_frame.anchors if base_frame is not None else (),
+            frame.anchors,
+        )
+        hitbox_deltas = diff_hitboxes(
+            base_frame.hitboxes if base_frame is not None else (),
+            frame.hitboxes,
+        )
+        if anchor_deltas or hitbox_deltas:
+            has_metadata_changes = True
+
         suffix = (
             f"{frame.state}.diff.png"
             if current_asset.SPEC.frames == 1
@@ -314,7 +345,55 @@ def diff_asset(
         )
         diff_path = out_dir / f"{current_asset.SPEC.id}_{suffix}"
         diff_path.write_bytes(diff.png)
-        out(f"diff {diff_path}: {diff.changed_pixels}/{diff.total_pixels} changed pixel(s)")
+
+        total_changed_pixels += diff.changed_pixels
+        total_pixels += diff.total_pixels
+        ratio = round(diff.changed_pixels / diff.total_pixels, 6) if diff.total_pixels > 0 else 0.0
+        frame_entries.append(
+            FrameDiffEntry(
+                state=frame.state,
+                frame=frame.frame,
+                diff_png=str(diff_path),
+                changed_pixels=diff.changed_pixels,
+                total_pixels=diff.total_pixels,
+                changed_ratio=ratio,
+                baseline_width=base_frame.surface.width if base_frame is not None else None,
+                baseline_height=base_frame.surface.height if base_frame is not None else None,
+                current_width=frame.surface.width,
+                current_height=frame.surface.height,
+                anchors=anchor_deltas,
+                hitboxes=hitbox_deltas,
+            )
+        )
+        if not json_output:
+            out(f"diff {diff_path}: {diff.changed_pixels}/{diff.total_pixels} changed pixel(s)")
+            for line in format_metadata_deltas(anchor_deltas, hitbox_deltas):
+                out(line)
+
+    removed_frames = [
+        RemovedFrameRef(state=state, frame=frame_idx)
+        for (state, frame_idx) in sorted(baseline_frames)
+        if (state, frame_idx) not in seen_keys
+    ]
+    if removed_frames and not json_output:
+        for removed in removed_frames:
+            out(f"  removed frame: ({removed.state}, f{removed.frame})")
+
+    if json_output:
+        report = AssetDiffReport(
+            asset_id=current_asset.SPEC.id,
+            base_ref=base_ref,
+            variant=variant,
+            baseline_exists=baseline_asset is not None,
+            total_changed_pixels=total_changed_pixels,
+            total_pixels=total_pixels,
+            has_pixel_changes=total_changed_pixels > 0,
+            has_metadata_changes=has_metadata_changes,
+            has_changes=total_changed_pixels > 0 or has_metadata_changes or bool(removed_frames),
+            frames=frame_entries,
+            removed_frames=removed_frames,
+        )
+        out(report.model_dump_json(indent=2))
     return 0
 
 

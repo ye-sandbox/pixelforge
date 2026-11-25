@@ -5,8 +5,14 @@ from __future__ import annotations
 import numpy as np
 
 from pixelforge.core.surface import IndexedSurface
-from pixelforge.core.types import PaletteColor, StylePack
-from pixelforge.export.diff import generate_pixel_diff, generate_surface_diff
+from pixelforge.core.types import AnchorPoint, HitboxRect, PaletteColor, StylePack
+from pixelforge.export.diff import (
+    diff_anchors,
+    diff_hitboxes,
+    format_metadata_deltas,
+    generate_pixel_diff,
+    generate_surface_diff,
+)
 from pixelforge.export.png import assert_binary_alpha, decode_png_to_rgba
 
 
@@ -85,3 +91,47 @@ def test_generate_surface_diff_detects_palette_only_changes() -> None:
     decoded = decode_png_to_rgba(result.png)
     diff_panel_x = 8 + 4 + 4 + 4 + 4
     assert tuple(decoded[8 + 1, diff_panel_x + 1].tolist()) == (255, 42, 133, 255)
+
+
+def test_diff_anchors_and_hitboxes_detects_all_delta_kinds() -> None:
+    base_anchors = (
+        AnchorPoint(name="same", x=2, y=3),
+        AnchorPoint(name="mount", x=10, y=12),
+        AnchorPoint(name="old", x=1, y=1),
+    )
+    curr_anchors = (
+        AnchorPoint(name="same", x=2, y=3),
+        AnchorPoint(name="mount", x=14, y=10),
+        AnchorPoint(name="muzzle", x=8, y=4),
+    )
+    anchor_deltas = diff_anchors(base_anchors, curr_anchors)
+    assert [(d.name, d.status, d.dx, d.dy) for d in anchor_deltas] == [
+        ("mount", "moved", 4, -2),
+        ("muzzle", "added", None, None),
+        ("old", "removed", None, None),
+    ]
+
+    base_hitboxes = (
+        HitboxRect(name="same", x=0, y=0, w=4, h=4),
+        HitboxRect(name="body", x=2, y=2, w=10, h=10),
+        HitboxRect(name="legacy", x=1, y=1, w=4, h=4),
+    )
+    curr_hitboxes = (
+        HitboxRect(name="same", x=0, y=0, w=4, h=4),
+        HitboxRect(name="body", x=2, y=3, w=12, h=8),
+        HitboxRect(name="hurt", x=0, y=0, w=8, h=8),
+    )
+    hitbox_deltas = diff_hitboxes(base_hitboxes, curr_hitboxes)
+    assert [(d.name, d.status, d.dx, d.dy, d.dw, d.dh) for d in hitbox_deltas] == [
+        ("body", "changed", 0, 1, 2, -2),
+        ("hurt", "added", None, None, None, None),
+        ("legacy", "removed", None, None, None, None),
+    ]
+
+    lines = format_metadata_deltas(anchor_deltas, hitbox_deltas)
+    assert any("anchor 'mount': moved (10, 12) -> (14, 10) (dx=+4, dy=-2)" in ln for ln in lines)
+    assert any("anchor 'muzzle': added (8, 4)" in ln for ln in lines)
+    assert any("anchor 'old': removed (1, 1)" in ln for ln in lines)
+    assert any("hitbox 'body': changed (2, 2, 10x10) -> (2, 3, 12x8)" in ln for ln in lines)
+    assert any("hitbox 'hurt': added (0, 0, 8x8)" in ln for ln in lines)
+    assert any("hitbox 'legacy': removed (1, 1, 4x4)" in ln for ln in lines)

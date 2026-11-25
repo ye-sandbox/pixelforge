@@ -107,6 +107,7 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         out_dir=_resolve_dir(root, settings.diffs_dir, args.out),
         scale=int(args.scale),
         variant=args.variant,
+        json_output=bool(args.json),
         out=_out,
         err=_err,
     )
@@ -297,6 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff_p.add_argument("--out", default=None, help="Output directory for diff PNGs")
     diff_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     diff_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    diff_p.add_argument("--json", action="store_true", help="Emit JSON diff summary")
     diff_p.add_argument("--root", default=None, help="Project root directory")
 
     watch_p = sub.add_parser("watch", help="Watch .asset.py/.style.py and hot-reload outputs")

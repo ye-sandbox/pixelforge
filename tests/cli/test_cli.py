@@ -151,6 +151,96 @@ def test_cli_diff_palette_only_against_git_head(
     assert rc_variant == 0
 
 
+def test_cli_diff_json_and_metadata_deltas(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `diff --json` emits structured pixel + anchor/hitbox delta reports."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    asset_file = tmp_path / "assets" / "example_crate.asset.py"
+    baseline_src = asset_file.read_text(encoding="utf-8") + '    a.hitbox("solid", 4, 5, 16, 15)\n'
+    asset_file.write_text(baseline_src, encoding="utf-8")
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "init")
+    capsys.readouterr()
+
+    updated = baseline_src.replace(
+        'a.anchor("foot", 12, 20)',
+        'a.anchor("foot", 14, 21)\n    a.anchor("side_port", 4, 12)',
+    ).replace(
+        'a.hitbox("solid", 4, 5, 16, 15)',
+        'a.hitbox("solid", 4, 6, 18, 14)',
+    )
+    assert updated != baseline_src
+    asset_file.write_text(updated, encoding="utf-8")
+
+    rc = main(["diff", "example_crate", "--base", "HEAD", "--json", "--root", str(tmp_path)])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["asset_id"] == "example_crate"
+    assert payload["base_ref"] == "HEAD"
+    assert payload["baseline_exists"] is True
+    assert payload["has_pixel_changes"] is False
+    assert payload["has_metadata_changes"] is True
+    assert payload["has_changes"] is True
+    assert payload["removed_frames"] == []
+    assert len(payload["frames"]) == 1
+
+    frame = payload["frames"][0]
+    assert frame["changed_pixels"] == 0
+    assert frame["anchors"] == [
+        {
+            "name": "foot",
+            "status": "moved",
+            "before": {"name": "foot", "x": 12, "y": 20},
+            "after": {"name": "foot", "x": 14, "y": 21},
+            "dx": 2,
+            "dy": 1,
+        },
+        {
+            "name": "side_port",
+            "status": "added",
+            "before": None,
+            "after": {"name": "side_port", "x": 4, "y": 12},
+            "dx": None,
+            "dy": None,
+        },
+    ]
+    assert frame["hitboxes"] == [
+        {
+            "name": "solid",
+            "status": "changed",
+            "before": {"name": "solid", "x": 4, "y": 5, "w": 16, "h": 15},
+            "after": {"name": "solid", "x": 4, "y": 6, "w": 18, "h": 14},
+            "dx": 0,
+            "dy": 1,
+            "dw": 2,
+            "dh": -1,
+        }
+    ]
+
+    # Human-readable diff also prints anchor/hitbox deltas
+    assert main(["diff", "example_crate", "--base", "HEAD", "--root", str(tmp_path)]) == 0
+    text_out = capsys.readouterr().out
+    assert "anchor 'foot': moved (12, 20) -> (14, 21) (dx=+2, dy=+1)" in text_out
+    assert "hitbox 'solid': changed (4, 5, 16x15) -> (4, 6, 18x14)" in text_out
+
+    # Untracked new asset reports baseline_exists=False
+    new_asset = tmp_path / "assets" / "new_prop.asset.py"
+    new_asset.write_text(
+        baseline_src.replace('id="example_crate"', 'id="new_prop"'),
+        encoding="utf-8",
+    )
+    assert main(["diff", "new_prop", "--base", "HEAD", "--json", "--root", str(tmp_path)]) == 0
+    new_payload = json.loads(capsys.readouterr().out)
+    assert new_payload["baseline_exists"] is False
+    assert new_payload["has_pixel_changes"] is True
+    assert new_payload["frames"][0]["baseline_width"] is None
+
+
 def test_cli_watch_bounded_cycles(tmp_path: Path) -> None:
     """Verify `watch` runs initial check+render and exits cleanly after --max-cycles."""
     assert main(["init", "--root", str(tmp_path)]) == 0

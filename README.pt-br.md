@@ -85,7 +85,7 @@ uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissi
 uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
 
 # Gerar comparação lado a lado + diff de pixels em magenta contra uma ref Git
-uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--root .]
+uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--json] [--root .]
 
 # Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente
 uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
