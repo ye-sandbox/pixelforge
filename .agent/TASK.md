@@ -1,4 +1,4 @@
-# TASK.md — Current Task and Roadmap (`v2-py`)
+# TASK.md — Current Task and Roadmap
 
 > WHAT to do now. Detailed history lives in `git log` and `.agent/ARCHIVE.md`.
 > User requests during conversation take precedence — report discrepancies before acting.

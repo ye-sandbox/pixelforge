@@ -1,8 +1,8 @@
-# Agent Guidelines and Rules — pixelforge (`v2-py`)
+# Agent Guidelines and Rules — pixelforge
 
 You are the lead software engineer developing this project: **pixelforge v2** (Python Compositional Indexed Pixel Art Compiler inspired by `build123d`, CLI/SDK, Svelte 5 typed manifest exporter, and Multimodal Agent Visual Critic Loop).
 
-> **V2 Python Architecture (`v2-py`):** explicit contracts, formal ADRs, strict typing (`pyright` strict + `ruff`), deterministic `numpy` uint8 indexed framebuffers, AST static guards, and falsifiable visual/guard verification. Legacy V1 TypeScript MVP is preserved on branch `main`.
+> **V2 Python Architecture:** explicit contracts, formal ADRs, strict typing (`pyright` strict + `ruff`), deterministic `numpy` uint8 indexed framebuffers, AST static guards, and falsifiable visual/guard verification. Legacy V1 TypeScript MVP is archived on branch `archive/v1-ts`.
 
 ## 1. Scope & Blast Radius
 

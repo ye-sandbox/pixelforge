@@ -7,7 +7,7 @@ Deterministic Python compositional indexed pixel art compiler (`build123d`-style
 [![Python >= 3.14](https://img.shields.io/badge/Python-%3E%3D3.14_(uv)-3776AB.svg)](https://www.python.org/)
 [![Typing: Pyright Strict](https://img.shields.io/badge/Pyright-Strict-3178C6.svg)](https://github.com/microsoft/pyright)
 [![Linter: Ruff](https://img.shields.io/badge/Ruff-Checked-D7FF64.svg)](https://docs.astral.sh/ruff/)
-[![Architecture: v2-py](https://img.shields.io/badge/Architecture-v2--py-teal.svg)](docs/DESIGN_V2.md)
+[![Architecture: V2 Python](https://img.shields.io/badge/Architecture-V2_Python-teal.svg)](docs/DESIGN_V2.md)
 
 ---
 

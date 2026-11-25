@@ -7,7 +7,7 @@ Compilador determinístico e composicional de pixel art indexada em Python (esti
 [![Python >= 3.14](https://img.shields.io/badge/Python-%3E%3D3.14_(uv)-3776AB.svg)](https://www.python.org/)
 [![Tipagem: Pyright Strict](https://img.shields.io/badge/Pyright-Strict-3178C6.svg)](https://github.com/microsoft/pyright)
 [![Linter: Ruff](https://img.shields.io/badge/Ruff-Checked-D7FF64.svg)](https://docs.astral.sh/ruff/)
-[![Arquitetura: v2-py](https://img.shields.io/badge/Arquitetura-v2--py-teal.svg)](docs/DESIGN_V2.md)
+[![Arquitetura: V2 Python](https://img.shields.io/badge/Arquitetura-V2_Python-teal.svg)](docs/DESIGN_V2.md)
 
 ---
 

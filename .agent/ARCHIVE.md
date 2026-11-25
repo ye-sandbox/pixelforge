@@ -7,7 +7,7 @@
 
 ## [v0.1.0-ts-mvp] - 2026-11-24
 
-Preserved intact on branch `main` prior to the `v2-py` Python compositional compiler pivot (`docs/DESIGN_V2.md`).
+Archived on branch `archive/v1-ts` (tag `v1-ts-archive`) prior to promoting the `v2-py` Python compositional compiler (`docs/DESIGN_V2.md`) to `main`.
 
 | Task | Title | Commit(s) | Date |
 |---|---|---|---|

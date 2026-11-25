@@ -14,7 +14,7 @@
 
 ---
 
-## Active Contracts (`v2-py`)
+## Active Contracts
 
 ### 1. Core Module & Output Contracts
 

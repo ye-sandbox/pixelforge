@@ -1,6 +1,6 @@
 # INVARIANTS.md — System Invariants and Untouchable Rules
 
-> Runtime-aware guardrails and inviolable rendering contracts for `pixelforge` (`v2-py`).
+> Runtime-aware guardrails and inviolable rendering contracts for `pixelforge`.
 > Record project-specific invariants here as they are discovered; preserve the shared Invariant 7 section verbatim.
 
 ---

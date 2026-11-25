@@ -3,7 +3,7 @@ author_type: agent-assisted
 author: Antigravity
 reviewed_by: Human Lead
 date: 2026-11-24
-status: proposed
+status: accepted
 type: architecture-design
 ---
 
