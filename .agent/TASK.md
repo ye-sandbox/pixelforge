@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[10.1]` Aseprite JSON & TexturePacker Atlas Export
+### `[11.1]` Catalog Scalability (`watch` Incremental Rebuild & Lazy `--indexed-ts`)
 
-- [ ] Design and implement optional Aseprite JSON / TexturePacker atlas metadata export alongside `manifest.json` + `manifest.d.ts` for third-party game engines (Godot, Phaser, PixiJS, Unity)
-- [ ] Wire export option into `pixelforge render` / `pixelforge watch` and `pixelforge.export` without altering existing `manifest.json` or `--indexed-ts` contracts
-- [ ] Cover atlas frame rectangles, animations/tags, and schema invariants with hermetic unit tests (`uv run pytest`)
+- [ ] Track `.style.py` / `.asset.py` dependency graph in `pixelforge watch` for incremental recompilation of only affected assets
+- [ ] Add optional lazy decoding mode in generated `--indexed-ts` bundles for larger asset catalogs
+- [ ] Cover incremental watch invalidation and lazy `--indexed-ts` decoding with hermetic unit tests (`uv run pytest`)
 
 ---
 
@@ -38,14 +38,14 @@
 | `[90.1]` | Structural Refactoring & Helper Deduplication (`PaletteLookup.with_overrides`, `_canvas.py`, `orphan_pixel_mask`, CLI `scaffold.py`/`workflow.py`) | `ef0cd95` | 2026-11-25 |
 | `[08.1]` | Scene-Composition Helper & Anchor Prop Validation (`compose_scene`, `generate_scene_sheet`, `pixelforge compose`) | `6a821e9` | 2026-11-25 |
 | `[09.1]` | Automated Multimodal Critic in CI (`hydra-llm-router` + `httpx2`, `self-hosted`, `pixelforge critic`) | `11cf32e` | 2026-11-25 |
+| `[10.1]` | Aseprite JSON & TexturePacker Atlas Export (`pixelforge.export.atlas`, `--atlas {aseprite,texturepacker,all}`) | `c148fba` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-1. **`[11.1]` Catalog Scalability (`watch` Incremental Rebuild & Lazy `--indexed-ts`)** — Dependency-tracked incremental recompilation in `pixelforge watch` and optional lazy decoding in generated `--indexed-ts` bundles for larger asset catalogs.
-2. **`[12.1]` Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff)** — Machine-readable `--json` diff summary plus anchor/hitbox coordinate delta detection against `--base`.
-3. **`[13.1]` CI TypeScript Validation (`tsc --noEmit`)** — Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`.
+1. **`[12.1]` Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff)** — Machine-readable `--json` diff summary plus anchor/hitbox coordinate delta detection against `--base`.
+2. **`[13.1]` CI TypeScript Validation (`tsc --noEmit`)** — Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`.
 
 ---
 
