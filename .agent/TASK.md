@@ -8,11 +8,7 @@
 
 ## Active Task
 
-### `[06.3]` Protect Filtered `render`/`watch --indexed-ts` Against Partial Bundle Overwrites
-Objective: prevent `pixelforge render <asset_id> --indexed-ts` (and `watch <asset_id> --indexed-ts`) from silently truncating `dist/indexed/{sprites,manifest}.generated.ts` to a single asset.
-- [ ] Decide and implement safe behavior in `src/pixelforge/cli/main.py` (either compile all assets belonging to the affected `StylePack` when writing `dist/indexed/` or reject `<asset_id>` combined with `--indexed-ts` with a clear actionable error message)
-- [ ] Document the exact `--indexed-ts` filtering contract in `.agent/NOTES.md`, `README.md`, and `README.pt-br.md`
-- [ ] Add regression tests in `tests/cli/test_cli.py` verifying full vs. filtered `--indexed-ts` invocations never silently drop sibling assets
+_None currently active — all queued roadmap tasks are complete._
 
 ---
 
@@ -31,6 +27,7 @@ Objective: prevent `pixelforge render <asset_id> --indexed-ts` (and `watch <asse
 | `[05.1]` | Reference Proportion & Quantized Sketch Analyzer (`pixelforge analyze-ref`) | `75dfc6c` | 2026-11-25 |
 | `[06.1]` | Contact Sheet Emissive-Only Preview Column (`contact_sheet.py`) | `6f7287e` | 2026-11-25 |
 | `[06.2]` | Historical `StylePack` Resolution in `pixelforge diff` (`load_style_from_git`) | `5c1dedf` | 2026-11-25 |
+| `[06.3]` | Protect Filtered `render`/`watch --indexed-ts` Against Partial Bundle Overwrites | `cdfefa8` | 2026-11-25 |
 
 ---
 
