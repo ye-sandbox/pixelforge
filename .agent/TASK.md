@@ -8,13 +8,12 @@
 
 ## Active Task
 
-### `[01.1]` Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives
-Objective: implement the `numpy.ndarray(dtype=np.uint8)` indexed framebuffer (`TRANSPARENT_INDEX = 255`), deterministic `mulberry32`/`hashf`, `StylePack` (with `emissive`, `bright`, and optional `reflections` tables) + fail-loud `PaletteLookup`, and full pixel-art primitive set.
-- [ ] Implement `StylePack`, `PaletteColor`, `PaletteFlag` (including `emissive` and `bright`), `reflections: dict[str, str]`, `AnchorPoint`, `HitboxRect`, and `AssetSpec` Pydantic/dataclass contracts in `src/pixelforge/core/types.py`
-- [ ] Implement `mulberry32`, `xorshift32`, and `hashf` deterministic uint32 PRNG in `src/pixelforge/core/prng.py`
-- [ ] Implement fail-loud `PaletteLookup`, reflection index table (`REFL`) resolution, and variant LUT resolution in `src/pixelforge/core/palette.py`
-- [ ] Implement `IndexedSurface` (`numpy` uint8) with `put`, `erase`, `get`, `rect`, `rounded_rect`, `line`, `circle`, `ellipse`, `polygon`, `quad`, `fill`, `dither` (Bayer 2×2/4×4, checker), `spr`, `blit_layer`, `mirror_x`, `flip_x`, `flip_y`, `auto_outline`, `sel_out`, `edge_mask`
-- [ ] Add comprehensive deterministic unit tests in `tests/core/`
+### `[01.2]` Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`)
+Objective: implement the hierarchical context-manager authoring API so AI agents build sprites, multi-style avatars, and `320×200` static scenes parametrically with local coordinates, masks, tilted planes, isometric volumes, and 1px escape hatches.
+- [ ] Implement `iso_project`, `iso_tile`, and `iso_box` (2:1 isometric) in `src/pixelforge/core/iso.py`
+- [ ] Implement `Plane` context manager (`with a.plane(p0, p1, p2) as p:`) with `(u, v)` `rect`, `grid`, `line`, `dot`, `quad`, `extrude_y`, and `anchor`
+- [ ] Implement `Asset` and `Layer` context managers (`with a.layer(name, offset=..., outline=..., sel_out=..., mirror_x=...)`) with masked `scatter`, token-override/recoloring helpers (for shared-silhouette avatars), multi-anchor scene registration (`hw_slot_*`, `window`, `solar`, `breaker`), code-coupled `hitbox`, and direct 1px escape hatches
+- [ ] Add unit tests covering nested layers, masking, plane projections, bevels, avatar token-swaps, and multi-anchor scene metadata
 
 ---
 
@@ -24,17 +23,11 @@ Objective: implement the `numpy.ndarray(dtype=np.uint8)` indexed framebuffer (`T
 |---|---|---|---|
 | `[00.0]` | V2 Python (`build123d`-style) branch, architecture spec (`DESIGN_V2.md`), ADR & roadmap | `6b94817` | 2026-11-24 |
 | `[00.1]` | Python V2 Project Bootstrap & Toolchain Setup (`uv`, `ruff`, `pyright`, `pytest`, `argparse`, V1 TS cleanup) | `78cb1bf` | 2026-11-25 |
+| `[01.1]` | Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives (`numpy` uint8, `StylePack`, `PaletteLookup`, `IndexedSurface`) | `fb6b7cf` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[01.2]` Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`)
-Objective: implement the hierarchical context-manager authoring API so AI agents build sprites, multi-style avatars, and `320×200` static scenes parametrically with local coordinates, masks, tilted planes, isometric volumes, and 1px escape hatches.
-- [ ] Implement `iso_project`, `iso_tile`, and `iso_box` (2:1 isometric) in `src/pixelforge/core/iso.py`
-- [ ] Implement `Plane` context manager (`with a.plane(p0, p1, p2) as p:`) with `(u, v)` `rect`, `grid`, `line`, `dot`, `quad`, `extrude_y`, and `anchor`
-- [ ] Implement `Asset` and `Layer` context managers (`with a.layer(name, offset=..., outline=..., sel_out=..., mirror_x=...)`) with masked `scatter`, token-override/recoloring helpers (for shared-silhouette avatars), multi-anchor scene registration (`hw_slot_*`, `window`, `solar`, `breaker`), code-coupled `hitbox`, and direct 1px escape hatches
-- [ ] Add unit tests covering nested layers, masking, plane projections, bevels, avatar token-swaps, and multi-anchor scene metadata
 
 ### `[02.1]` Headless Exporter, Animated Previews, Contact Sheet, Svelte `manifest.d.ts` & `--indexed-ts`
 Objective: implement `Pillow`-backed PNG/spritesheet/emissive-sheet/LUT/GIF-APNG export, direct `--indexed-ts` `Uint8Array` + palette (`EMISSIVE`/`BRIGHT`/`REFL`) export for CPU indexed framebuffers (`idle-datacenter`), upgraded coordinate-ruled `.contact.png`, pixel-diff generator, and auto-generated `manifest.d.ts` for Svelte 5.
