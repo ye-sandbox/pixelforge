@@ -8,13 +8,9 @@
 
 ## Active Task
 
-### `[07.2]` Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync
+### `[07.3]` GitHub Actions CI Workflow
 
-- [ ] Composite emissive pixels across all frames of each state in `contact_sheet.py` so blinking LEDs active only on `frame >= 1` are visible in the emissive column
-- [ ] Add `"styles"` and `"assets"` to `[tool.pyright] include` in `pyproject.toml` so strict typechecking covers authored packs automatically
-- [ ] Fix `WINDOW_SKY` emissive drift and outdated V1 token names in `.agent/skills/create-pixel-asset/SKILL.md` and `.agent/NOTES.md`
-- [ ] Sync `PIXELFORGE_PREVIEWS_DIR` and `PIXELFORGE_DIFFS_DIR` across `.env.example`, `_cmd_init`, `README.md`, and `README.pt-br.md`
-- [ ] Add an explicit superseded/archived banner to `docs/DESIGN_MVP.md` pointing to `docs/DESIGN_V2.md`
+- [ ] Add `.github/workflows/ci.yml` (pinned action SHAs, minimal `contents: read` permissions, `uv` caching, Python 3.14) running `ruff check`, `ruff format --check`, `pyright`, `pytest`, and `pixelforge check`
 
 ---
 
@@ -35,14 +31,11 @@
 | `[06.2]` | Historical `StylePack` Resolution in `pixelforge diff` (`load_style_from_git`) | `5c1dedf` | 2026-11-25 |
 | `[06.3]` | Protect Filtered `render`/`watch --indexed-ts` Against Partial Bundle Overwrites | `cdfefa8` | 2026-11-25 |
 | `[07.1]` | Guard, CLI & Core Contract Bug Fixes | `3f1b3cb` | 2026-11-25 |
+| `[07.2]` | Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync | `ce23210` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[07.3]` GitHub Actions CI Workflow
-
-- [ ] Add `.github/workflows/ci.yml` (pinned action SHAs, minimal `contents: read` permissions, `uv` caching, Python 3.14) running `ruff check`, `ruff format --check`, `pyright`, `pytest`, and `pixelforge check`
 
 ### `[90.1]` Structural Refactoring & Helper Deduplication
 
