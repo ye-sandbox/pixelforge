@@ -56,6 +56,4 @@ Full V2 specification lives in [`docs/DESIGN_V2.md`](../docs/DESIGN_V2.md). High
 
 ## Deliberate Technical Debt
 
-| Debt | Rationale | Revisit When |
-|---|---|---|
-| Legacy V1 TypeScript files remain temporarily on `v2-py` until `[00.1]` executes | Preserves reference context during bootstrap plan approval; V1 stays permanently preserved on `main` | Task `[00.1]` (clean removal on `v2-py` once `uv` toolchain is initialized) |
+_None currently open._

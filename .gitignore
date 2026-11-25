@@ -3,14 +3,21 @@
 .env.*
 !.env.example
 
+# Python & uv environments / caches
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # Build & package outputs
-node_modules/
 dist/
 build/
 coverage/
 *.log
-npm-debug.log*
-pnpm-debug.log*
 
 # Ephemeral visual critic sheets & reference scratch (never commit reference photos)
 .pixelforge/
@@ -28,7 +35,6 @@ Thumbs.db
 .claude/
 .maestri/
 .multigravity/
-*.tsbuildinfo
 
 # dev-harness local-first state (queue contracts live in git; runtime state does not)
 .harness/queue/done/

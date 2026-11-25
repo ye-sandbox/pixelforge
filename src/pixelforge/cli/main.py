@@ -1,0 +1,34 @@
+"""Thin CLI entrypoint for pixelforge."""
+
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+
+from pixelforge import __version__
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the top-level pixelforge CLI argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="pixelforge",
+        description="Deterministic compositional indexed pixel art compiler.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the pixelforge CLI and return a process exit code."""
+    parser = build_parser()
+    parser.parse_args(list(argv) if argv is not None else None)
+    parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

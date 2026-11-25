@@ -196,6 +196,7 @@ Functions SHOULD remain concise (heuristic <= 50 lines of code; ~80 lines accept
 ```python
 # BAD: stdlib random, raw hex strings, and fractional float coords
 import random
+
 color = "#ffd866" if random.random() > 0.5 else "#f85149"
 surface.put(10.5, 4.2, color)
 
