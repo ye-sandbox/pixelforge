@@ -51,6 +51,7 @@ select = [
     "TID",
     "RUF",
 ]
+ignore = ["S603"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]

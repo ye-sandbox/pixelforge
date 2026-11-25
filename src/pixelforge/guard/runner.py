@@ -1,0 +1,259 @@
+"""Module discovery, git-ref asset loading, and unified guard runner."""
+
+from __future__ import annotations
+
+import importlib.util
+import shutil
+import subprocess
+import tempfile
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from types import ModuleType
+from typing import cast
+
+from pixelforge.core.builder import Asset
+from pixelforge.core.types import AssetSpec, StylePack
+from pixelforge.export.bundle import LoadedAsset
+from pixelforge.guard.ast_rules import check_ast_file
+from pixelforge.guard.runtime_rules import check_asset_runtime
+from pixelforge.guard.types import GuardViolation
+
+
+@dataclass(frozen=True)
+class CheckReport:
+    """Aggregated AST + runtime guard result."""
+
+    violations: tuple[GuardViolation, ...]
+    assets_checked: int
+    styles_checked: int
+    errors: int
+    warnings: int
+
+    @property
+    def passed(self) -> bool:
+        """Return `True` when zero error-severity violations occurred."""
+        return self.errors == 0
+
+
+def discover_style_files(styles_dir: Path) -> list[Path]:
+    """Return sorted `*.style.py` files under `styles_dir`."""
+    if not styles_dir.is_dir():
+        return []
+    return sorted(styles_dir.rglob("*.style.py"))
+
+
+def discover_asset_files(assets_dir: Path) -> list[Path]:
+    """Return sorted `*.asset.py` files under `assets_dir`."""
+    if not assets_dir.is_dir():
+        return []
+    return sorted(assets_dir.rglob("*.asset.py"))
+
+
+def _exec_module_from_path(path: Path) -> ModuleType:
+    module_name = f"_pixelforge_dyn_{uuid.uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        msg = f"Cannot create module spec for {path}"
+        raise ImportError(msg)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _exec_module_from_source(source: str, filename: str) -> ModuleType:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir) / Path(filename).name
+        tmp_path.write_text(source, encoding="utf-8")
+        return _exec_module_from_path(tmp_path)
+
+
+def _extract_style(module: ModuleType, origin: str) -> StylePack:
+    style = getattr(module, "STYLE", None)
+    if not isinstance(style, StylePack):
+        msg = f"Style module {origin} must export `STYLE: StylePack`"
+        raise TypeError(msg)
+    return style
+
+
+def _extract_asset(module: ModuleType, origin: str) -> LoadedAsset:
+    spec = getattr(module, "SPEC", None)
+    render_fn = getattr(module, "render", None)
+    if not isinstance(spec, AssetSpec):
+        msg = f"Asset module {origin} must export `SPEC: AssetSpec`"
+        raise TypeError(msg)
+    if not callable(render_fn):
+        msg = f"Asset module {origin} must export callable `render(a: Asset) -> None`"
+        raise TypeError(msg)
+    typed_render = cast(Callable[[Asset], None], render_fn)
+    return LoadedAsset(SPEC=spec, render=typed_render)
+
+
+def load_style_module(path: Path) -> StylePack:
+    """Load a `StylePack` from a `*.style.py` file."""
+    return _extract_style(_exec_module_from_path(path), str(path))
+
+
+def load_asset_module(path: Path) -> LoadedAsset:
+    """Load a `LoadedAsset` (`SPEC` + `render`) from a `*.asset.py` file."""
+    return _extract_asset(_exec_module_from_path(path), str(path))
+
+
+def read_git_file(repo_root: Path, file_path: Path, ref: str = "HEAD") -> str | None:
+    """Read file contents at `ref` via `git show`, returning `None` if absent at `ref`."""
+    if not ref or ref.startswith("-"):
+        msg = f"Invalid git ref {ref!r}"
+        raise ValueError(msg)
+
+    git_bin = shutil.which("git")
+    if git_bin is None:
+        msg = "git executable not found on PATH"
+        raise RuntimeError(msg)
+
+    try:
+        rel_path = file_path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        rel_path = file_path.as_posix()
+
+    proc = subprocess.run(
+        [git_bin, "-C", str(repo_root), "show", f"{ref}:{rel_path}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def load_asset_from_git(
+    repo_root: Path,
+    asset_path: Path,
+    ref: str = "HEAD",
+) -> LoadedAsset | None:
+    """Load an `.asset.py` module from a historical git revision."""
+    source = read_git_file(repo_root, asset_path, ref=ref)
+    if source is None:
+        return None
+    module = _exec_module_from_source(source, f"{ref}:{asset_path.as_posix()}")
+    return _extract_asset(module, f"{ref}:{asset_path.as_posix()}")
+
+
+def load_style_from_git(
+    repo_root: Path,
+    style_path: Path,
+    ref: str = "HEAD",
+) -> StylePack | None:
+    """Load a `.style.py` module from a historical git revision."""
+    source = read_git_file(repo_root, style_path, ref=ref)
+    if source is None:
+        return None
+    module = _exec_module_from_source(source, f"{ref}:{style_path.as_posix()}")
+    return _extract_style(module, f"{ref}:{style_path.as_posix()}")
+
+
+def load_all_styles(styles_dir: Path) -> dict[str, StylePack]:
+    """Discover and load all `*.style.py` packs indexed by `StylePack.id`."""
+    styles: dict[str, StylePack] = {}
+    for style_path in discover_style_files(styles_dir):
+        pack = load_style_module(style_path)
+        styles[pack.id] = pack
+    return styles
+
+
+def run_checks(
+    root: Path,
+    *,
+    asset_id: str | None = None,
+    strict_orphans: bool = False,
+) -> CheckReport:
+    """Run AST static guards and runtime invariant checks across the project."""
+    violations: list[GuardViolation] = []
+
+    core_dir = root / "src" / "pixelforge" / "core"
+    if core_dir.is_dir():
+        for core_file in sorted(core_dir.rglob("*.py")):
+            violations.extend(check_ast_file(core_file, scope="core"))
+
+    style_files = discover_style_files(root / "styles")
+    styles: dict[str, StylePack] = {}
+    for style_path in style_files:
+        ast_issues = check_ast_file(style_path, scope="style")
+        violations.extend(ast_issues)
+        if not ast_issues:
+            try:
+                pack = load_style_module(style_path)
+                styles[pack.id] = pack
+            except Exception as exc:
+                violations.append(
+                    GuardViolation(
+                        file=str(style_path),
+                        line=1,
+                        col=0,
+                        rule="load-error",
+                        detail=str(exc),
+                    )
+                )
+
+    asset_files = discover_asset_files(root / "assets")
+    assets_checked = 0
+    for asset_path in asset_files:
+        ast_issues = check_ast_file(asset_path, scope="asset")
+        if ast_issues:
+            if asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id:
+                violations.extend(ast_issues)
+                assets_checked += 1
+            continue
+
+        try:
+            loaded = load_asset_module(asset_path)
+        except Exception as exc:
+            if asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id:
+                violations.append(
+                    GuardViolation(
+                        file=str(asset_path),
+                        line=1,
+                        col=0,
+                        rule="load-error",
+                        detail=str(exc),
+                    )
+                )
+                assets_checked += 1
+            continue
+
+        if asset_id is not None and loaded.SPEC.id != asset_id:
+            continue
+
+        assets_checked += 1
+        style = styles.get(loaded.SPEC.style_id)
+        if style is None:
+            violations.append(
+                GuardViolation(
+                    file=str(asset_path),
+                    line=1,
+                    col=0,
+                    rule="missing-style",
+                    detail=f"Referenced style {loaded.SPEC.style_id!r} not found in styles/",
+                )
+            )
+            continue
+
+        violations.extend(
+            check_asset_runtime(
+                loaded,
+                style,
+                file_path=str(asset_path),
+                strict_orphans=strict_orphans,
+            )
+        )
+
+    errors = sum(1 for v in violations if v.severity == "error")
+    warnings = sum(1 for v in violations if v.severity == "warning")
+    return CheckReport(
+        violations=tuple(violations),
+        assets_checked=assets_checked,
+        styles_checked=len(style_files),
+        errors=errors,
+        warnings=warnings,
+    )
