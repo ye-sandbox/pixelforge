@@ -8,11 +8,7 @@
 
 ## Active Task
 
-### `[90.1]` Structural Refactoring & Helper Deduplication
-
-- [ ] Decompose oversized functions (`generate_contact_sheet`, `export_asset_bundle`, `check_asset_runtime`) and extract CLI scaffold/orchestration helpers out of `src/pixelforge/cli/main.py`
-- [ ] Deduplicate 8-connected orphan-pixel detection (`guard/runtime_rules.py` vs `export/contact_sheet.py`) and RGBA checkerboard/compositing helpers (`export/contact_sheet.py` vs `export/diff.py`)
-- [ ] Replace `object.__setattr__` mutation in `src/pixelforge/core/builder.py` with a dedicated `PaletteLookup.with_overrides(...)` method
+_None currently active (roadmap complete; ready for next milestone or release `[99.1]` upon instruction)._
 
 ---
 
@@ -35,6 +31,7 @@
 | `[07.1]` | Guard, CLI & Core Contract Bug Fixes | `3f1b3cb` | 2026-11-25 |
 | `[07.2]` | Multi-Frame Emissive Contact Sheet, Strict Asset Typing & Docs/Skill Sync | `ce23210` | 2026-11-25 |
 | `[07.3]` | GitHub Actions CI Workflow (`.github/workflows/ci.yml` with pinned SHAs, `uv` caching, Python 3.14) | `4245d1e` | 2026-11-25 |
+| `[90.1]` | Structural Refactoring & Helper Deduplication (`PaletteLookup.with_overrides`, `_canvas.py`, `orphan_pixel_mask`, CLI `scaffold.py`/`workflow.py`) | `ef0cd95` | 2026-11-25 |
 
 ---
 
