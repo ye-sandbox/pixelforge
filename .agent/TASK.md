@@ -8,12 +8,14 @@
 
 ## Active Task
 
-### `[01.2]` Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`)
-Objective: implement the hierarchical context-manager authoring API so AI agents build sprites, multi-style avatars, and `320×200` static scenes parametrically with local coordinates, masks, tilted planes, isometric volumes, and 1px escape hatches.
-- [ ] Implement `iso_project`, `iso_tile`, and `iso_box` (2:1 isometric) in `src/pixelforge/core/iso.py`
-- [ ] Implement `Plane` context manager (`with a.plane(p0, p1, p2) as p:`) with `(u, v)` `rect`, `grid`, `line`, `dot`, `quad`, `extrude_y`, and `anchor`
-- [ ] Implement `Asset` and `Layer` context managers (`with a.layer(name, offset=..., outline=..., sel_out=..., mirror_x=...)`) with masked `scatter`, token-override/recoloring helpers (for shared-silhouette avatars), multi-anchor scene registration (`hw_slot_*`, `window`, `solar`, `breaker`), code-coupled `hitbox`, and direct 1px escape hatches
-- [ ] Add unit tests covering nested layers, masking, plane projections, bevels, avatar token-swaps, and multi-anchor scene metadata
+### `[02.1]` Headless Exporter, Animated Previews, Contact Sheet, Svelte `manifest.d.ts` & `--indexed-ts`
+Objective: implement `Pillow`-backed PNG/spritesheet/emissive-sheet/LUT/GIF-APNG export, direct `--indexed-ts` `Uint8Array` + palette (`EMISSIVE`/`BRIGHT`/`REFL`) export for CPU indexed framebuffers (`idle-datacenter`), upgraded coordinate-ruled `.contact.png`, pixel-diff generator, and auto-generated `manifest.d.ts` for Svelte 5.
+- [ ] Implement `surface_to_rgba`, `assert_binary_alpha`, indexed texture + 1D LUT export, and PNG/GIF/APNG encoding in `src/pixelforge/export/png.py`
+- [ ] Implement `export_asset_bundle` generating state PNGs, `<id>_sheet.png`, `<id>_<state>_emissive.png`, `<id>_sheet_emissive.png`, optional GIF/APNG preview, and `manifest.json` (preserving per-state/per-frame metadata when varying)
+- [ ] Implement `generate_svelte_manifest_dts` emitting strictly typed `manifest.d.ts` (IDs, states, frames, fps, anchors, hitboxes)
+- [ ] Implement `export_indexed_ts` in `src/pixelforge/export/indexed_ts.py` emitting compact RLE/base64 `Uint8Array` buffers (`255 = transparent`), `palette.generated.ts` (`PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, `REFL`), and typed `manifest.generated.ts` compatible with `idle-datacenter`'s `Framebuffer.blit()`
+- [ ] Implement upgraded `generate_contact_sheet` (full untruncated palette names + `[E]` flag, hitbox dashed overlays, anchor crosshairs, 1× dark/light, zoomed `(x, y)` ruler, state/frame matrix, variant previews, and bounding-box/orphan metrics)
+- [ ] Implement `generate_pixel_diff` (side-by-side + magenta diff PNG) and unit tests in `tests/export/`
 
 ---
 
@@ -24,19 +26,11 @@ Objective: implement the hierarchical context-manager authoring API so AI agents
 | `[00.0]` | V2 Python (`build123d`-style) branch, architecture spec (`DESIGN_V2.md`), ADR & roadmap | `6b94817` | 2026-11-24 |
 | `[00.1]` | Python V2 Project Bootstrap & Toolchain Setup (`uv`, `ruff`, `pyright`, `pytest`, `argparse`, V1 TS cleanup) | `78cb1bf` | 2026-11-25 |
 | `[01.1]` | Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives (`numpy` uint8, `StylePack`, `PaletteLookup`, `IndexedSurface`) | `fb6b7cf` | 2026-11-25 |
+| `[01.2]` | Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`) | `d324ba5` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[02.1]` Headless Exporter, Animated Previews, Contact Sheet, Svelte `manifest.d.ts` & `--indexed-ts`
-Objective: implement `Pillow`-backed PNG/spritesheet/emissive-sheet/LUT/GIF-APNG export, direct `--indexed-ts` `Uint8Array` + palette (`EMISSIVE`/`BRIGHT`/`REFL`) export for CPU indexed framebuffers (`idle-datacenter`), upgraded coordinate-ruled `.contact.png`, pixel-diff generator, and auto-generated `manifest.d.ts` for Svelte 5.
-- [ ] Implement `surface_to_rgba`, `assert_binary_alpha`, indexed texture + 1D LUT export, and PNG/GIF/APNG encoding in `src/pixelforge/export/png.py`
-- [ ] Implement `export_asset_bundle` generating state PNGs, `<id>_sheet.png`, `<id>_<state>_emissive.png`, `<id>_sheet_emissive.png`, optional GIF/APNG preview, and `manifest.json` (preserving per-state/per-frame metadata when varying)
-- [ ] Implement `generate_svelte_manifest_dts` emitting strictly typed `manifest.d.ts` (IDs, states, frames, fps, anchors, hitboxes)
-- [ ] Implement `export_indexed_ts` in `src/pixelforge/export/indexed_ts.py` emitting compact RLE/base64 `Uint8Array` buffers (`255 = transparent`), `palette.generated.ts` (`PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, `REFL`), and typed `manifest.generated.ts` compatible with `idle-datacenter`'s `Framebuffer.blit()`
-- [ ] Implement upgraded `generate_contact_sheet` (full untruncated palette names + `[E]` flag, hitbox dashed overlays, anchor crosshairs, 1× dark/light, zoomed `(x, y)` ruler, state/frame matrix, variant previews, and bounding-box/orphan metrics)
-- [ ] Implement `generate_pixel_diff` (side-by-side + magenta diff PNG) and unit tests in `tests/export/`
 
 ### `[03.1]` AST Static + Runtime Guard Suite & `pixelforge` CLI (`init`, `render`, `check`, `diff`, `watch`)
 Objective: build stdlib `ast` static guards, runtime invariants, orphan-pixel diagnostics, and the full CLI including `--indexed-ts`, git-ref `.asset.py` diffing, and `watch` hot-reload for Svelte 5 / `idle-datacenter` development.
