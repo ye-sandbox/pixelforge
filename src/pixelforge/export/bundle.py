@@ -243,29 +243,28 @@ def _compute_bundle_digest(
     return hasher.hexdigest()
 
 
-def export_asset_bundle(
-    asset: AssetModule,
-    style: StylePack,
-    options: ExportBundleOptions | None = None,
-) -> ExportBundleResult:
-    """Compile an asset into PNGs, spritesheets, emissive masks, LUTs, previews, and manifest."""
-    opts = options or ExportBundleOptions()
-    spec = asset.SPEC
-    rendered_frames = render_asset_frames(
-        asset,
-        style,
-        variant=opts.variant,
-        token_overrides=opts.token_overrides,
-    )
+@dataclass(frozen=True)
+class _StateExportOutputs:
+    files: dict[str, bytes]
+    preview_files: dict[str, bytes]
+    state_files: dict[str, str]
+    emissive_files: dict[str, str]
+    indexed_files: dict[str, str]
 
-    include_emissive = _has_emissive_colors(style) if opts.emissive is None else opts.emissive
+
+def _export_state_outputs(
+    spec: AssetSpec,
+    style: StylePack,
+    by_key: Mapping[tuple[str, int], RenderedFrame],
+    opts: ExportBundleOptions,
+    *,
+    include_emissive: bool,
+) -> _StateExportOutputs:
     files: dict[str, bytes] = {}
     preview_files: dict[str, bytes] = {}
     state_files: dict[str, str] = {}
     emissive_files: dict[str, str] = {}
     indexed_files: dict[str, str] = {}
-
-    by_key = {(item.state, item.frame): item for item in rendered_frames}
 
     for state in spec.states:
         primary = by_key[(state, 0)]
@@ -312,25 +311,81 @@ def export_asset_bundle(
                 else frames_to_gif(rgba_seq, fps=spec.fps)
             )
 
-    sheet_name: str | None = None
+    return _StateExportOutputs(
+        files=files,
+        preview_files=preview_files,
+        state_files=state_files,
+        emissive_files=emissive_files,
+        indexed_files=indexed_files,
+    )
+
+
+def _export_spritesheet_outputs(
+    spec: AssetSpec,
+    style: StylePack,
+    rendered_frames: Sequence[RenderedFrame],
+    opts: ExportBundleOptions,
+    *,
+    include_emissive: bool,
+) -> tuple[dict[str, bytes], str | None, str | None]:
+    if spec.frames <= 1:
+        return ({}, None, None)
+
+    files: dict[str, bytes] = {}
+    sheet_surface = build_spritesheet_surface(spec, rendered_frames)
+    sheet_name = f"{spec.id}_sheet.png"
+    files[sheet_name] = rgba_to_png(
+        surface_to_rgba(sheet_surface, style, variant=opts.variant, scale=opts.scale)
+    )
+
     sheet_emissive_name: str | None = None
-    if spec.frames > 1:
-        sheet_surface = build_spritesheet_surface(spec, rendered_frames)
-        sheet_name = f"{spec.id}_sheet.png"
-        files[sheet_name] = rgba_to_png(
-            surface_to_rgba(sheet_surface, style, variant=opts.variant, scale=opts.scale)
-        )
-        if include_emissive:
-            sheet_emissive_name = f"{spec.id}_sheet_emissive.png"
-            files[sheet_emissive_name] = rgba_to_png(
-                surface_to_rgba(
-                    sheet_surface,
-                    style,
-                    variant=opts.variant,
-                    scale=opts.scale,
-                    emissive_only=True,
-                )
+    if include_emissive:
+        sheet_emissive_name = f"{spec.id}_sheet_emissive.png"
+        files[sheet_emissive_name] = rgba_to_png(
+            surface_to_rgba(
+                sheet_surface,
+                style,
+                variant=opts.variant,
+                scale=opts.scale,
+                emissive_only=True,
             )
+        )
+    return (files, sheet_name, sheet_emissive_name)
+
+
+def export_asset_bundle(
+    asset: AssetModule,
+    style: StylePack,
+    options: ExportBundleOptions | None = None,
+) -> ExportBundleResult:
+    """Compile an asset into PNGs, spritesheets, emissive masks, LUTs, previews, and manifest."""
+    opts = options or ExportBundleOptions()
+    spec = asset.SPEC
+    rendered_frames = render_asset_frames(
+        asset,
+        style,
+        variant=opts.variant,
+        token_overrides=opts.token_overrides,
+    )
+
+    include_emissive = _has_emissive_colors(style) if opts.emissive is None else opts.emissive
+    by_key = {(item.state, item.frame): item for item in rendered_frames}
+
+    state_out = _export_state_outputs(
+        spec,
+        style,
+        by_key,
+        opts,
+        include_emissive=include_emissive,
+    )
+    sheet_files, sheet_name, sheet_emissive_name = _export_spritesheet_outputs(
+        spec,
+        style,
+        rendered_frames,
+        opts,
+        include_emissive=include_emissive,
+    )
+    files = {**state_out.files, **sheet_files}
 
     lut_name: str | None = None
     if opts.lut:
@@ -353,11 +408,11 @@ def export_asset_bundle(
     )
 
     export_files = ExportedAssetFiles(
-        states=state_files,
+        states=state_out.state_files,
         sheet=sheet_name,
-        emissive=emissive_files if include_emissive else None,
+        emissive=state_out.emissive_files if include_emissive else None,
         sheetEmissive=sheet_emissive_name,
-        indexed=indexed_files if opts.lut else None,
+        indexed=state_out.indexed_files if opts.lut else None,
         lut=lut_name,
     )
 
@@ -380,7 +435,7 @@ def export_asset_bundle(
     return ExportBundleResult(
         manifest=manifest,
         files=files,
-        preview_files=preview_files,
+        preview_files=state_out.preview_files,
         rendered_frames=rendered_frames,
     )
 

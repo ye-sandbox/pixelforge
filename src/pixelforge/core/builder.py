@@ -55,34 +55,6 @@ class _LayerFrame:
     layer: Layer
 
 
-def _apply_palette_overrides(
-    base: PaletteLookup,
-    style: StylePack,
-    overrides: Mapping[str, str | int],
-) -> PaletteLookup:
-    """Return a new `PaletteLookup` with selected semantic token names remapped."""
-    resolved = base.to_dict()
-    for src_token, dst_value in overrides.items():
-        if src_token not in resolved:
-            msg = f"Unknown source token {src_token!r} for palette override"
-            raise KeyError(msg)
-        if isinstance(dst_value, str):
-            resolved[src_token] = base[dst_value]
-        else:
-            idx = int(dst_value)
-            if idx < 0 or idx >= TRANSPARENT_INDEX:
-                msg = (
-                    f"Override index {idx} out of valid palette range [0..{TRANSPARENT_INDEX - 1}]"
-                )
-                raise ValueError(msg)
-            resolved[src_token] = idx
-
-    # Build a synthetic PaletteLookup bound to the same style id with remapped indices.
-    remapped = PaletteLookup(style)
-    object.__setattr__(remapped, "_indices", resolved)
-    return remapped
-
-
 class _DrawingMixin:
     """Shared drawing, scatter, recolor, and metadata helpers for `Asset` and `Layer`."""
 
@@ -583,7 +555,7 @@ class Asset(_DrawingMixin):
 
         base_pal = PaletteLookup(style)
         if token_overrides:
-            base_pal = _apply_palette_overrides(base_pal, style, token_overrides)
+            base_pal = base_pal.with_overrides(token_overrides)
         self._pal = base_pal
 
         self._root_surface = IndexedSurface(spec.width, spec.height)
@@ -661,7 +633,7 @@ class Asset(_DrawingMixin):
     def palette_override(self, overrides: Mapping[str, str | int]) -> Generator[PaletteLookup]:
         """Temporarily remap palette token names inside a `with` scope (e.g., avatar swaps)."""
         prev_pal = self._pal
-        self._pal = _apply_palette_overrides(prev_pal, self.style, overrides)
+        self._pal = prev_pal.with_overrides(overrides)
         try:
             yield self._pal
         finally:

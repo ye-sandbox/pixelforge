@@ -10,12 +10,15 @@ from numpy.typing import NDArray
 
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import StylePack
+from pixelforge.export._canvas import Rgb, composite_rgba, draw_checkerboard
 from pixelforge.export.png import rgba_to_png, surface_to_rgba
 
 _GAP: Final[int] = 4
 _PADDING: Final[int] = 8
 _MAGENTA: Final[tuple[int, int, int, int]] = (255, 42, 133, 255)
 _FRAME_BG: Final[tuple[int, int, int, int]] = (13, 17, 23, 255)
+_CHECKER_A: Final[Rgb] = (22, 24, 28)
+_CHECKER_B: Final[Rgb] = (30, 32, 36)
 
 
 @dataclass(frozen=True)
@@ -27,27 +30,6 @@ class DiffResult:
     width: int
     height: int
     png: bytes
-
-
-def _fill_checker(canvas: NDArray[np.uint8], x0: int, y0: int, w: int, h: int) -> None:
-    yy, xx = np.mgrid[0:h, 0:w]
-    dark = (((xx >> 2) + (yy >> 2)) & 1) == 0
-    patch = np.empty((h, w, 4), dtype=np.uint8)
-    patch[dark] = (22, 24, 28, 255)
-    patch[~dark] = (30, 32, 36, 255)
-    canvas[y0 : y0 + h, x0 : x0 + w] = patch
-
-
-def _blit_opaque(
-    canvas: NDArray[np.uint8],
-    src: NDArray[np.uint8],
-    dx: int,
-    dy: int,
-) -> None:
-    sh, sw, _ = src.shape
-    patch = canvas[dy : dy + sh, dx : dx + sw]
-    mask = src[:, :, 3] > 0
-    patch[mask] = src[mask]
 
 
 def generate_pixel_diff(
@@ -76,12 +58,12 @@ def generate_pixel_diff(
     curr_x = _PADDING + panel_w + _GAP
     diff_x = _PADDING + (panel_w + _GAP) * 2
 
-    _fill_checker(canvas, base_x, _PADDING, panel_w, panel_h)
-    _fill_checker(canvas, curr_x, _PADDING, panel_w, panel_h)
-    _fill_checker(canvas, diff_x, _PADDING, panel_w, panel_h)
+    draw_checkerboard(canvas, base_x, _PADDING, panel_w, panel_h, _CHECKER_A, _CHECKER_B, 4)
+    draw_checkerboard(canvas, curr_x, _PADDING, panel_w, panel_h, _CHECKER_A, _CHECKER_B, 4)
+    draw_checkerboard(canvas, diff_x, _PADDING, panel_w, panel_h, _CHECKER_A, _CHECKER_B, 4)
 
-    _blit_opaque(canvas, baseline, base_x, _PADDING)
-    _blit_opaque(canvas, current, curr_x, _PADDING)
+    composite_rgba(canvas, baseline, base_x, _PADDING)
+    composite_rgba(canvas, current, curr_x, _PADDING)
 
     padded_base = np.zeros((panel_h, panel_w, 4), dtype=np.uint8)
     padded_curr = np.zeros((panel_h, panel_w, 4), dtype=np.uint8)

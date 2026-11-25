@@ -680,3 +680,24 @@ class IndexedSurface:
             self.data[below_empty] = c_bot
         if c_top is not None:
             self.data[above_empty] = c_top
+
+
+def orphan_pixel_mask(surface: IndexedSurface) -> NDArray[np.bool_]:
+    """Return a boolean mask of opaque pixels with zero 8-connected opaque neighbors."""
+    opaque = surface.data != TRANSPARENT_INDEX
+    if not np.any(opaque):
+        return np.zeros_like(opaque, dtype=bool)
+
+    # INVARIANT: An orphan pixel is an opaque pixel with zero 8-connected opaque neighbors.
+    padded = np.pad(opaque.astype(np.uint8), 1, mode="constant", constant_values=0)
+    neighbor_sum = (
+        padded[:-2, :-2]
+        + padded[:-2, 1:-1]
+        + padded[:-2, 2:]
+        + padded[1:-1, :-2]
+        + padded[1:-1, 2:]
+        + padded[2:, :-2]
+        + padded[2:, 1:-1]
+        + padded[2:, 2:]
+    )
+    return np.asarray(opaque & (neighbor_sum == 0), dtype=bool)

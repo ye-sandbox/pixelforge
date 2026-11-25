@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -66,6 +66,33 @@ class PaletteLookup:
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._indices)
+
+    @classmethod
+    def _from_resolved(cls, style_id: str, resolved: Mapping[str, int]) -> PaletteLookup:
+        instance = cls.__new__(cls)
+        object.__setattr__(instance, "_style_id", style_id)
+        object.__setattr__(instance, "_indices", dict(resolved))
+        return instance
+
+    def with_overrides(self, overrides: Mapping[str, str | int]) -> PaletteLookup:
+        """Return a new `PaletteLookup` with selected semantic token names remapped."""
+        resolved = dict(self._indices)
+        for src_token, dst_value in overrides.items():
+            if src_token not in resolved:
+                msg = f"Unknown source token {src_token!r} for palette override"
+                raise KeyError(msg)
+            if isinstance(dst_value, str):
+                resolved[src_token] = self[dst_value]
+            else:
+                idx = int(dst_value)
+                if idx < 0 or idx >= TRANSPARENT_INDEX:
+                    msg = (
+                        f"Override index {idx} out of valid palette range "
+                        f"[0..{TRANSPARENT_INDEX - 1}]"
+                    )
+                    raise ValueError(msg)
+                resolved[src_token] = idx
+        return PaletteLookup._from_resolved(self._style_id, resolved)
 
     def to_dict(self) -> dict[str, int]:
         """Return a shallow copy of the resolved token-to-index map."""
