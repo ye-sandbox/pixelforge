@@ -8,11 +8,7 @@
 
 ## Active Task
 
-### `[05.1]` Reference Proportion & Quantized Sketch Analyzer (`pixelforge analyze-ref`)
-Objective: add an optional, strictly ephemeral CLI helper that extracts aspect ratio and a low-resolution palette-quantized ASCII sketch from a local reference image to guide agent planning without ever importing external rasters into assets.
-- [ ] Implement `analyze_reference_image(path, style, size)` outputting aspect ratio, dominant palette token histogram, and quantized ASCII draft
-- [ ] Wire `pixelforge analyze-ref` CLI command with explicit guardrails ensuring outputs stay ephemeral
-- [ ] Add hermetic tests using programmatically generated in-memory PNG fixtures
+_All planned `v2-py` roadmap tasks (`[00.0]`–`[05.1]`) are complete. See Backlog / Future Backlog below or await human prioritization._
 
 ---
 
@@ -28,6 +24,7 @@ Objective: add an optional, strictly ephemeral CLI helper that extracts aspect r
 | `[03.1]` | AST Static + Runtime Guard Suite & `pixelforge` CLI (`init`, `render`, `check`, `diff`, `watch`) | `4fa94ee` | 2026-11-25 |
 | `[03.2]` | Hermetic Agent Skill (`create-pixel-asset` v2) & Docs Sync (`README.md`, `README.pt-br.md`) | `0219a5f` | 2026-11-25 |
 | `[04.1]` | Pilot Pack Port & Benchmark Validation (`homelab-16bit` 64-color canonical pack + 7 pilot/ThinkPad assets) | `eff4945` | 2026-11-25 |
+| `[05.1]` | Reference Proportion & Quantized Sketch Analyzer (`pixelforge analyze-ref`) | `75dfc6c` | 2026-11-25 |
 
 ---
 
