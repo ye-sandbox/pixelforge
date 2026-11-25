@@ -8,10 +8,12 @@
 
 ## Active Task
 
-### `[03.2]` Hermetic Agent Skill (`create-pixel-asset` v2) & Docs Sync
-Objective: rewrite `.agent/skills/create-pixel-asset/SKILL.md` for Python `build123d`-style authoring and synchronize `README.md` and `README.pt-br.md` to v2.
-- [ ] Update `.agent/skills/create-pixel-asset/SKILL.md` with compositional `with a.layer` / `with a.plane` workflow, AST guards, GIF/contact-sheet critique protocol, and canonical `.asset.py` examples
-- [ ] Synchronize `README.md` and `README.pt-br.md` (zero heading emojis, Mermaid diagrams, real CLI flags, Svelte 5 `manifest.d.ts` + `--indexed-ts` integration, and `uv` validation commands)
+### `[04.1]` Pilot Pack Port & Benchmark Validation (`homelab-16bit` 64-Color Canonical Pack + ThinkPad)
+Objective: author the canonical 64-color `homelab-16bit` `StylePack` aligned with `idle-datacenter` (`emissive`, `bright`, `reflections`, fixing `WINDOW_SKY` emissive separation) and port pilot assets (`old_laptop`, `used_gpu_rig`, `ai_cluster_node`, `bedroom_desk_iso`, `thinkpad_r51_iso`, `thinkpad_r51_front`) to `.asset.py`, validating `< 40 ms` renders, zero guard violations, clean 1× visuals, Svelte `manifest.d.ts`, and `--indexed-ts` framebuffer export.
+- [ ] Author `styles/homelab_16bit.style.py` aligned with `idle-datacenter`'s 64-color palette (`VOID..GLASS_L`, `emissive`, `bright`, `reflections`), keeping non-emissive accent tokens distinct from emissive glow tokens
+- [ ] Port all 4 `homelab/` assets and ThinkPad showcase assets using `with a.layer` / `with a.plane` / `dither` / `iso_box`
+- [ ] Run Visual Critic Loop on `.contact.png` + animated `.gif` previews (fix any orphan pixels or outline defects)
+- [ ] Add `tests/test_homelab_pilot.py` asserting all guards pass, render time budget holds, and both `manifest.d.ts` and `--indexed-ts` outputs match expected contracts
 
 ---
 
@@ -25,17 +27,11 @@ Objective: rewrite `.agent/skills/create-pixel-asset/SKILL.md` for Python `build
 | `[01.2]` | Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`) | `d324ba5` | 2026-11-25 |
 | `[02.1]` | Headless Exporter, Animated Previews, Contact Sheet, Svelte `manifest.d.ts` & `--indexed-ts` | `eef6045` | 2026-11-25 |
 | `[03.1]` | AST Static + Runtime Guard Suite & `pixelforge` CLI (`init`, `render`, `check`, `diff`, `watch`) | `4fa94ee` | 2026-11-25 |
+| `[03.2]` | Hermetic Agent Skill (`create-pixel-asset` v2) & Docs Sync (`README.md`, `README.pt-br.md`) | `0219a5f` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[04.1]` Pilot Pack Port & Benchmark Validation (`homelab-16bit` 64-Color Canonical Pack + ThinkPad)
-Objective: author the canonical 64-color `homelab-16bit` `StylePack` aligned with `idle-datacenter` (`emissive`, `bright`, `reflections`, fixing `WINDOW_SKY` emissive separation) and port pilot assets (`old_laptop`, `used_gpu_rig`, `ai_cluster_node`, `bedroom_desk_iso`, `thinkpad_r51_iso`, `thinkpad_r51_front`) to `.asset.py`, validating `< 40 ms` renders, zero guard violations, clean 1× visuals, Svelte `manifest.d.ts`, and `--indexed-ts` framebuffer export.
-- [ ] Author `styles/homelab_16bit.style.py` aligned with `idle-datacenter`'s 64-color palette (`VOID..GLASS_L`, `emissive`, `bright`, `reflections`), keeping non-emissive accent tokens distinct from emissive glow tokens
-- [ ] Port all 4 `homelab/` assets and ThinkPad showcase assets using `with a.layer` / `with a.plane` / `dither` / `iso_box`
-- [ ] Run Visual Critic Loop on `.contact.png` + animated `.gif` previews (fix any orphan pixels or outline defects)
-- [ ] Add `tests/test_homelab_pilot.py` asserting all guards pass, render time budget holds, and both `manifest.d.ts` and `--indexed-ts` outputs match expected contracts
 
 ### `[05.1]` Reference Proportion & Quantized Sketch Analyzer (`pixelforge analyze-ref`)
 Objective: add an optional, strictly ephemeral CLI helper that extracts aspect ratio and a low-resolution palette-quantized ASCII sketch from a local reference image to guide agent planning without ever importing external rasters into assets.
