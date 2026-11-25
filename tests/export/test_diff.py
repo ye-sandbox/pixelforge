@@ -62,3 +62,26 @@ def test_generate_surface_diff_handles_different_sizes() -> None:
     result = generate_surface_diff(s1, s2, style)
     assert result.changed_pixels == 1
     assert result.total_pixels == 24
+
+
+def test_generate_surface_diff_detects_palette_only_changes() -> None:
+    base_style = _style()
+    curr_style = StylePack(
+        id="diff-style",
+        perspective="side",
+        lighting_angle="top",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="OUTLINE", hex="#101218", flags=("outline",)),
+            PaletteColor(index=1, name="FILL", hex="#22aa44"),
+            PaletteColor(index=2, name="ACCENT", hex="#ff5555"),
+        ),
+    )
+    surface = IndexedSurface(4, 4)
+    surface.rect(1, 1, 2, 2, 1)
+
+    result = generate_surface_diff(surface, surface, curr_style, baseline_style=base_style)
+    assert result.changed_pixels == 4
+    decoded = decode_png_to_rgba(result.png)
+    diff_panel_x = 8 + 4 + 4 + 4 + 4
+    assert tuple(decoded[8 + 1, diff_panel_x + 1].tolist()) == (255, 42, 133, 255)

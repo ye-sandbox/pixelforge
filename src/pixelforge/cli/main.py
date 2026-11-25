@@ -16,6 +16,7 @@ from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_
 from pixelforge.export.bundle import (
     ExportBundleOptions,
     ExportBundleResult,
+    LoadedAsset,
     export_asset_bundle,
     render_asset_frames,
     write_export_bundle,
@@ -29,6 +30,8 @@ from pixelforge.guard.runner import (
     load_all_styles,
     load_asset_from_git,
     load_asset_module,
+    load_style_from_git,
+    load_style_module,
     run_checks,
 )
 
@@ -270,9 +273,43 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     )
 
 
+def _resolve_baseline_style(
+    root: Path,
+    *,
+    baseline_asset: LoadedAsset | None,
+    current_style: StylePack,
+    styles: dict[str, StylePack],
+    style_paths: dict[str, Path],
+    base_ref: str,
+    variant: str | None,
+) -> StylePack:
+    """Load the historical `StylePack` at `base_ref`, falling back to current when needed."""
+    if baseline_asset is None:
+        return current_style
+
+    fallback = styles.get(baseline_asset.SPEC.style_id, current_style)
+    style_path = style_paths.get(baseline_asset.SPEC.style_id)
+    if style_path is None:
+        return fallback
+
+    historical = load_style_from_git(root, style_path, ref=base_ref)
+    if historical is None:
+        return fallback
+    # INVARIANT: Fall back to current style when --variant only exists in the working tree
+    if variant is not None and variant not in historical.variants:
+        return fallback
+    return historical
+
+
 def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     root = _resolve_root(args.root)
-    styles = load_all_styles(root / "styles")
+    styles: dict[str, StylePack] = {}
+    style_paths: dict[str, Path] = {}
+    for style_path in discover_style_files(root / "styles"):
+        pack = load_style_module(style_path)
+        styles[pack.id] = pack
+        style_paths[pack.id] = style_path
+
     asset_id: str = args.asset_id
     target_path: Path | None = None
     for candidate in discover_asset_files(root / "assets"):
@@ -292,9 +329,21 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         return 1
 
     baseline_asset = load_asset_from_git(root, target_path, ref=args.base)
+    base_style = _resolve_baseline_style(
+        root,
+        baseline_asset=baseline_asset,
+        current_style=style,
+        styles=styles,
+        style_paths=style_paths,
+        base_ref=args.base,
+        variant=args.variant,
+    )
     current_frames = render_asset_frames(current_asset, style, variant=args.variant)
     baseline_map = (
-        {(f.state, f.frame): f.surface for f in render_asset_frames(baseline_asset, style)}
+        {
+            (f.state, f.frame): f.surface
+            for f in render_asset_frames(baseline_asset, base_style, variant=args.variant)
+        }
         if baseline_asset is not None
         else {}
     )
@@ -315,6 +364,7 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
             style,
             variant=args.variant,
             scale=int(args.scale),
+            baseline_style=base_style,
         )
         suffix = (
             f"{frame.state}.diff.png"

@@ -98,6 +98,54 @@ def test_cli_diff_against_git_head(tmp_path: Path, capsys: pytest.CaptureFixture
     assert (tmp_path / ".pixelforge" / "diffs" / "example_crate_idle.diff.png").is_file()
 
 
+def test_cli_diff_palette_only_against_git_head(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `diff` surfaces palette-only edits against historical StylePack at --base HEAD."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "init")
+    capsys.readouterr()
+
+    style_file = tmp_path / "styles" / "homelab_16bit.style.py"
+    original_style = style_file.read_text(encoding="utf-8")
+    updated_style = original_style.replace("#38bdf8", "#ff00aa")
+    assert updated_style != original_style
+    style_file.write_text(updated_style, encoding="utf-8")
+
+    rc = main(["diff", "example_crate", "--base", "HEAD", "--root", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert ": 0/" not in out
+    assert ": 2/576 changed pixel(s)" in out
+
+    diff_path = tmp_path / ".pixelforge" / "diffs" / "example_crate_idle.diff.png"
+    assert diff_path.is_file()
+    decoded = np.asarray(Image.open(diff_path).convert("RGBA"), dtype=np.uint8)
+    magenta_mask = np.all(decoded == np.array([255, 42, 133, 255], dtype=np.uint8), axis=2)
+    assert int(np.count_nonzero(magenta_mask)) > 0
+
+    # Variant added only in working tree falls back to current style without crashing
+    variant_style = updated_style.replace(
+        "variants={},",
+        'variants={"night": {"ACCENT_CYAN": "#00ffcc"}},',
+    )
+    if variant_style == updated_style:
+        variant_style = updated_style.replace(
+            "    palette=(",
+            '    variants={"night": {"ACCENT_CYAN": "#00ffcc"}},\n    palette=(',
+        )
+    style_file.write_text(variant_style, encoding="utf-8")
+    rc_variant = main(
+        ["diff", "example_crate", "--base", "HEAD", "--variant", "night", "--root", str(tmp_path)]
+    )
+    assert rc_variant == 0
+
+
 def test_cli_watch_bounded_cycles(tmp_path: Path) -> None:
     """Verify `watch` runs initial check+render and exits cleanly after --max-cycles."""
     assert main(["init", "--root", str(tmp_path)]) == 0

@@ -113,8 +113,14 @@ def generate_surface_diff(
     *,
     variant: str | None = None,
     scale: int = 1,
+    baseline_style: StylePack | None = None,
 ) -> DiffResult:
-    """Render and diff two `IndexedSurface` buffers under a common `StylePack`."""
-    base_rgba = surface_to_rgba(baseline, style, variant=variant, scale=scale)
+    """Render and diff two `IndexedSurface` buffers under their `StylePack`s."""
+    base_rgba = surface_to_rgba(
+        baseline,
+        baseline_style if baseline_style is not None else style,
+        variant=variant,
+        scale=scale,
+    )
     curr_rgba = surface_to_rgba(current, style, variant=variant, scale=scale)
     return generate_pixel_diff(base_rgba, curr_rgba)
