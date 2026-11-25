@@ -8,11 +8,10 @@
 
 ## Active Task
 
-### `[12.1]` Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff)
+### `[13.1]` CI TypeScript Validation (`tsc --noEmit`)
 
-- [ ] Add `--json` machine-readable diff summary output to `pixelforge diff`
-- [ ] Detect anchor and hitbox coordinate deltas against `--base` alongside pixel diffs
-- [ ] Cover structured `diff --json` and anchor/hitbox delta reporting with hermetic unit tests (`uv run pytest`)
+- [ ] Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`
+- [ ] Cover generated TypeScript compilation validation in CI / tests without breaking hermetic `uv run pytest`
 
 ---
 
@@ -40,12 +39,13 @@
 | `[09.1]` | Automated Multimodal Critic in CI (`hydra-llm-router` + `httpx2`, `self-hosted`, `pixelforge critic`) | `11cf32e` | 2026-11-25 |
 | `[10.1]` | Aseprite JSON & TexturePacker Atlas Export (`pixelforge.export.atlas`, `--atlas {aseprite,texturepacker,all}`) | `c148fba` | 2026-11-25 |
 | `[11.1]` | Catalog Scalability (`watch` Incremental Rebuild & Lazy `--indexed-ts`) | `fd9a338` | 2026-11-25 |
+| `[12.1]` | Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff) | `1690b36` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-1. **`[13.1]` CI TypeScript Validation (`tsc --noEmit`)** — Add a CI validation step confirming generated `manifest.d.ts` and `--indexed-ts` TypeScript outputs typecheck cleanly under strict `tsc`.
+_None currently queued._
 
 ---
 
