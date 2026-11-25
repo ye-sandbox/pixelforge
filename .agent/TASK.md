@@ -8,13 +8,10 @@
 
 ## Active Task
 
-### `[03.1]` AST Static + Runtime Guard Suite & `pixelforge` CLI (`init`, `render`, `check`, `diff`, `watch`)
-Objective: build stdlib `ast` static guards, runtime invariants, orphan-pixel diagnostics, and the full CLI including `--indexed-ts`, git-ref `.asset.py` diffing, and `watch` hot-reload for Svelte 5 / `idle-datacenter` development.
-- [ ] Implement `ast.parse`-based static guard rules (`no-stdlib-random`, `no-external-assets`, `no-raw-hex`, `no-io-or-eval`) in `src/pixelforge/guard/ast_rules.py`
-- [ ] Implement runtime guard rules (`exact-dimensions`, `closed-palette`, `binary-alpha`, `bit-determinism`, `valid-anchors`) + `orphan-pixels` diagnostic in `src/pixelforge/guard/runtime_rules.py`
-- [ ] Implement `importlib` module discovery + `git show` historical `.asset.py` loader in `src/pixelforge/guard/runner.py`
-- [ ] Implement CLI commands (`init`, `render`, `check`, `diff`, `watch`, including `--indexed-ts` on `render` and `watch`) with `pydantic-settings` env var support (`PIXELFORGE_OUT_DIR`, `PIXELFORGE_SHEETS_DIR`, `PIXELFORGE_DEFAULT_STYLE`)
-- [ ] Add end-to-end hermetic CLI & guard tests in `tests/guard/` and `tests/cli/`
+### `[03.2]` Hermetic Agent Skill (`create-pixel-asset` v2) & Docs Sync
+Objective: rewrite `.agent/skills/create-pixel-asset/SKILL.md` for Python `build123d`-style authoring and synchronize `README.md` and `README.pt-br.md` to v2.
+- [ ] Update `.agent/skills/create-pixel-asset/SKILL.md` with compositional `with a.layer` / `with a.plane` workflow, AST guards, GIF/contact-sheet critique protocol, and canonical `.asset.py` examples
+- [ ] Synchronize `README.md` and `README.pt-br.md` (zero heading emojis, Mermaid diagrams, real CLI flags, Svelte 5 `manifest.d.ts` + `--indexed-ts` integration, and `uv` validation commands)
 
 ---
 
@@ -27,15 +24,11 @@ Objective: build stdlib `ast` static guards, runtime invariants, orphan-pixel di
 | `[01.1]` | Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives (`numpy` uint8, `StylePack`, `PaletteLookup`, `IndexedSurface`) | `fb6b7cf` | 2026-11-25 |
 | `[01.2]` | Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`) | `d324ba5` | 2026-11-25 |
 | `[02.1]` | Headless Exporter, Animated Previews, Contact Sheet, Svelte `manifest.d.ts` & `--indexed-ts` | `eef6045` | 2026-11-25 |
+| `[03.1]` | AST Static + Runtime Guard Suite & `pixelforge` CLI (`init`, `render`, `check`, `diff`, `watch`) | `4fa94ee` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[03.2]` Hermetic Agent Skill (`create-pixel-asset` v2) & Docs Sync
-Objective: rewrite `.agent/skills/create-pixel-asset/SKILL.md` for Python `build123d`-style authoring and synchronize `README.md` and `README.pt-br.md` to v2.
-- [ ] Update `.agent/skills/create-pixel-asset/SKILL.md` with compositional `with a.layer` / `with a.plane` workflow, AST guards, GIF/contact-sheet critique protocol, and canonical `.asset.py` examples
-- [ ] Synchronize `README.md` and `README.pt-br.md` (zero heading emojis, Mermaid diagrams, real CLI flags, Svelte 5 `manifest.d.ts` + `--indexed-ts` integration, and `uv` validation commands)
 
 ### `[04.1]` Pilot Pack Port & Benchmark Validation (`homelab-16bit` 64-Color Canonical Pack + ThinkPad)
 Objective: author the canonical 64-color `homelab-16bit` `StylePack` aligned with `idle-datacenter` (`emissive`, `bright`, `reflections`, fixing `WINDOW_SKY` emissive separation) and port pilot assets (`old_laptop`, `used_gpu_rig`, `ai_cluster_node`, `bedroom_desk_iso`, `thinkpad_r51_iso`, `thinkpad_r51_front`) to `.asset.py`, validating `< 40 ms` renders, zero guard violations, clean 1× visuals, Svelte `manifest.d.ts`, and `--indexed-ts` framebuffer export.
