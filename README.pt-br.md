@@ -138,4 +138,4 @@ git diff --check
 
 ## Licença
 
-Privado / Interno (`ye-sandbox`).
+Licença Apache 2.0 — veja [LICENSE](LICENSE).
