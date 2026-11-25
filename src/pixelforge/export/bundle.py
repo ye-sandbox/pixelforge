@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -393,18 +395,34 @@ def build_manifest_document(
     }
 
 
+def _atomic_write_text(target_path: Path, content: str) -> None:
+    fd, tmp_name = tempfile.mkstemp(
+        dir=target_path.parent,
+        prefix=f".{target_path.name}.",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(tmp_path, target_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def write_manifest(
     entries: Mapping[str, ExportedAssetManifestEntry],
     out_dir: Path,
 ) -> tuple[Path, Path]:
-    """Write `manifest.json` and `manifest.d.ts` into `out_dir`."""
+    """Atomically write `manifest.json` and `manifest.d.ts` into `out_dir`."""
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_json_path = out_dir / "manifest.json"
     manifest_dts_path = out_dir / "manifest.d.ts"
 
     doc = build_manifest_document(entries)
-    manifest_json_path.write_text(f"{json.dumps(doc, indent=2)}\n", encoding="utf-8")
-    manifest_dts_path.write_text(generate_svelte_manifest_dts(entries), encoding="utf-8")
+    _atomic_write_text(manifest_json_path, f"{json.dumps(doc, indent=2)}\n")
+    _atomic_write_text(manifest_dts_path, generate_svelte_manifest_dts(entries))
     return (manifest_json_path, manifest_dts_path)
 
 
@@ -416,8 +434,9 @@ def write_export_bundle(
     out_dir: Path,
     *,
     previews_dir: Path | None = None,
+    update_manifest: bool = True,
 ) -> Path:
-    """Write compiled sprite PNGs, merge `manifest.json` + `manifest.d.ts`, and save previews."""
+    """Write compiled sprite PNGs, optionally merge manifest files, and save previews."""
     sprites_dir = out_dir / "sprites"
     sprites_dir.mkdir(parents=True, exist_ok=True)
 
@@ -430,6 +449,9 @@ def write_export_bundle(
             (previews_dir / filename).write_bytes(payload)
 
     manifest_path = out_dir / "manifest.json"
+    if not update_manifest:
+        return manifest_path
+
     existing: dict[str, ExportedAssetManifestEntry] = (
         _MANIFEST_ADAPTER.validate_json(manifest_path.read_text(encoding="utf-8"))
         if manifest_path.exists()

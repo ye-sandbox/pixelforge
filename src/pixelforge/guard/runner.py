@@ -156,10 +156,35 @@ def load_style_from_git(
 def load_all_styles(styles_dir: Path) -> dict[str, StylePack]:
     """Discover and load all `*.style.py` packs indexed by `StylePack.id`."""
     styles: dict[str, StylePack] = {}
+    seen_paths: dict[str, Path] = {}
     for style_path in discover_style_files(styles_dir):
         pack = load_style_module(style_path)
+        if pack.id in seen_paths:
+            msg = (
+                f"Duplicate style ID {pack.id!r} in {style_path} "
+                f"(already declared in {seen_paths[pack.id]})"
+            )
+            raise ValueError(msg)
+        seen_paths[pack.id] = style_path
         styles[pack.id] = pack
     return styles
+
+
+def load_all_assets(assets_dir: Path) -> dict[str, LoadedAsset]:
+    """Discover and load all `*.asset.py` modules indexed by `AssetSpec.id`."""
+    assets: dict[str, LoadedAsset] = {}
+    seen_paths: dict[str, Path] = {}
+    for asset_path in discover_asset_files(assets_dir):
+        loaded = load_asset_module(asset_path)
+        if loaded.SPEC.id in seen_paths:
+            msg = (
+                f"Duplicate asset ID {loaded.SPEC.id!r} in {asset_path} "
+                f"(already declared in {seen_paths[loaded.SPEC.id]})"
+            )
+            raise ValueError(msg)
+        seen_paths[loaded.SPEC.id] = asset_path
+        assets[loaded.SPEC.id] = loaded
+    return assets
 
 
 def run_checks(
@@ -178,13 +203,13 @@ def run_checks(
 
     style_files = discover_style_files(root / "styles")
     styles: dict[str, StylePack] = {}
+    style_origins: dict[str, Path] = {}
     for style_path in style_files:
         ast_issues = check_ast_file(style_path, scope="style")
         violations.extend(ast_issues)
         if not ast_issues:
             try:
                 pack = load_style_module(style_path)
-                styles[pack.id] = pack
             except Exception as exc:
                 violations.append(
                     GuardViolation(
@@ -195,8 +220,27 @@ def run_checks(
                         detail=str(exc),
                     )
                 )
+                continue
+
+            if pack.id in style_origins:
+                violations.append(
+                    GuardViolation(
+                        file=str(style_path),
+                        line=1,
+                        col=0,
+                        rule="duplicate-id",
+                        detail=(
+                            f"Duplicate style ID {pack.id!r} "
+                            f"(already declared in {style_origins[pack.id]})"
+                        ),
+                    )
+                )
+                continue
+            style_origins[pack.id] = style_path
+            styles[pack.id] = pack
 
     asset_files = discover_asset_files(root / "assets")
+    asset_origins: dict[str, Path] = {}
     assets_checked = 0
     for asset_path in asset_files:
         ast_issues = check_ast_file(asset_path, scope="asset")
@@ -222,6 +266,24 @@ def run_checks(
                 assets_checked += 1
             continue
 
+        if loaded.SPEC.id in asset_origins:
+            if asset_id is None or loaded.SPEC.id == asset_id:
+                violations.append(
+                    GuardViolation(
+                        file=str(asset_path),
+                        line=1,
+                        col=0,
+                        rule="duplicate-id",
+                        detail=(
+                            f"Duplicate asset ID {loaded.SPEC.id!r} "
+                            f"(already declared in {asset_origins[loaded.SPEC.id]})"
+                        ),
+                    )
+                )
+                assets_checked += 1
+            continue
+        asset_origins[loaded.SPEC.id] = asset_path
+
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
 
@@ -245,6 +307,17 @@ def run_checks(
                 style,
                 file_path=str(asset_path),
                 strict_orphans=strict_orphans,
+            )
+        )
+
+    if asset_id is not None and assets_checked == 0:
+        violations.append(
+            GuardViolation(
+                file=str(root / "assets"),
+                line=1,
+                col=0,
+                rule="asset-not-found",
+                detail=f"Asset {asset_id!r} not found under assets/",
             )
         )
 

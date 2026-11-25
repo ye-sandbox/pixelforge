@@ -55,17 +55,27 @@ def test_no_io_or_eval() -> None:
     """Ban filesystem I/O, clock access, and dynamic code execution in asset modules."""
     bad = (
         "import os\n"
+        "import sys\n"
         "import pathlib\n"
         "import subprocess\n"
         "import time\n"
+        "import importlib\n"
+        "import shutil\n"
+        "import tempfile\n"
+        "import socket\n"
+        "import urllib.request\n"
+        "import http.client\n"
+        "import builtins\n"
         "from datetime import datetime\n"
         'f = open("secret.txt")\n'
         'x = eval("1 + 1")\n'
         'exec("pass")\n'
+        'y = builtins.open("secret.txt")\n'
+        'z = __builtins__.eval("1")\n'
     )
     violations = check_ast_source(bad, "assets/a.asset.py", scope="asset")
     io_violations = [v for v in violations if v.rule == "no-io-or-eval"]
-    assert len(io_violations) == 8
+    assert len(io_violations) == 18
 
 
 def test_syntax_error_reported_cleanly() -> None:

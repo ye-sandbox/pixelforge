@@ -473,6 +473,7 @@ class Layer(_DrawingMixin):
         [Layer, str, int | float, int | float, int | float, int | float],
         HitboxRect,
     ]
+    _on_enter: Callable[[Layer], None]
     _on_exit: Callable[[Layer, bool], None]
 
     def __init__(
@@ -488,6 +489,7 @@ class Layer(_DrawingMixin):
             [Layer, str, int | float, int | float, int | float, int | float],
             HitboxRect,
         ],
+        on_enter: Callable[[Layer], None],
         on_exit: Callable[[Layer, bool], None],
     ) -> None:
         self.name = name
@@ -497,6 +499,7 @@ class Layer(_DrawingMixin):
         self._resolve_color = resolve_color
         self._emit_anchor_cb = emit_anchor
         self._emit_hitbox_cb = emit_hitbox
+        self._on_enter = on_enter
         self._on_exit = on_exit
 
     @property
@@ -523,6 +526,7 @@ class Layer(_DrawingMixin):
         return self._emit_hitbox_cb(self, name, x, y, w, h)
 
     def __enter__(self) -> Self:
+        self._on_enter(self)
         return self
 
     def __exit__(
@@ -682,6 +686,11 @@ class Asset(_DrawingMixin):
         lw, lh = size if size is not None else (parent.width, parent.height)
         layer_surf = IndexedSurface(lw, lh)
         ox, oy = int(offset[0]), int(offset[1])
+        layer_frame: list[_LayerFrame] = []
+
+        def _enter_layer(_layer: Layer) -> None:
+            self._layer_stack.append(layer_frame[0])
+
         layer_obj = Layer(
             name,
             layer_surf,
@@ -690,9 +699,12 @@ class Asset(_DrawingMixin):
             resolve_color=self._resolve_pal_index,
             emit_anchor=self._emit_anchor_for_layer,
             emit_hitbox=self._emit_hitbox_for_layer,
+            on_enter=_enter_layer,
             on_exit=self._exit_layer_callback,
         )
-        self._layer_stack.append(
+        # INVARIANT: Push onto `_layer_stack` only inside `Layer.__enter__` so unentered
+        # `a.layer(...)` handles cannot leak onto the stack and corrupt subsequent draws.
+        layer_frame.append(
             _LayerFrame(
                 name=name,
                 surface=layer_surf,

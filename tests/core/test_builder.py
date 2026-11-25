@@ -247,8 +247,15 @@ def test_builder_validation_errors() -> None:
     a = Asset(spec, style)
     with pytest.raises(ValueError, match="non-empty"):
         a.layer("")
+    # Unentered layer must not corrupt _layer_stack or active surface
+    _unused = a.layer("unused")
+    assert a.surface is a.root_surface
+    a.put(1, 1, 1)
+    assert a.root_surface.get(1, 1) == 1
+
     with pytest.raises(RuntimeError, match="Out-of-order"):
         outer = a.layer("outer")
         with outer:
-            _inner = a.layer("inner")
+            inner = a.layer("inner")
+            inner.__enter__()
             outer.__exit__(None, None, None)

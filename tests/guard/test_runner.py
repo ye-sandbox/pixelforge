@@ -6,8 +6,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from pixelforge.cli.main import main
-from pixelforge.guard.runner import load_asset_from_git, run_checks
+from pixelforge.guard.runner import (
+    load_all_assets,
+    load_all_styles,
+    load_asset_from_git,
+    run_checks,
+)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -42,3 +49,37 @@ def test_load_asset_from_git(tmp_path: Path) -> None:
 
     missing = load_asset_from_git(tmp_path, tmp_path / "assets" / "missing.asset.py", ref="HEAD")
     assert missing is None
+
+
+def test_run_checks_and_loaders_fail_on_duplicate_ids(tmp_path: Path) -> None:
+    """Emit `duplicate-id` in `run_checks` and raise `ValueError` in loaders."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    style_copy = tmp_path / "styles" / "homelab_dup.style.py"
+    style_copy.write_text(
+        (tmp_path / "styles" / "homelab_16bit.style.py").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    asset_copy = tmp_path / "assets" / "example_crate_dup.asset.py"
+    asset_copy.write_text(
+        (tmp_path / "assets" / "example_crate.asset.py").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    report = run_checks(tmp_path)
+    assert not report.passed
+    dup_violations = [v for v in report.violations if v.rule == "duplicate-id"]
+    assert len(dup_violations) == 2
+
+    with pytest.raises(ValueError, match="Duplicate style ID"):
+        load_all_styles(tmp_path / "styles")
+    with pytest.raises(ValueError, match="Duplicate asset ID"):
+        load_all_assets(tmp_path / "assets")
+
+
+def test_run_checks_missing_asset_id_returns_error(tmp_path: Path) -> None:
+    """Emit `asset-not-found` and exit 1 when `check <asset_id>` matches zero assets."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    report = run_checks(tmp_path, asset_id="nonexistent")
+    assert not report.passed
+    assert any(v.rule == "asset-not-found" for v in report.violations)
+    assert main(["check", "nonexistent", "--root", str(tmp_path)]) == 1

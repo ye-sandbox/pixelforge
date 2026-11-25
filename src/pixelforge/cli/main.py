@@ -7,6 +7,7 @@ import sys
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 from pixelforge import __version__
 from pixelforge.cli.settings import PixelforgeSettings
@@ -16,12 +17,14 @@ from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_
 from pixelforge.export.bundle import (
     ExportBundleOptions,
     ExportBundleResult,
+    ExportedAssetManifestEntry,
     LoadedAsset,
     export_asset_bundle,
     render_asset_frames,
     write_export_bundle,
+    write_manifest,
 )
-from pixelforge.export.contact_sheet import generate_contact_sheet
+from pixelforge.export.contact_sheet import ContactSheetOptions, generate_contact_sheet
 from pixelforge.export.diff import generate_surface_diff
 from pixelforge.export.indexed_ts import export_indexed_ts, write_indexed_ts_bundle
 from pixelforge.guard.runner import (
@@ -200,13 +203,19 @@ def _render_once(
     previews_dir: Path,
     sheet: bool,
     animate: bool,
+    animate_format: Literal["gif", "apng"] = "gif",
     emissive: bool | None,
     lut: bool,
     indexed_ts: bool,
     scale: int,
     variant: str | None,
 ) -> int:
-    styles = load_all_styles(root / "styles")
+    try:
+        styles = load_all_styles(root / "styles")
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
+
     asset_files = discover_asset_files(root / "assets")
     if not asset_files:
         _err("No .asset.py files found under assets/")
@@ -218,14 +227,23 @@ def _render_once(
         emissive=emissive,
         lut=lut,
         animate=animate,
+        animate_format=animate_format,
     )
 
     all_loaded: list[LoadedAsset] = []
+    seen_asset_ids: dict[str, Path] = {}
     bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
     rendered_count = 0
 
     for asset_path in asset_files:
         loaded = load_asset_module(asset_path)
+        if loaded.SPEC.id in seen_asset_ids:
+            _err(
+                f"{asset_path}:1 [duplicate-id] Duplicate asset ID {loaded.SPEC.id!r} "
+                f"(already declared in {seen_asset_ids[loaded.SPEC.id]})"
+            )
+            return 1
+        seen_asset_ids[loaded.SPEC.id] = asset_path
         all_loaded.append(loaded)
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
@@ -243,10 +261,11 @@ def _render_once(
             bundle,
             out_dir,
             previews_dir=previews_dir if animate else None,
+            update_manifest=asset_id is not None,
         )
         if sheet:
             sheets_dir.mkdir(parents=True, exist_ok=True)
-            contact = generate_contact_sheet(loaded, style)
+            contact = generate_contact_sheet(loaded, style, ContactSheetOptions(variant=variant))
             (sheets_dir / f"{loaded.SPEC.id}.contact.png").write_bytes(contact.png)
 
         if style.id not in bundles_by_style:
@@ -259,7 +278,16 @@ def _render_once(
         _err(f"Asset {asset_id!r} not found under assets/")
         return 1
 
+    if asset_id is None:
+        all_manifests: dict[str, ExportedAssetManifestEntry] = {
+            bundle.manifest.id: bundle.manifest
+            for _, style_bundles in bundles_by_style.values()
+            for bundle in style_bundles
+        }
+        write_manifest(all_manifests, out_dir)
+
     if indexed_ts:
+        multi_style = len(bundles_by_style) > 1
         for style, style_bundles in bundles_by_style.values():
             full_bundles = (
                 _compile_style_indexed_bundles(style, style_bundles, all_loaded, options)
@@ -267,7 +295,12 @@ def _render_once(
                 else style_bundles
             )
             ts_result = export_indexed_ts(full_bundles, style)
-            write_indexed_ts_bundle(ts_result, out_dir / "indexed")
+            indexed_out = (
+                out_dir / "indexed" / style.id.replace("-", "_")
+                if multi_style
+                else out_dir / "indexed"
+            )
+            write_indexed_ts_bundle(ts_result, indexed_out)
 
     return 0
 
@@ -285,7 +318,6 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         if settings.previews_dir.is_absolute()
         else root / settings.previews_dir
     )
-    emissive: bool | None = True if args.emissive else None
     return _render_once(
         root,
         asset_id=args.asset_id,
@@ -294,7 +326,8 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         previews_dir=previews_dir,
         sheet=bool(args.sheet),
         animate=bool(args.animate),
-        emissive=emissive,
+        animate_format=args.animate_format,
+        emissive=args.emissive,
         lut=bool(args.lut),
         indexed_ts=bool(args.indexed_ts),
         scale=int(args.scale),
@@ -583,8 +616,23 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
     render_p.add_argument("--out", default=None, help="Output directory")
     render_p.add_argument("--sheet", action="store_true", help="Generate diagnostic .contact.png")
-    render_p.add_argument("--animate", action="store_true", help="Generate animated GIF previews")
-    render_p.add_argument("--emissive", action="store_true", help="Force emissive mask emission")
+    render_p.add_argument(
+        "--animate",
+        action="store_true",
+        help="Generate animated GIF/APNG previews",
+    )
+    render_p.add_argument(
+        "--animate-format",
+        choices=("gif", "apng"),
+        default="gif",
+        help="Animated preview format when --animate is set (default: gif)",
+    )
+    render_p.add_argument(
+        "--emissive",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Force or disable emissive mask emission",
+    )
     render_p.add_argument("--lut", action="store_true", help="Emit indexed PNGs + 1D LUT")
     render_p.add_argument(
         "--indexed-ts",

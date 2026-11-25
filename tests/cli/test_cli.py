@@ -268,3 +268,98 @@ def test_cli_filtered_indexed_ts_preserves_sibling_assets(tmp_path: Path) -> Non
     assert '"sibling_crate"' in watch_sprites
     assert '"example_crate"' in watch_manifest
     assert '"sibling_crate"' in watch_manifest
+
+
+def test_cli_unfiltered_render_replaces_stale_manifest_and_filtered_merges(
+    tmp_path: Path,
+) -> None:
+    """Unfiltered `render` replaces manifest atomically; filtered `render <id>` merges."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    _add_sibling_asset(tmp_path, "sibling_crate")
+    out_dir = tmp_path / "dist"
+
+    assert main(["render", "--root", str(tmp_path)]) == 0
+    manifest_before = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest_before.keys()) == {"example_crate", "sibling_crate"}
+
+    # Filtered render preserves sibling entry in manifest.json
+    assert main(["render", "example_crate", "--root", str(tmp_path)]) == 0
+    manifest_filtered = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest_filtered.keys()) == {"example_crate", "sibling_crate"}
+
+    # Remove sibling asset and run unfiltered render: stale entry must be removed
+    (tmp_path / "assets" / "sibling_crate.asset.py").unlink()
+    assert main(["render", "--root", str(tmp_path)]) == 0
+    manifest_after = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest_after.keys()) == {"example_crate"}
+    dts = (out_dir / "manifest.d.ts").read_text(encoding="utf-8")
+    assert '"example_crate"' in dts
+    assert '"sibling_crate"' not in dts
+
+
+def test_cli_multi_style_indexed_ts_namespaces_per_style(tmp_path: Path) -> None:
+    """Multi-style `--indexed-ts` writes into `dist/indexed/<style_slug>/` without overwriting."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    second_style = (
+        (tmp_path / "styles" / "homelab_16bit.style.py")
+        .read_text(encoding="utf-8")
+        .replace("homelab-16bit", "retro-amber")
+    )
+    (tmp_path / "styles" / "retro_amber.style.py").write_text(second_style, encoding="utf-8")
+    second_asset = (
+        (tmp_path / "assets" / "example_crate.asset.py")
+        .read_text(encoding="utf-8")
+        .replace('id="example_crate"', 'id="amber_crate"')
+        .replace("'homelab-16bit'", "'retro-amber'")
+        .replace('"homelab-16bit"', '"retro-amber"')
+    )
+    (tmp_path / "assets" / "amber_crate.asset.py").write_text(second_asset, encoding="utf-8")
+
+    assert main(["render", "--root", str(tmp_path), "--indexed-ts"]) == 0
+    out_dir = tmp_path / "dist" / "indexed"
+    assert (out_dir / "homelab_16bit" / "manifest.generated.ts").is_file()
+    assert (out_dir / "retro_amber" / "manifest.generated.ts").is_file()
+    assert not (out_dir / "manifest.generated.ts").exists()
+
+
+def test_cli_render_no_emissive_animate_apng_and_sheet_variant(tmp_path: Path) -> None:
+    """Verify `--no-emissive`, `--animate-format apng`, and `--sheet --variant`."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+
+    style_file = tmp_path / "styles" / "homelab_16bit.style.py"
+    style_src = style_file.read_text(encoding="utf-8").replace(
+        "    palette=(",
+        '    variants={"amber": {"ACCENT_CYAN": "#ffaa00"}},\n    palette=(',
+    )
+    style_file.write_text(style_src, encoding="utf-8")
+
+    asset_file = tmp_path / "assets" / "example_crate.asset.py"
+    asset_src = asset_file.read_text(encoding="utf-8").replace("frames=1,", "frames=2,")
+    asset_file.write_text(asset_src, encoding="utf-8")
+
+    rc = main(
+        [
+            "render",
+            "--root",
+            str(tmp_path),
+            "--no-emissive",
+            "--animate",
+            "--animate-format",
+            "apng",
+            "--sheet",
+            "--variant",
+            "amber",
+        ]
+    )
+    assert rc == 0
+
+    out_dir = tmp_path / "dist"
+    assert (out_dir / "sprites" / "example_crate_idle.png").is_file()
+    assert not (out_dir / "sprites" / "example_crate_idle_emissive.png").exists()
+    assert (tmp_path / ".pixelforge" / "previews" / "example_crate_idle.apng").is_file()
+
+    sheet_path = tmp_path / ".pixelforge" / "sheets" / "example_crate.contact.png"
+    assert sheet_path.is_file()
+    sheet_rgba = np.asarray(Image.open(sheet_path).convert("RGBA"), dtype=np.uint8)
+    amber_mask = np.all(sheet_rgba == np.array([255, 170, 0, 255], dtype=np.uint8), axis=2)
+    assert int(np.count_nonzero(amber_mask)) > 0

@@ -20,11 +20,27 @@ _EXTERNAL_ASSET_RE: Final[re.Pattern[str]] = re.compile(
 _BANNED_RANDOM_MODULES: Final[frozenset[str]] = frozenset({"random", "secrets", "numpy.random"})
 _BANNED_EXTERNAL_IMPORTS: Final[frozenset[str]] = frozenset({"PIL", "Image"})
 _BANNED_IO_MODULES: Final[frozenset[str]] = frozenset(
-    {"os", "pathlib", "subprocess", "time", "datetime", "io"}
+    {
+        "os",
+        "sys",
+        "pathlib",
+        "subprocess",
+        "time",
+        "datetime",
+        "io",
+        "importlib",
+        "shutil",
+        "tempfile",
+        "socket",
+        "urllib",
+        "http",
+        "builtins",
+    }
 )
 _BANNED_IO_CALLS: Final[frozenset[str]] = frozenset(
     {"open", "eval", "exec", "__import__", "compile"}
 )
+_BANNED_BUILTIN_ATTR_BASES: Final[frozenset[str]] = frozenset({"builtins", "__builtins__"})
 
 
 def infer_scope(path: Path) -> GuardScope | None:
@@ -145,16 +161,23 @@ class _AstGuardVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if (
-            self.scope == "asset"
-            and isinstance(node.func, ast.Name)
-            and node.func.id in _BANNED_IO_CALLS
-        ):
-            self._add(
-                node,
-                "no-io-or-eval",
-                f"Banned call {node.func.id}() inside asset module",
-            )
+        if self.scope == "asset":
+            if isinstance(node.func, ast.Name) and node.func.id in _BANNED_IO_CALLS:
+                self._add(
+                    node,
+                    "no-io-or-eval",
+                    f"Banned call {node.func.id}() inside asset module",
+                )
+            elif (
+                isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id in _BANNED_BUILTIN_ATTR_BASES
+            ):
+                self._add(
+                    node,
+                    "no-io-or-eval",
+                    f"Banned call {node.func.value.id}.{node.func.attr}() inside asset module",
+                )
 
         if _is_spr_call(node):
             self._in_spr_call += 1
