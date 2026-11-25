@@ -1,67 +1,67 @@
 # pixelforge
 
-Motor determinístico de pixel art indexada em código, CLI/SDK e ciclo de auto-crítica visual por agentes multimodais de IA para gerar PNGs pixel-perfect, spritesheets animados, máscaras emissivas e manifestos tipados sem mixels.
+Compilador determinístico e composicional de pixel art indexada em Python (estilo `build123d`), CLI/SDK e ciclo de auto-crítica visual por agentes multimodais de IA para gerar PNGs pixel-perfect, spritesheets animados, máscaras emissivas, manifestos tipados para Svelte 5 e pacotes de framebuffer `Uint8Array` sem mixels.
 
 **[English](README.md)** | **[Português (Brasil)](README.pt-br.md)**
 
-[![Runtime: Node 26 LTS](https://img.shields.io/badge/Node-26_LTS_(floor_24)-339933.svg)](https://nodejs.org/)
-[![Linguagem: TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6.svg)](https://www.typescriptlang.org/)
-[![Status: MVP Greenfield](https://img.shields.io/badge/Status-MVP_Greenfield-amber.svg)](docs/DESIGN_MVP.md)
+[![Python >= 3.14](https://img.shields.io/badge/Python-%3E%3D3.14_(uv)-3776AB.svg)](https://www.python.org/)
+[![Tipagem: Pyright Strict](https://img.shields.io/badge/Pyright-Strict-3178C6.svg)](https://github.com/microsoft/pyright)
+[![Linter: Ruff](https://img.shields.io/badge/Ruff-Checked-D7FF64.svg)](https://docs.astral.sh/ruff/)
+[![Arquitetura: v2-py](https://img.shields.io/badge/Arquitetura-v2--py-teal.svg)](docs/DESIGN_V2.md)
 
 ---
 
 ## Visão Geral
 
-O `pixelforge` elimina os modos de falha estruturais de geradores de pixel art baseados em difusão raster (mixels, halos semi-transparentes, deriva de paleta entre sprites, instabilidade entre frames de animação e PNGs sem metadados de âncoras) ao modelar cada asset como um módulo TypeScript determinístico sobre um framebuffer indexado (`Uint8Array`).
+O `pixelforge` elimina os modos de falha estruturais de geradores de pixel art baseados em difusão raster (mixels, halos semi-transparentes, deriva de paleta entre sprites, instabilidade entre frames de animação e PNGs sem metadados de âncoras) ao modelar cada asset como um módulo Python composicional (`*.asset.py`) sobre um framebuffer indexado `numpy` `uint8`.
 
-Capacidades previstas no MVP ([`docs/DESIGN_MVP.md`](docs/DESIGN_MVP.md)):
-- **Framebuffer Indexado Sem Mixels:** Superfícies `Uint8Array` em coordenadas inteiras (índices semânticos `0..254`, com `255` reservado para alpha binário `0`), com primitivas 2D e isométricas `2:1` (`rect`, `line`, `dither`, `spr`, `autoOutline`, `isoBox`, `edgeMask`).
-- **Paletas Semânticas e Troca por LUT:** Tokens nomeados com flags de material (`outline`, `emissive`, `shadow`, `metal`, `accent`) permitindo alternância sem perdas entre estados/horários (`healthy`/`dusty`/`faulty`, `day`/`night`) sem redesenhar a geometria.
-- **Exportação Headless em Milissegundos:** Codificação nativa em Node.js (`< 50ms` por sprite, sem dependência de navegador) gerando PNGs 1x, spritesheets horizontais, máscaras emissivas e `manifest.json` sincronizado com âncoras e hitboxes emitidos pelo código.
-- **Ciclo de Crítica Visual Multimodal:** Gera folhas diagnósticas `.contact.png` (previews 1x em fundo claro/escuro, zoom 4x/8x com grade e régua de coordenadas `(x, y)`, matriz de estados/frames e swatches da paleta) para que agentes de IA inspecionem os pixels renderizados e apliquem correções cirúrgicas por coordenada.
-- **Guard Tests Determinísticos:** Checagens estáticas e em tempo de execução bloqueando `Math.random`, imports de imagens externas, hex literais fora da paleta, alpha intermediário e saídas não determinísticas.
+Capacidades principais ([`docs/DESIGN_V2.md`](docs/DESIGN_V2.md)):
+- **API Composicional Estilo `build123d`:** Gerenciadores de contexto (`with a.layer(...)`, `with a.plane(...)`) com contorno automático, contorno seletivo (`sel_out`), espelhamento, projeção afim `(u, v)` (`rect`, `grid`, `line`, `dot`, `anchor`), primitivas isométricas `2:1` (`iso_box`, `iso_tile`) e escapes cirúrgicos de 1px (`put`, `erase`, `spr`).
+- **Framebuffer Indexado Sem Mixels:** Superfícies `numpy.ndarray(dtype=np.uint8)` em coordenadas inteiras (índices semânticos `0..254`, com `255` permanentemente reservado para alpha binário `0`).
+- **Paletas Semânticas e Troca por LUT:** Tokens nomeados com flags de material (`outline`, `emissive`, `bright`, `shadow`, `metal`, `accent`) e tabelas `reflections` permitindo alternância sem perdas entre estados/horários (`healthy`/`dusty`/`faulty`, `day`/`night`) sem redesenhar a geometria.
+- **Exportação Headless em Milissegundos:** Codificação vetorizada com `numpy` + `Pillow` gerando PNGs 1× (ou `--scale N`) com alpha binário, spritesheets horizontais, máscaras emissivas, texturas `--lut` opcionais, `manifest.json` + **`manifest.d.ts`** e pacotes **`--indexed-ts`** (`Uint8Array` RLE/base64) para jogos Svelte 5.
+- **Ciclo de Crítica Visual Multimodal:** Gera folhas diagnósticas `.contact.png` (faixas 1× em fundo claro/escuro, grid ampliado com régua `(x, y)`, sobreposição de hitboxes/âncoras, swatches sem truncamento) e previews animados `.gif` (`--animate`) para inspeção e correção cirúrgica por coordenada.
+- **Suíte de Guards AST + Runtime:** Checagens estáticas via `ast.parse` e em tempo de execução bloqueando `random`/`secrets`/`numpy.random`, imports de imagens externas, hex literais `#rrggbb`, I/O/`eval`, pixels fora da paleta, alpha intermediário e saídas não determinísticas.
 
 ## Arquitetura
 
 ```mermaid
 flowchart LR
-    Spec["Prompt / Referência + StylePack"] --> Agent["Agente IA (Skill create-pixel-asset)"]
-    Agent --> Asset["Módulo de Asset (*.asset.ts)"]
-    Asset --> Core["src/core (IndexedSurface, Paleta, PRNG, Primitivas)"]
-    Asset --> Guard["src/guard (Regras Estáticas e de Runtime)"]
-    Core --> Export["src/export (PNG, Spritesheet, Emissive, Manifest)"]
-    Core --> Sheet["src/export/contact-sheet (1x + Grid 4x + Régua XY)"]
-    Sheet --> Critic["Visual Critic (Inspeciona PNG e Corrige Coordenadas)"]
-    Critic -->|"2-4 Iterações Cirúrgicas"| Agent
+    Spec["Prompt + StylePack (*.style.py)"] --> Agent["Agente IA (Skill create-pixel-asset v2)"]
+    Agent --> Asset["Asset Composicional (*.asset.py)"]
+    Asset --> Guard["Guards AST + Runtime (pixelforge check)"]
+    Asset --> Core["pixelforge.core (numpy uint8, Layer, Plane, Iso, PRNG)"]
+    Core --> Sheet["Contact Sheet (.contact.png) + GIF (--animate)"]
+    Sheet --> Critic["Visual Critic (Inspeciona e Corrige Coordenadas)"]
+    Critic -->|"2-4 Passes Cirúrgicos"| Agent
+    Core --> Export["pixelforge.export (PNG, Sheet, Emissive, LUT, Indexed-TS, manifest.d.ts)"]
+    Export --> Svelte["Jogo Svelte 5 (Framebuffer / WebGL2 / pixelforge watch)"]
 ```
 
-As decisões arquiteturais estão registradas em [`docs/adr/decisions.md`](docs/adr/decisions.md) e a especificação completa de contratos está em [`docs/DESIGN_MVP.md`](docs/DESIGN_MVP.md).
+As decisões arquiteturais estão registradas em [`docs/adr/decisions.md`](docs/adr/decisions.md) e a especificação completa de contratos está em [`docs/DESIGN_V2.md`](docs/DESIGN_V2.md).
 
 ## Início Rápido
 
-> Estado atual do repositório: especificação greenfield concluída (`[00.0]`). O bootstrap de toolchain e o esqueleto da CLI começam na Tarefa `[00.1]` ([`.agent/TASK.md`](.agent/TASK.md)).
-
 ### Pré-requisitos
 
-- Node.js `>= 24` (recomendado: **Node.js 26 Active LTS**)
-- `pnpm`
+- Python `>= 3.14`
+- [`uv`](https://docs.astral.sh/uv/)
 
-### Fluxo Local Previsto (após `[00.1]`)
+### Configuração Local
 
 ```bash
 cp .env.example .env
-pnpm install --frozen-lockfile
-pnpm test
-pnpm build
+uv sync --frozen
+uv run pytest
 ```
 
 ## Configuração
 
-Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example):
+Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) (carregadas via `pydantic-settings` com prefixo `PIXELFORGE_`):
 
 | Variável | Descrição | Padrão | Obrigatória |
 | :--- | :--- | :--- | :--- |
-| `PIXELFORGE_OUT_DIR` | Diretório de saída para PNGs exportados, spritesheets, máscaras emissivas e `manifest.json` | `dist` | Não |
+| `PIXELFORGE_OUT_DIR` | Diretório de saída para PNGs exportados, spritesheets, máscaras emissivas, `manifest.json`, `manifest.d.ts` e `indexed/` | `dist` | Não |
 | `PIXELFORGE_SHEETS_DIR` | Diretório de folhas efêmeras `.contact.png` de crítica visual (ignorado no Git) | `.pixelforge/sheets` | Não |
 | `PIXELFORGE_DEFAULT_STYLE` | Identificador padrão de `StylePack` usado pelo comando `pixelforge init` | `homelab-16bit` | Não |
 | `LLM_BASE_URL` | Endpoint opcional de gateway OpenAI v1 (`hydra-llm-router`) para modo crítico automatizado na Fase 3 | `http://127.0.0.1:3000/v1` | Não |
@@ -70,21 +70,29 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example):
 | `LLM_MODEL_DEEP` | Alias virtual de raciocínio profundo no gateway LLM | `deep` | Não |
 | `LLM_TIMEOUT_SECONDS` | Timeout HTTP em segundos para chamadas de raciocínio profundo no gateway | `180` | Não |
 
-## Referência da CLI (Superfície Prevista do MVP)
+## Referência da CLI
 
 ```bash
-# Inicializar um StylePack e um módulo de asset de exemplo
-pixelforge init --style homelab-16bit
+# Inicializar StylePack inicial, módulo .asset.py de exemplo e .env.example
+uv run pixelforge init [--style homelab-16bit] [--force] [--root .]
 
-# Renderizar PNGs 1x, spritesheets horizontais, máscaras emissivas, manifest.json e contact sheet
-pixelforge render old_laptop --sheet --emissive
+# Compilar módulos .asset.py em PNGs, spritesheets, máscaras emissivas, manifestos e diagnósticos
+uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--scale 1] [--variant <name>] [--root .]
 
-# Executar guard tests estáticos e de runtime (código de saída 0 se aprovado)
-pixelforge check
+# Executar guard tests estáticos (AST) e de runtime (código de saída 0 se aprovado)
+uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
 
-# Gerar comparação lado a lado + diff de pixels contra uma ref Git
-pixelforge diff old_laptop --base HEAD
+# Gerar comparação lado a lado + diff de pixels em magenta contra uma ref Git
+uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--root .]
+
+# Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente
+uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
 ```
+
+## Integração com Svelte 5
+
+- **Fluxo Padrão PNG + WebGL2:** Execute `pixelforge render --emissive --lut` (ou `pixelforge watch --out ../my-svelte-game/static/sprites`) para emitir `manifest.json` e `manifest.d.ts` com tipagem TypeScript estrita para IDs de sprites, estados, contagem de frames, FPS, âncoras e hitboxes.
+- **Fluxo Framebuffer Indexado em CPU (`--indexed-ts`):** Passe `--indexed-ts` para gerar `dist/indexed/palette.generated.ts` (`PALETTE_HEX`, `EMISSIVE`, `BRIGHT`, `REFL`), `dist/indexed/sprites.generated.ts` (buffers `Uint8Array` em RLE/base64 com `255 = transparente`) e `dist/indexed/manifest.generated.ts` para composição direta via `Framebuffer.blit()`.
 
 ## Desenvolvimento
 
@@ -92,33 +100,34 @@ pixelforge diff old_laptop --base HEAD
 
 ```text
 ├── .agent/
-│   ├── TASK.md              # Checklist da tarefa ativa e roadmap
-│   ├── NOTES.md             # Contratos ativos de módulos/CLI e gotchas
-│   ├── INVARIANTS.md        # Guardrails de renderização e verificação de interface
-│   ├── ARCHIVE.md           # Ciclos de tarefas arquivados
-│   ├── hooks/               # Hooks de ciclo de vida para worktrees e verificação
-│   ├── knowledge/           # Cards atômicos de gotchas de plataforma/runtime
-│   └── skills/              # Skills herméticas do projeto (create-pixel-asset em [02.2])
+│   ├── TASK.md                    # Checklist da tarefa ativa e roadmap
+│   ├── NOTES.md                   # Contratos ativos de módulos/CLI e gotchas
+│   ├── INVARIANTS.md              # Guardrails de renderização e verificação de interface
+│   ├── ARCHIVE.md                 # Ciclos de tarefas arquivados
+│   └── skills/create-pixel-asset/ # Skill hermética de autoria e crítica visual
 ├── docs/
-│   ├── DESIGN_MVP.md        # Especificação canônica do MVP e contratos
-│   └── adr/decisions.md     # Diário de Decisões Arquiteturais (ADRs)
-├── src/                     # Motor core, exportador, guard runner e CLI (criado em [00.1]+)
-├── styles/                  # Definições de StylePack (piloto homelab-16bit em [03.1])
-├── assets/                  # Módulos *.asset.ts desenhados em código (pacote piloto em [03.1])
-├── tests/                   # Suítes herméticas Vitest (unitários e guard tests)
-├── .env.example             # Modelo de variáveis de ambiente
-└── AGENTS.md                # Constituição de engenharia e regras para agentes
+│   ├── DESIGN_V2.md               # Especificação canônica v2 Python e contratos
+│   └── adr/decisions.md           # Diário de Decisões Arquiteturais (ADRs)
+├── src/pixelforge/
+│   ├── core/                      # IndexedSurface, StylePack, PRNG, Iso, Plane, Asset/Layer
+│   ├── export/                    # PNG/GIF, bundle, svelte_types, indexed_ts, contact_sheet, diff
+│   ├── guard/                     # Regras estáticas AST, regras de runtime, runner
+│   └── cli/                       # Entrypoint fino da CLI e configuração pydantic-settings
+├── tests/                         # Suítes herméticas pytest (core, export, guard, cli)
+├── .env.example                   # Modelo de variáveis de ambiente
+├── pyproject.toml                 # Configuração uv, ruff, pyright strict e pytest
+└── AGENTS.md                      # Constituição de engenharia e regras para agentes
 ```
 
 ### Comandos de Validação
 
-Checagens canônicas configuradas em `[00.1]` e obrigatórias antes de concluir qualquer tarefa:
+Todas as checagens abaixo devem encerrar com código `0` antes de concluir qualquer tarefa:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+uv sync --frozen
+uv run ruff check . && uv run ruff format --check .
+uv run pyright
+uv run pytest
 git diff --check
 ```
 
