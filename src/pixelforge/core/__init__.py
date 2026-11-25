@@ -1,5 +1,6 @@
 """Core indexed framebuffer, PRNG, palette, isometric, plane, and compositional builder APIs."""
 
+from pixelforge.core import prefabs
 from pixelforge.core.builder import (
     AnchorAlign,
     Asset,
@@ -72,6 +73,7 @@ __all__ = [
     "iso_project",
     "iso_tile",
     "mulberry32",
+    "prefabs",
     "resolve_reflections",
     "resolve_variant_colors",
     "xorshift32",

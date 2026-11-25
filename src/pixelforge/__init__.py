@@ -20,6 +20,7 @@ from pixelforge.core import (
     iso_project,
     iso_tile,
     mulberry32,
+    prefabs,
     xorshift32,
 )
 
@@ -44,6 +45,7 @@ __all__ = [
     "iso_project",
     "iso_tile",
     "mulberry32",
+    "prefabs",
     "xorshift32",
 ]
 
