@@ -279,14 +279,24 @@ def generate_contact_sheet(
     zoomed_h = spec.height * zoom
     preview_1x_w = max(spec.width * 2 + 12, 120)
 
-    # Matrix dimensions (states x frames)
+    # Matrix dimensions (states x frames [+ emissive])
+    has_emissive = any("emissive" in entry.flags for entry in style.palette)
     cell_scale = 2 if max(spec.width, spec.height) <= 32 else 1
     cell_w = spec.width * cell_scale
     cell_h = spec.height * cell_scale
     cell_gap = 6
     state_label_w = max((measure_text(s)[0] for s in spec.states), default=24) + 10
-    matrix_w = state_label_w + spec.frames * (cell_w + cell_gap)
-    matrix_h = len(spec.states) * (cell_h + cell_gap) + 16
+    matrix_title = "states x frames (+emissive)" if has_emissive else "states x frames"
+    emissive_label = "emissive"
+    emissive_col_w = max(cell_w, measure_text(emissive_label)[0]) if has_emissive else 0
+    matrix_row_offset = 20 if has_emissive else 12
+    matrix_cells_w = (
+        state_label_w
+        + spec.frames * (cell_w + cell_gap)
+        + (emissive_col_w + cell_gap if has_emissive else 0)
+    )
+    matrix_w = max(matrix_cells_w, measure_text(matrix_title)[0])
+    matrix_h = len(spec.states) * (cell_h + cell_gap) + matrix_row_offset + 4
 
     # Variant strip dimensions
     variant_names = tuple(style.variants.keys()) if opts.include_variants else ()
@@ -383,10 +393,18 @@ def generate_contact_sheet(
 
     # State/frame matrix
     matrix_y = right_y + spec.height + 24
-    draw_bitmap_text(canvas, "states x frames", right_x, matrix_y, _TEXT_MUTED)
+    draw_bitmap_text(canvas, matrix_title, right_x, matrix_y, _TEXT_MUTED)
+    if has_emissive:
+        col_hdr_y = matrix_y + 10
+        for frame_idx in range(spec.frames):
+            col_x = right_x + state_label_w + frame_idx * (cell_w + cell_gap)
+            draw_bitmap_text(canvas, f"f{frame_idx}", col_x, col_hdr_y, _TEXT_MUTED)
+        emit_hdr_x = right_x + state_label_w + spec.frames * (cell_w + cell_gap)
+        draw_bitmap_text(canvas, emissive_label, emit_hdr_x, col_hdr_y, _TEXT_MUTED)
+
     by_key = {(f.state, f.frame): f for f in frames}
     for s_idx, state in enumerate(spec.states):
-        row_y = matrix_y + 12 + s_idx * (cell_h + cell_gap)
+        row_y = matrix_y + matrix_row_offset + s_idx * (cell_h + cell_gap)
         draw_bitmap_text(canvas, state, right_x, row_y + max(0, (cell_h - 6) // 2), _TEXT_LIGHT)
         for frame_idx in range(spec.frames):
             cell_x = right_x + state_label_w + frame_idx * (cell_w + cell_gap)
@@ -400,6 +418,19 @@ def generate_contact_sheet(
                 scale=cell_scale,
             )
             _composite_rgba(canvas, cell_rgba, cell_x, row_y)
+        if has_emissive:
+            emit_x = right_x + state_label_w + spec.frames * (cell_w + cell_gap)
+            _draw_checkerboard(
+                canvas, emit_x, row_y, cell_w, cell_h, _CHECK_DARK_A, _CHECK_DARK_B, 4
+            )
+            emit_rgba = surface_to_rgba(
+                by_key[(state, 0)].surface,
+                style,
+                variant=opts.variant,
+                scale=cell_scale,
+                emissive_only=True,
+            )
+            _composite_rgba(canvas, emit_rgba, emit_x, row_y)
 
     # Variant strip (if declared)
     if variant_names:
