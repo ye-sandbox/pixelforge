@@ -8,17 +8,13 @@
 
 ## Active Task
 
-### `[00.1]` Python V2 Project Bootstrap & Toolchain Setup
-
-Objective: initialize the `v2-py` Python package (`pyproject.toml`, `uv`, Python `>= 3.14`, `ruff`, `pyright` strict, `pytest` + `pytest-socket`), obtain consultative approval for runtime/dev dependencies, remove legacy V1 TS scaffolding on `v2-py` (V1 remains preserved on `main`), and verify canonical checks exit `0`.
-
-- [ ] Present consultative dependency plan (`numpy`, `pillow`, `pydantic`, `pydantic-settings`, CLI parser choice `argparse` vs `typer`, plus dev tools `ruff`, `pyright`, `pytest`, `pytest-socket`) and obtain explicit user approval
-- [ ] Confirm disposition of uncommitted V1 files (`package.json`, `tests/homelab-pilot.test.ts`, `assets/thinkpad/thinkpad_r51_front.asset.ts`, `assets/thinkpad/thinkpad_trackpoint_detail.asset.ts`) before cleanup (preserve on `main` or discard on `v2-py`)
-- [ ] Configure `pyproject.toml`, `.python-version`, `src/pixelforge/` package skeleton, and `.gitignore` updates for Python (`.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`)
-- [ ] Transition branch `v2-py` cleanly off all legacy TS files (`package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, `vitest.config.ts`, `biome.json`, `src/**/*.ts`, `styles/*.style.ts`, `assets/**/*.asset.ts`, `tests/**/*.test.ts`, plus local `dist/` and `.pixelforge/`) while keeping `main` untouched
-- [ ] Configure `ruff` (`ASYNC`, `S`, `ANN`, `T20`, `DTZ`, `UP`, `TID`), `pyright` (`strict`), and `pytest` (`--disable-socket --allow-unix-socket`)
-- [ ] Add smoke test (`tests/test_smoke.py`) and CLI entrypoint (`pixelforge --help`, `--version`)
-- [ ] Verify `uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest` exits `0`
+### `[01.1]` Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives
+Objective: implement the `numpy.ndarray(dtype=np.uint8)` indexed framebuffer (`TRANSPARENT_INDEX = 255`), deterministic `mulberry32`/`hashf`, `StylePack` (with `emissive`, `bright`, and optional `reflections` tables) + fail-loud `PaletteLookup`, and full pixel-art primitive set.
+- [ ] Implement `StylePack`, `PaletteColor`, `PaletteFlag` (including `emissive` and `bright`), `reflections: dict[str, str]`, `AnchorPoint`, `HitboxRect`, and `AssetSpec` Pydantic/dataclass contracts in `src/pixelforge/core/types.py`
+- [ ] Implement `mulberry32`, `xorshift32`, and `hashf` deterministic uint32 PRNG in `src/pixelforge/core/prng.py`
+- [ ] Implement fail-loud `PaletteLookup`, reflection index table (`REFL`) resolution, and variant LUT resolution in `src/pixelforge/core/palette.py`
+- [ ] Implement `IndexedSurface` (`numpy` uint8) with `put`, `erase`, `get`, `rect`, `rounded_rect`, `line`, `circle`, `ellipse`, `polygon`, `quad`, `fill`, `dither` (Bayer 2×2/4×4, checker), `spr`, `blit_layer`, `mirror_x`, `flip_x`, `flip_y`, `auto_outline`, `sel_out`, `edge_mask`
+- [ ] Add comprehensive deterministic unit tests in `tests/core/`
 
 ---
 
@@ -27,18 +23,11 @@ Objective: initialize the `v2-py` Python package (`pyproject.toml`, `uv`, Python
 | Task | Title | Commit(s) | Date |
 |---|---|---|---|
 | `[00.0]` | V2 Python (`build123d`-style) branch, architecture spec (`DESIGN_V2.md`), ADR & roadmap | `6b94817` | 2026-11-24 |
+| `[00.1]` | Python V2 Project Bootstrap & Toolchain Setup (`uv`, `ruff`, `pyright`, `pytest`, `argparse`, V1 TS cleanup) | `78cb1bf` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### `[01.1]` Core Indexed Framebuffer, Deterministic PRNG & Pixel Primitives
-Objective: implement the `numpy.ndarray(dtype=np.uint8)` indexed framebuffer (`TRANSPARENT_INDEX = 255`), deterministic `mulberry32`/`hashf`, `StylePack` (with `emissive`, `bright`, and optional `reflections` tables) + fail-loud `PaletteLookup`, and full pixel-art primitive set.
-- [ ] Implement `StylePack`, `PaletteColor`, `PaletteFlag` (including `emissive` and `bright`), `reflections: dict[str, str]`, `AnchorPoint`, `HitboxRect`, and `AssetSpec` Pydantic/dataclass contracts in `src/pixelforge/core/types.py`
-- [ ] Implement `mulberry32`, `xorshift32`, and `hashf` deterministic uint32 PRNG in `src/pixelforge/core/prng.py`
-- [ ] Implement fail-loud `PaletteLookup`, reflection index table (`REFL`) resolution, and variant LUT resolution in `src/pixelforge/core/palette.py`
-- [ ] Implement `IndexedSurface` (`numpy` uint8) with `put`, `erase`, `get`, `rect`, `rounded_rect`, `line`, `circle`, `ellipse`, `polygon`, `quad`, `fill`, `dither` (Bayer 2×2/4×4, checker), `spr`, `blit_layer`, `mirror_x`, `flip_x`, `flip_y`, `auto_outline`, `sel_out`, `edge_mask`
-- [ ] Add comprehensive deterministic unit tests in `tests/core/`
 
 ### `[01.2]` Compositional `build123d`-Style Context API (`Asset`, `Layer`, `Plane`, `Iso`)
 Objective: implement the hierarchical context-manager authoring API so AI agents build sprites, multi-style avatars, and `320×200` static scenes parametrically with local coordinates, masks, tilted planes, isometric volumes, and 1px escape hatches.
