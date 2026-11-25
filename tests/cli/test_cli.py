@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -523,3 +524,129 @@ def test_cli_render_and_watch_with_atlas_flags(tmp_path: Path) -> None:
     assert watch_rc == 0
     assert (watch_out / "sprites" / "example_crate.aseprite.json").is_file()
     assert not (watch_out / "sprites" / "example_crate.texturepacker.json").exists()
+
+
+def test_cli_render_and_watch_indexed_ts_lazy(tmp_path: Path) -> None:
+    """Verify `--indexed-ts-lazy` emits lazy-decoding sprites.generated.ts in render and watch."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    out_dir = tmp_path / "dist"
+
+    rc_render = main(
+        ["render", "--root", str(tmp_path), "--out", str(out_dir), "--indexed-ts-lazy"]
+    )
+    assert rc_render == 0
+    sprites_ts = (out_dir / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    assert "createLazySpriteFrame(" in sprites_ts
+
+    watch_out = tmp_path / "watch_dist"
+    rc_watch = main(
+        [
+            "watch",
+            "--root",
+            str(tmp_path),
+            "--out",
+            str(watch_out),
+            "--indexed-ts-lazy",
+            "--interval",
+            "0.01",
+            "--max-cycles",
+            "0",
+        ]
+    )
+    assert rc_watch == 0
+    watch_sprites = (watch_out / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    assert "createLazySpriteFrame(" in watch_sprites
+
+
+def test_cli_watch_incremental_dependency_invalidation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `watch` incrementally rebuilds only affected assets on edits and deletes."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    _add_sibling_asset(tmp_path, "sibling_crate")
+
+    alt_style_src = (
+        (tmp_path / "styles" / "homelab_16bit.style.py")
+        .read_text(encoding="utf-8")
+        .replace("homelab-16bit", "alt-style")
+    )
+    (tmp_path / "styles" / "alt_style.style.py").write_text(alt_style_src, encoding="utf-8")
+
+    alt_asset_src = (
+        (tmp_path / "assets" / "example_crate.asset.py")
+        .read_text(encoding="utf-8")
+        .replace('id="example_crate"', 'id="alt_box"')
+        .replace("homelab-16bit", "alt-style")
+    )
+    (tmp_path / "assets" / "alt_box.asset.py").write_text(alt_asset_src, encoding="utf-8")
+    capsys.readouterr()
+
+    out_dir = tmp_path / "dist"
+    cycle_idx = 0
+    cycle_logs: list[str] = []
+
+    def fake_sleep(_interval: float) -> None:
+        nonlocal cycle_idx
+        cycle_logs.append(capsys.readouterr().out)
+        cycle_idx += 1
+        if cycle_idx == 1:
+            # Edit only sibling_crate.asset.py
+            sib = tmp_path / "assets" / "sibling_crate.asset.py"
+            text = sib.read_text(encoding="utf-8") + "\n# touch\n"
+            sib.write_text(text, encoding="utf-8")
+            os.utime(sib, ns=(sib.stat().st_atime_ns, sib.stat().st_mtime_ns + 1_000_000))
+        elif cycle_idx == 2:
+            # Edit homelab_16bit.style.py -> rebuilds example_crate & sibling_crate, not alt_box
+            sty = tmp_path / "styles" / "homelab_16bit.style.py"
+            text = sty.read_text(encoding="utf-8") + "\n# style touch\n"
+            sty.write_text(text, encoding="utf-8")
+            os.utime(sty, ns=(sty.stat().st_atime_ns, sty.stat().st_mtime_ns + 1_000_000))
+        elif cycle_idx == 3:
+            # Delete sibling_crate -> prunes manifest & indexed-ts without re-rendering others
+            (tmp_path / "assets" / "sibling_crate.asset.py").unlink()
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+    rc = main(
+        [
+            "watch",
+            "--root",
+            str(tmp_path),
+            "--out",
+            str(out_dir),
+            "--indexed-ts",
+            "--interval",
+            "0.01",
+            "--max-cycles",
+            "4",
+        ]
+    )
+    assert rc == 0
+    cycle_logs.append(capsys.readouterr().out)
+
+    # Initial pass rendered all 3 assets
+    assert "rendered example_crate" in cycle_logs[0]
+    assert "rendered sibling_crate" in cycle_logs[0]
+    assert "rendered alt_box" in cycle_logs[0]
+
+    # Cycle 1: only sibling_crate rebuilt
+    assert "rendered sibling_crate" in cycle_logs[1]
+    assert "rendered example_crate" not in cycle_logs[1]
+    assert "rendered alt_box" not in cycle_logs[1]
+
+    # Cycle 2: homelab-16bit assets rebuilt, alt-style asset untouched
+    assert "rendered example_crate" in cycle_logs[2]
+    assert "rendered sibling_crate" in cycle_logs[2]
+    assert "rendered alt_box" not in cycle_logs[2]
+
+    # Cycle 3: deletion pruned sibling_crate from manifest and indexed-ts
+    assert "rendered example_crate" not in cycle_logs[3]
+    assert "rendered alt_box" not in cycle_logs[3]
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest.keys()) == {"alt_box", "example_crate"}
+    homelab_sprites = (out_dir / "indexed" / "homelab_16bit" / "sprites.generated.ts").read_text(
+        encoding="utf-8"
+    )
+    assert '"example_crate"' in homelab_sprites
+    assert '"sibling_crate"' not in homelab_sprites

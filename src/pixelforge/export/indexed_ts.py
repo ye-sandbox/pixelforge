@@ -143,7 +143,33 @@ def _decode_rle_ts_helper() -> list[str]:
     ]
 
 
-def generate_sprites_ts(bundles: Sequence[ExportBundleResult]) -> str:
+def _lazy_sprite_ts_helper() -> list[str]:
+    return [
+        "function createLazySpriteFrame(",
+        "  b64: string,",
+        "  width: number,",
+        "  height: number,",
+        "): IndexedSpriteFrame {",
+        "  let cached: Uint8Array | undefined;",
+        "  return {",
+        "    width,",
+        "    height,",
+        "    get data(): Uint8Array {",
+        "      if (cached === undefined) {",
+        "        cached = decodeRleSprite(b64, width, height);",
+        "      }",
+        "      return cached;",
+        "    },",
+        "  };",
+        "}",
+    ]
+
+
+def generate_sprites_ts(
+    bundles: Sequence[ExportBundleResult],
+    *,
+    lazy: bool = False,
+) -> str:
     """Generate `sprites.generated.ts` containing RLE-base64 `Uint8Array` index buffers."""
     ordered = sorted(bundles, key=lambda b: b.manifest.id)
     lines: list[str] = [
@@ -156,9 +182,10 @@ def generate_sprites_ts(bundles: Sequence[ExportBundleResult]) -> str:
         "}",
         "",
         *_decode_rle_ts_helper(),
-        "",
-        "export const INDEXED_SPRITES = {",
     ]
+    if lazy:
+        lines.extend(["", *_lazy_sprite_ts_helper()])
+    lines.extend(["", "export const INDEXED_SPRITES = {"])
 
     for bundle in ordered:
         m = bundle.manifest
@@ -169,13 +196,19 @@ def generate_sprites_ts(bundles: Sequence[ExportBundleResult]) -> str:
             for frame_idx in range(m.frames):
                 rendered = by_key[(state, frame_idx)]
                 rle_b64 = base64.b64encode(encode_rle_bytes(rendered.surface.data)).decode("ascii")
-                lines.append(
-                    "      { "
-                    f"width: {m.width}, "
-                    f"height: {m.height}, "
-                    f"data: decodeRleSprite({json.dumps(rle_b64)}, {m.width}, {m.height}) "
-                    "},"
-                )
+                if lazy:
+                    encoded_b64 = json.dumps(rle_b64)
+                    lines.append(
+                        f"      createLazySpriteFrame({encoded_b64}, {m.width}, {m.height}),"
+                    )
+                else:
+                    lines.append(
+                        "      { "
+                        f"width: {m.width}, "
+                        f"height: {m.height}, "
+                        f"data: decodeRleSprite({json.dumps(rle_b64)}, {m.width}, {m.height}) "
+                        "},"
+                    )
             lines.append("    ],")
         lines.append("  },")
 
@@ -245,6 +278,8 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
 def export_indexed_ts(
     bundles: Sequence[ExportBundleResult],
     style: StylePack,
+    *,
+    lazy: bool = False,
 ) -> IndexedTsExportResult:
     """Compile asset bundles and `StylePack` into self-contained TS indexed framebuffer modules."""
     for bundle in bundles:
@@ -257,7 +292,7 @@ def export_indexed_ts(
 
     return IndexedTsExportResult(
         palette_ts=generate_palette_ts(style),
-        sprites_ts=generate_sprites_ts(bundles),
+        sprites_ts=generate_sprites_ts(bundles, lazy=lazy),
         manifest_ts=generate_indexed_manifest_ts(bundles),
     )
 

@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -191,10 +191,12 @@ def run_checks(
     root: Path,
     *,
     asset_id: str | None = None,
+    asset_paths: Collection[Path] | None = None,
     strict_orphans: bool = False,
 ) -> CheckReport:
     """Run AST static guards and runtime invariant checks across the project."""
     violations: list[GuardViolation] = []
+    target_paths = {p.resolve() for p in asset_paths} if asset_paths is not None else None
 
     core_dir = root / "src" / "pixelforge" / "core"
     if core_dir.is_dir():
@@ -243,9 +245,12 @@ def run_checks(
     asset_origins: dict[str, Path] = {}
     assets_checked = 0
     for asset_path in asset_files:
+        in_target_paths = target_paths is None or asset_path.resolve() in target_paths
         ast_issues = check_ast_file(asset_path, scope="asset")
         if ast_issues:
-            if asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id:
+            if in_target_paths and (
+                asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id
+            ):
                 violations.extend(ast_issues)
                 assets_checked += 1
             continue
@@ -253,7 +258,9 @@ def run_checks(
         try:
             loaded = load_asset_module(asset_path)
         except Exception as exc:
-            if asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id:
+            if in_target_paths and (
+                asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id
+            ):
                 violations.append(
                     GuardViolation(
                         file=str(asset_path),
@@ -267,7 +274,7 @@ def run_checks(
             continue
 
         if loaded.SPEC.id in asset_origins:
-            if asset_id is None or loaded.SPEC.id == asset_id:
+            if in_target_paths and (asset_id is None or loaded.SPEC.id == asset_id):
                 violations.append(
                     GuardViolation(
                         file=str(asset_path),
@@ -284,6 +291,8 @@ def run_checks(
             continue
         asset_origins[loaded.SPEC.id] = asset_path
 
+        if not in_target_paths:
+            continue
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
 

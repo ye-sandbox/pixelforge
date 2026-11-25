@@ -109,3 +109,42 @@ def test_export_indexed_ts_rejects_mismatched_style() -> None:
     )
     with pytest.raises(ValueError, match="expected 'homelab-16bit'"):
         export_indexed_ts([bundle], style)
+
+
+def test_export_indexed_ts_lazy_defers_rle_decoding() -> None:
+    style = _style()
+    spec = AssetSpec(
+        id="rack_node",
+        style_id="homelab-16bit",
+        width=8,
+        height=8,
+        perspective="iso-2:1",
+        states=("idle", "active"),
+        frames=2,
+        fps=4,
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(1, 1, 6, 6, a.pal.CHASSIS)
+        if a.state == "active" or a.frame == 1:
+            a.put(4, 3, a.pal.CYAN_GLOW)
+
+    bundle = export_asset_bundle(LoadedAsset(SPEC=spec, render=render), style)
+    result = export_indexed_ts([bundle], style, lazy=True)
+
+    assert "function createLazySpriteFrame(" in result.sprites_ts
+    assert "get data(): Uint8Array {" in result.sprites_ts
+    assert "if (cached === undefined) {" in result.sprites_ts
+    assert "export function getIndexedSpriteFrame<" in result.sprites_ts
+
+    lazy_calls = re.findall(
+        r'createLazySpriteFrame\("([A-Za-z0-9+/=]+)", 8, 8\)',
+        result.sprites_ts,
+    )
+    assert len(lazy_calls) == 4
+    # Eager decodeRleSprite calls must not appear inside INDEXED_SPRITES entries
+    sprites_body = result.sprites_ts.split("export const INDEXED_SPRITES = {", 1)[1]
+    assert "decodeRleSprite(" not in sprites_body
+    for rendered, b64_payload in zip(bundle.rendered_frames, lazy_calls, strict=True):
+        decoded = decode_rle_bytes(base64.b64decode(b64_payload), 64).reshape((8, 8))
+        assert np.array_equal(decoded, rendered.surface.data)

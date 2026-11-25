@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -81,6 +82,7 @@ def _emit_indexed_ts_bundles(
     out_dir: Path,
     *,
     filtered: bool,
+    lazy: bool = False,
 ) -> None:
     multi_style = len(bundles_by_style) > 1
     for style, style_bundles in bundles_by_style.values():
@@ -89,7 +91,7 @@ def _emit_indexed_ts_bundles(
             if filtered
             else style_bundles
         )
-        ts_result = export_indexed_ts(full_bundles, style)
+        ts_result = export_indexed_ts(full_bundles, style, lazy=lazy)
         indexed_out = (
             out_dir / "indexed" / style.id.replace("-", "_") if multi_style else out_dir / "indexed"
         )
@@ -109,6 +111,7 @@ def render_once(
     emissive: bool | None,
     lut: bool,
     indexed_ts: bool,
+    indexed_ts_lazy: bool = False,
     atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
@@ -200,6 +203,7 @@ def render_once(
             options,
             out_dir,
             filtered=asset_id is not None,
+            lazy=indexed_ts_lazy,
         )
 
     return 0
@@ -314,9 +318,296 @@ def diff_asset(
     return 0
 
 
-def _snapshot_mtimes(root: Path) -> dict[Path, int]:
-    files = [*discover_style_files(root / "styles"), *discover_asset_files(root / "assets")]
-    return {p: p.stat().st_mtime_ns for p in files if p.exists()}
+@dataclass
+class _WatchGraph:
+    """In-memory dependency graph and compiled bundle cache for incremental `watch`."""
+
+    style_mtimes: dict[Path, int] = field(default_factory=dict[Path, int])
+    asset_mtimes: dict[Path, int] = field(default_factory=dict[Path, int])
+    style_ids_by_path: dict[Path, str] = field(default_factory=dict[Path, str])
+    asset_meta_by_path: dict[Path, tuple[str, str]] = field(
+        default_factory=dict[Path, tuple[str, str]]
+    )
+    bundles_by_id: dict[str, ExportBundleResult] = field(
+        default_factory=dict[str, ExportBundleResult]
+    )
+    manifests_by_id: dict[str, ExportedAssetManifestEntry] = field(
+        default_factory=dict[str, ExportedAssetManifestEntry]
+    )
+    initial_render_done: bool = False
+
+
+def _snapshot_watch_mtimes(root: Path) -> tuple[dict[Path, int], dict[Path, int]]:
+    style_mtimes = {
+        p: p.stat().st_mtime_ns for p in discover_style_files(root / "styles") if p.exists()
+    }
+    asset_mtimes = {
+        p: p.stat().st_mtime_ns for p in discover_asset_files(root / "assets") if p.exists()
+    }
+    return (style_mtimes, asset_mtimes)
+
+
+def _seed_watch_graph_metadata(graph: _WatchGraph) -> None:
+    for style_path in graph.style_mtimes:
+        try:
+            graph.style_ids_by_path[style_path] = load_style_module(style_path).id
+        except ImportError, SyntaxError, TypeError, ValueError, OSError:
+            graph.style_ids_by_path.pop(style_path, None)
+    for asset_path in graph.asset_mtimes:
+        try:
+            spec = load_asset_module(asset_path).SPEC
+            graph.asset_meta_by_path[asset_path] = (spec.id, spec.style_id)
+        except ImportError, SyntaxError, TypeError, ValueError, OSError:
+            graph.asset_meta_by_path.pop(asset_path, None)
+
+
+def _diff_watch_graph(
+    graph: _WatchGraph,
+    cur_styles: dict[Path, int],
+    cur_assets: dict[Path, int],
+) -> tuple[set[Path], set[str], set[str]]:
+    changed_styles = {
+        p
+        for p in set(cur_styles) | set(graph.style_mtimes)
+        if cur_styles.get(p) != graph.style_mtimes.get(p)
+    }
+    changed_assets = {
+        p
+        for p in set(cur_assets) | set(graph.asset_mtimes)
+        if cur_assets.get(p) != graph.asset_mtimes.get(p)
+    }
+    graph.style_mtimes = cur_styles
+    graph.asset_mtimes = cur_assets
+
+    changed_style_ids: set[str] = set()
+    for style_path in changed_styles:
+        if style_path in graph.style_ids_by_path:
+            changed_style_ids.add(graph.style_ids_by_path[style_path])
+        if style_path.exists():
+            try:
+                pack = load_style_module(style_path)
+            except ImportError, SyntaxError, TypeError, ValueError, OSError:
+                graph.style_ids_by_path.pop(style_path, None)
+            else:
+                graph.style_ids_by_path[style_path] = pack.id
+                changed_style_ids.add(pack.id)
+        else:
+            graph.style_ids_by_path.pop(style_path, None)
+
+    affected_asset_paths: set[Path] = set()
+    affected_style_ids: set[str] = set(changed_style_ids)
+    deleted_asset_ids: set[str] = set()
+    for asset_path in changed_assets:
+        old_meta = graph.asset_meta_by_path.get(asset_path)
+        if asset_path.exists():
+            affected_asset_paths.add(asset_path)
+            try:
+                spec = load_asset_module(asset_path).SPEC
+            except ImportError, SyntaxError, TypeError, ValueError, OSError:
+                if old_meta is not None:
+                    affected_style_ids.add(old_meta[1])
+            else:
+                graph.asset_meta_by_path[asset_path] = (spec.id, spec.style_id)
+                affected_style_ids.add(spec.style_id)
+                if old_meta is not None:
+                    if old_meta[0] != spec.id:
+                        deleted_asset_ids.add(old_meta[0])
+                    if old_meta[1] != spec.style_id:
+                        affected_style_ids.add(old_meta[1])
+        else:
+            graph.asset_meta_by_path.pop(asset_path, None)
+            if old_meta is not None:
+                deleted_asset_ids.add(old_meta[0])
+                affected_style_ids.add(old_meta[1])
+
+    # INVARIANT: Only `.style.py` edits invalidate sibling assets sharing that style;
+    # single `.asset.py` edits only invalidate that asset (plus `--indexed-ts` for its style).
+    for asset_path, (_, style_id) in graph.asset_meta_by_path.items():
+        if style_id in changed_style_ids:
+            affected_asset_paths.add(asset_path)
+
+    return (affected_asset_paths, affected_style_ids, deleted_asset_ids)
+
+
+def _render_watch_full(
+    root: Path,
+    graph: _WatchGraph,
+    *,
+    asset_id: str | None,
+    out_dir: Path,
+    sheets_dir: Path,
+    sheet: bool,
+    options: ExportBundleOptions,
+    indexed_ts: bool,
+    indexed_ts_lazy: bool,
+    out: OutputFn,
+    err: OutputFn,
+) -> bool:
+    try:
+        styles = load_all_styles(root / "styles")
+    except ValueError as exc:
+        err(str(exc))
+        return False
+
+    asset_files = discover_asset_files(root / "assets")
+    if not asset_files:
+        err("No .asset.py files found under assets/")
+        return False
+
+    graph.bundles_by_id.clear()
+    graph.manifests_by_id.clear()
+    all_loaded: list[LoadedAsset] = []
+    bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
+    rendered_count = 0
+
+    for asset_path in asset_files:
+        loaded = load_asset_module(asset_path)
+        all_loaded.append(loaded)
+        graph.asset_meta_by_path[asset_path] = (loaded.SPEC.id, loaded.SPEC.style_id)
+        if asset_id is not None and loaded.SPEC.id != asset_id:
+            continue
+
+        style = styles.get(loaded.SPEC.style_id)
+        if style is None:
+            err(
+                f"{asset_path}:1 [missing-style] Referenced style "
+                f"{loaded.SPEC.style_id!r} not found in styles/"
+            )
+            return False
+
+        bundle = export_asset_bundle(loaded, style, options)
+        write_export_bundle(bundle, out_dir, update_manifest=asset_id is not None)
+        if sheet:
+            sheets_dir.mkdir(parents=True, exist_ok=True)
+            contact = generate_contact_sheet(
+                loaded,
+                style,
+                ContactSheetOptions(variant=options.variant),
+            )
+            (sheets_dir / f"{loaded.SPEC.id}.contact.png").write_bytes(contact.png)
+
+        graph.bundles_by_id[bundle.manifest.id] = bundle
+        graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
+        if style.id not in bundles_by_style:
+            bundles_by_style[style.id] = (style, [])
+        bundles_by_style[style.id][1].append(bundle)
+        rendered_count += 1
+        out(f"rendered {loaded.SPEC.id} -> {out_dir}")
+
+    if rendered_count == 0:
+        err(f"Asset {asset_id!r} not found under assets/")
+        return False
+
+    if asset_id is None:
+        write_manifest(graph.manifests_by_id, out_dir)
+
+    if indexed_ts:
+        for style, style_bundles in bundles_by_style.values():
+            full_bundles = (
+                compile_style_indexed_bundles(style, style_bundles, all_loaded, options)
+                if asset_id is not None
+                else style_bundles
+            )
+            for b in full_bundles:
+                graph.bundles_by_id[b.manifest.id] = b
+        _emit_indexed_ts_bundles(
+            bundles_by_style,
+            all_loaded,
+            options,
+            out_dir,
+            filtered=asset_id is not None,
+            lazy=indexed_ts_lazy,
+        )
+
+    graph.initial_render_done = True
+    return True
+
+
+def _render_watch_incremental(
+    root: Path,
+    graph: _WatchGraph,
+    *,
+    affected_asset_paths: set[Path],
+    affected_style_ids: set[str],
+    deleted_asset_ids: set[str],
+    asset_id: str | None,
+    out_dir: Path,
+    sheets_dir: Path,
+    sheet: bool,
+    options: ExportBundleOptions,
+    indexed_ts: bool,
+    indexed_ts_lazy: bool,
+    out: OutputFn,
+    err: OutputFn,
+) -> bool:
+    try:
+        styles = load_all_styles(root / "styles")
+    except ValueError as exc:
+        err(str(exc))
+        return False
+
+    for dead_id in deleted_asset_ids:
+        graph.bundles_by_id.pop(dead_id, None)
+        graph.manifests_by_id.pop(dead_id, None)
+
+    rendered_any = False
+    for asset_path in sorted(affected_asset_paths):
+        loaded = load_asset_module(asset_path)
+        if asset_id is not None and loaded.SPEC.id != asset_id:
+            continue
+        style = styles.get(loaded.SPEC.style_id)
+        if style is None:
+            err(
+                f"{asset_path}:1 [missing-style] Referenced style "
+                f"{loaded.SPEC.style_id!r} not found in styles/"
+            )
+            return False
+
+        bundle = export_asset_bundle(loaded, style, options)
+        write_export_bundle(bundle, out_dir, update_manifest=asset_id is not None)
+        if sheet:
+            sheets_dir.mkdir(parents=True, exist_ok=True)
+            contact = generate_contact_sheet(
+                loaded,
+                style,
+                ContactSheetOptions(variant=options.variant),
+            )
+            (sheets_dir / f"{loaded.SPEC.id}.contact.png").write_bytes(contact.png)
+
+        graph.bundles_by_id[bundle.manifest.id] = bundle
+        graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
+        affected_style_ids.add(style.id)
+        rendered_any = True
+        out(f"rendered {loaded.SPEC.id} -> {out_dir}")
+
+    if asset_id is None and (rendered_any or deleted_asset_ids):
+        write_manifest(graph.manifests_by_id, out_dir)
+
+    if indexed_ts and affected_style_ids:
+        active_styles = {b.manifest.styleId for b in graph.bundles_by_id.values()}
+        multi_style = len(active_styles) > 1
+        for sid in sorted(affected_style_ids):
+            style = styles.get(sid)
+            if style is None:
+                continue
+            style_bundles = [b for b in graph.bundles_by_id.values() if b.manifest.styleId == sid]
+            if not style_bundles:
+                continue
+            ts_result = export_indexed_ts(style_bundles, style, lazy=indexed_ts_lazy)
+            indexed_out = (
+                out_dir / "indexed" / sid.replace("-", "_") if multi_style else out_dir / "indexed"
+            )
+            write_indexed_ts_bundle(ts_result, indexed_out)
+
+    return True
+
+
+def _emit_check_violations(violations: Sequence[object], out: OutputFn, err: OutputFn) -> None:
+    from pixelforge.guard.types import GuardViolation
+
+    for v in violations:
+        if isinstance(v, GuardViolation):
+            (err if v.severity == "error" else out)(v.format_line())
 
 
 def watch_loop(
@@ -330,6 +621,7 @@ def watch_loop(
     emissive: bool | None,
     lut: bool,
     indexed_ts: bool,
+    indexed_ts_lazy: bool = False,
     atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
@@ -338,61 +630,104 @@ def watch_loop(
     interval: float = 0.5,
     max_cycles: int | None = None,
 ) -> int:
-    """Poll `.asset.py` and `.style.py` mtimes and re-check + re-render on changes."""
-    last_mtimes = _snapshot_mtimes(root)
+    """Poll `.asset.py` and `.style.py` mtimes and incrementally rebuild affected assets."""
+    _ = previews_dir
+    options = ExportBundleOptions(
+        variant=variant,
+        scale=scale,
+        emissive=emissive,
+        lut=lut,
+        animate=False,
+        atlas=atlas,
+    )
+    style_mtimes, asset_mtimes = _snapshot_watch_mtimes(root)
+    graph = _WatchGraph(style_mtimes=style_mtimes, asset_mtimes=asset_mtimes)
+    _seed_watch_graph_metadata(graph)
+
     report = run_checks(root, asset_id=asset_id)
     if report.passed:
-        render_once(
+        _render_watch_full(
             root,
+            graph,
             asset_id=asset_id,
             out_dir=out_dir,
             sheets_dir=sheets_dir,
-            previews_dir=previews_dir,
             sheet=sheet,
-            animate=False,
-            emissive=emissive,
-            lut=lut,
+            options=options,
             indexed_ts=indexed_ts,
-            atlas=atlas,
-            scale=scale,
-            variant=variant,
+            indexed_ts_lazy=indexed_ts_lazy,
             out=out,
             err=err,
         )
     else:
-        for v in report.violations:
-            err(v.format_line())
+        _emit_check_violations(report.violations, out, err)
 
     cycles = 0
     try:
         while max_cycles is None or cycles < max_cycles:
             time.sleep(interval)
             cycles += 1
-            current_mtimes = _snapshot_mtimes(root)
-            if current_mtimes == last_mtimes:
+            cur_styles, cur_assets = _snapshot_watch_mtimes(root)
+            if cur_styles == graph.style_mtimes and cur_assets == graph.asset_mtimes:
                 continue
-            last_mtimes = current_mtimes
-            report = run_checks(root, asset_id=asset_id)
-            for v in report.violations:
-                (err if v.severity == "error" else out)(v.format_line())
-            if report.passed:
-                render_once(
-                    root,
-                    asset_id=asset_id,
-                    out_dir=out_dir,
-                    sheets_dir=sheets_dir,
-                    previews_dir=previews_dir,
-                    sheet=sheet,
-                    animate=False,
-                    emissive=emissive,
-                    lut=lut,
-                    indexed_ts=indexed_ts,
-                    atlas=atlas,
-                    scale=scale,
-                    variant=variant,
-                    out=out,
-                    err=err,
-                )
+
+            affected_paths, affected_styles, deleted_ids = _diff_watch_graph(
+                graph,
+                cur_styles,
+                cur_assets,
+            )
+            if not graph.initial_render_done:
+                report = run_checks(root, asset_id=asset_id)
+                _emit_check_violations(report.violations, out, err)
+                if report.passed:
+                    _render_watch_full(
+                        root,
+                        graph,
+                        asset_id=asset_id,
+                        out_dir=out_dir,
+                        sheets_dir=sheets_dir,
+                        sheet=sheet,
+                        options=options,
+                        indexed_ts=indexed_ts,
+                        indexed_ts_lazy=indexed_ts_lazy,
+                        out=out,
+                        err=err,
+                    )
+                continue
+
+            if asset_id is not None:
+                target_paths = {
+                    p
+                    for p in affected_paths
+                    if graph.asset_meta_by_path.get(p, (None, None))[0] == asset_id
+                    or (p in cur_assets and graph.asset_meta_by_path.get(p) is None)
+                }
+                if not target_paths and asset_id not in deleted_ids:
+                    continue
+                affected_paths = target_paths
+
+            if affected_paths:
+                report = run_checks(root, asset_id=asset_id, asset_paths=affected_paths)
+                _emit_check_violations(report.violations, out, err)
+                if not report.passed:
+                    continue
+
+            _render_watch_incremental(
+                root,
+                graph,
+                affected_asset_paths=affected_paths,
+                affected_style_ids=affected_styles,
+                deleted_asset_ids=deleted_ids,
+                asset_id=asset_id,
+                out_dir=out_dir,
+                sheets_dir=sheets_dir,
+                sheet=sheet,
+                options=options,
+                indexed_ts=indexed_ts,
+                indexed_ts_lazy=indexed_ts_lazy,
+                out=out,
+                err=err,
+            )
     except KeyboardInterrupt:
         out("watch stopped")
     return 0

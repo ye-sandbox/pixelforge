@@ -88,7 +88,8 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         animate_format=args.animate_format,
         emissive=args.emissive,
         lut=bool(args.lut),
-        indexed_ts=bool(args.indexed_ts),
+        indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
+        indexed_ts_lazy=bool(args.indexed_ts_lazy),
         atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
@@ -123,7 +124,8 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         sheet=bool(args.sheet),
         emissive=emissive,
         lut=bool(args.lut),
-        indexed_ts=bool(args.indexed_ts),
+        indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
+        indexed_ts_lazy=bool(args.indexed_ts_lazy),
         atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
@@ -266,6 +268,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
     )
     render_p.add_argument(
+        "--indexed-ts-lazy",
+        action="store_true",
+        help="Defer RLE decoding in --indexed-ts sprites.generated.ts until frame access",
+    )
+    render_p.add_argument(
         "--atlas",
         choices=("aseprite", "texturepacker", "all"),
         default=None,
@@ -302,6 +309,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--indexed-ts",
         action="store_true",
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
+    )
+    watch_p.add_argument(
+        "--indexed-ts-lazy",
+        action="store_true",
+        help="Defer RLE decoding in --indexed-ts sprites.generated.ts until frame access",
     )
     watch_p.add_argument(
         "--atlas",

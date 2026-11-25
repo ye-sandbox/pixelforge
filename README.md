@@ -79,7 +79,7 @@ Optional environment overrides declared in [`.env.example`](.env.example) (loade
 uv run pixelforge init [--style homelab-16bit] [--force] [--root .]
 
 # Compile .asset.py modules into PNGs, spritesheets, emissive masks, manifests, and diagnostics
-uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--root .]
+uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--root .]
 
 # Execute AST static and runtime guard checks (exit code 0 on pass)
 uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
@@ -88,7 +88,7 @@ uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
 uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--root .]
 
 # Watch .asset.py and .style.py files and hot-reload compiled outputs
-uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
+uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
 
 # Extract an ephemeral aspect ratio, palette histogram, and quantized ASCII sketch from a local reference image
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--root .]
