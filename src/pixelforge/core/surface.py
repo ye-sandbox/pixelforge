@@ -29,6 +29,31 @@ _BAYER_4X4: Final[NDArray[np.float64]] = (
 ) / 16.0
 
 
+def compute_dither_selection(
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    *,
+    pattern: DitherPattern = "bayer4",
+    ratio: float = 0.5,
+) -> NDArray[np.bool_]:
+    """Compute a boolean mask selecting pixels for `color_b` over `[x0, x1) x [y0, y1)`."""
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    if pattern == "bayer2":
+        return np.asarray(_BAYER_2X2[yy & 1, xx & 1] < ratio, dtype=bool)
+    if pattern == "bayer4":
+        return np.asarray(_BAYER_4X4[yy & 3, xx & 3] < ratio, dtype=bool)
+    if pattern == "checker":
+        if ratio <= 0.0:
+            return np.zeros_like(xx, dtype=bool)
+        if ratio >= 1.0:
+            return np.ones_like(xx, dtype=bool)
+        return np.asarray(((xx + yy) & 1) == 0, dtype=bool)
+    msg = f"Unsupported dither pattern: {pattern!r}"
+    raise ValueError(msg)
+
+
 def _normalize_index(color: int) -> int:
     idx = int(color)
     if idx < 0 or idx > TRANSPARENT_INDEX:
@@ -519,21 +544,7 @@ class IndexedSurface:
         if x0 >= x1 or y0 >= y1:
             return
 
-        yy, xx = np.mgrid[y0:y1, x0:x1]
-        if pattern == "bayer2":
-            select_b = _BAYER_2X2[yy & 1, xx & 1] < ratio
-        elif pattern == "bayer4":
-            select_b = _BAYER_4X4[yy & 3, xx & 3] < ratio
-        elif pattern == "checker":
-            if ratio <= 0.0:
-                select_b = np.zeros_like(xx, dtype=bool)
-            elif ratio >= 1.0:
-                select_b = np.ones_like(xx, dtype=bool)
-            else:
-                select_b = ((xx + yy) & 1) == 0
-        else:
-            msg = f"Unsupported dither pattern: {pattern!r}"
-            raise ValueError(msg)
+        select_b = compute_dither_selection(x0, y0, x1, y1, pattern=pattern, ratio=ratio)
 
         region = self.data[y0:y1, x0:x1]
         active = (region != TRANSPARENT_INDEX) if mask == "opaque" else np.ones_like(region, bool)

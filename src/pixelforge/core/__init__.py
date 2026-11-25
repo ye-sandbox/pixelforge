@@ -1,5 +1,13 @@
-"""Core indexed framebuffer, PRNG, palette, and pixel primitives."""
+"""Core indexed framebuffer, PRNG, palette, isometric, plane, and compositional builder APIs."""
 
+from pixelforge.core.builder import (
+    AnchorAlign,
+    Asset,
+    Layer,
+    ScatterMask,
+    SelOutSpec,
+)
+from pixelforge.core.iso import IsoAnchor, iso_box, iso_project, iso_tile
 from pixelforge.core.palette import (
     PaletteLookup,
     PaletteLookupError,
@@ -9,6 +17,7 @@ from pixelforge.core.palette import (
     resolve_reflections,
     resolve_variant_colors,
 )
+from pixelforge.core.plane import GridMode, Plane, Point2D
 from pixelforge.core.prng import hashf, mulberry32, xorshift32
 from pixelforge.core.surface import (
     DitherMask,
@@ -32,12 +41,17 @@ from pixelforge.core.types import (
 __all__ = [
     "MAX_PALETTE_INDEX",
     "TRANSPARENT_INDEX",
+    "AnchorAlign",
     "AnchorPoint",
+    "Asset",
     "AssetSpec",
     "DitherMask",
     "DitherPattern",
+    "GridMode",
     "HitboxRect",
     "IndexedSurface",
+    "IsoAnchor",
+    "Layer",
     "LightingAngle",
     "MirrorSource",
     "PaletteColor",
@@ -45,11 +59,18 @@ __all__ = [
     "PaletteLookup",
     "PaletteLookupError",
     "PerspectiveMode",
+    "Plane",
+    "Point2D",
+    "ScatterMask",
+    "SelOutSpec",
     "StylePack",
     "build_reflection_lut",
     "build_rgba_lut",
     "hashf",
     "hex_to_rgb",
+    "iso_box",
+    "iso_project",
+    "iso_tile",
     "mulberry32",
     "resolve_reflections",
     "resolve_variant_colors",
