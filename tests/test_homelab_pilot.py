@@ -35,6 +35,7 @@ EXPECTED_HOMELAB_IDS = (
     "ai_cluster_node",
     "ai_cluster_node_iso",
     "bedroom_desk_iso",
+    "multiroom_homelab_iso",
     "old_laptop",
     "old_laptop_iso",
     "used_gpu_rig",
@@ -42,7 +43,7 @@ EXPECTED_HOMELAB_IDS = (
     "window_cycles_iso",
     "window_vistas_front",
 )
-EXPECTED_SCENE_IDS = ("homelab_desk_scene",)
+EXPECTED_SCENE_IDS = ("homelab_desk_scene", "multiroom_homelab_scene")
 EXPECTED_THINKPAD_IDS = (
     "thinkpad_r51_front",
     "thinkpad_r51_iso",
@@ -51,11 +52,14 @@ EXPECTED_THINKPAD_IDS = (
 EXPECTED_PROPS_IDS = (
     "coffee_mug_iso",
     "desk_lamp_iso",
+    "glass_partition_iso",
     "keyboard_iso",
     "monitor_iso",
     "mouse_iso",
     "network_switch_iso",
+    "partition_wall_iso",
     "pc_tower_iso",
+    "pillar_iso",
     "potted_plant_iso",
     "storage_crate_iso",
 )

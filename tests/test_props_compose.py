@@ -19,11 +19,14 @@ PROPS_DIR = ROOT_DIR / "assets" / "props"
 EXPECTED_PROP_IDS = (
     "coffee_mug_iso",
     "desk_lamp_iso",
+    "glass_partition_iso",
     "keyboard_iso",
     "monitor_iso",
     "mouse_iso",
     "network_switch_iso",
+    "partition_wall_iso",
     "pc_tower_iso",
+    "pillar_iso",
     "potted_plant_iso",
     "storage_crate_iso",
 )
@@ -235,3 +238,45 @@ def test_network_switch_iso_exposes_individual_port_anchors() -> None:
     assert all(p.dir == (-1, 1) for p in ports)
     # Ports are ordered left-to-right across the front isometric face
     assert [p.x for p in ports] == sorted(p.x for p in ports)
+
+
+def test_multiroom_homelab_scene_zone_ordered_depth_sorting() -> None:
+    """Verify `multiroom_homelab_scene` sorts by `(z_index, iso_y)` with zero clipping."""
+    from pixelforge.export.scene import compose_scene_frames
+    from pixelforge.guard.runner import load_scene_module
+
+    style = load_style_module(ROOT_DIR / "styles" / "homelab_16bit.style.py")
+    parent = load_asset_module(ROOT_DIR / "assets" / "homelab" / "multiroom_homelab_iso.asset.py")
+    scene_mod = load_scene_module(
+        ROOT_DIR / "assets" / "homelab" / "multiroom_homelab_scene.scene.py"
+    )
+    props = _load_props()
+
+    _scene_asset_spec, frames, _warnings = compose_scene_frames(
+        scene_mod.SCENE, parent, props, style
+    )
+    assert len(frames) == 4  # 2 states (day, night) x 2 synced frames
+
+    day_res = compose_scene(
+        parent,
+        props,
+        style,
+        SceneCompositionSpec(
+            parent_id=scene_mod.SCENE.parent_id,
+            parent_state="day",
+            mounts=scene_mod.SCENE.mounts,
+            depth_sort=scene_mod.SCENE.depth_sort,
+        ),
+        strict_bounds=True,
+        strict_perspective=True,
+    )
+    assert all(p.in_bounds for p in day_res.placements)
+    assert all(p.clipped_pixels == 0 for p in day_res.placements)
+    assert all(p.perspective_match for p in day_res.placements)
+
+    # Placements are sorted by z_index (zones 0 -> 1 -> 2)
+    z_indices = [p.z_index for p in day_res.placements]
+    assert z_indices == sorted(z_indices)
+    # Divider zone (z_index=1) is ordered back-to-front by iso_y
+    div_ids = [p.prop_id for p in day_res.placements if p.z_index == 1]
+    assert div_ids == ["partition_wall_iso", "pillar_iso", "glass_partition_iso"]
