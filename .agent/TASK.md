@@ -8,16 +8,18 @@
 
 ## Active Task
 
-### `[43.1]` Zero-Reference Asset, Scene & Style Scaffolders (`pixelforge new`)
-- [ ] Add `pixelforge new {asset,scene,style}` with `--kind iso-prop|front-prop|character|tile-blob47|9slice|font`, `--parent`, and `--from-preset`
-- [ ] Emit `Asset[<Name>Palette]` typed skeletons, starter anchors/hitboxes, and automatic `sync_palette_stubs`
-- [ ] Support `--format llm|json|human` and add unit/CLI tests in `tests/cli/`
+### `[44.1]` Batch Pack Contact Sheet (`pixelforge render --pack-sheet`)
+- [ ] Compile a single comparative 1x + 2x grid `.contact.png` across multiple assets (filterable by directory, pack, or IDs)
+- [ ] Surface cross-asset scale, lighting, and outline consistency metrics
+- [ ] Add unit and CLI tests in `tests/export/` and `tests/cli/`
 
 ---
 
 ## Completed Tasks Log
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
+
+- `[43.1]` Zero-Reference Asset, Scene & Style Scaffolders (`pixelforge new`) (`ecfc95c`)
 
 - `[42.1]` Exact Pixel & Layer Diagnostics (`pixelforge probe`) (`16591e6`)
 - `[41.1]` Core Drawing API Introspection (`pixelforge inspect api`) (`4a561c9`)
@@ -52,7 +54,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track G — Agent QoL & Developer Ergonomics
-- `[44.1]` **Batch Pack Contact Sheet (`pixelforge render --pack-sheet`):** Compile a single comparative 1x + 2x grid `.contact.png` across multiple assets (filterable by directory/pack/IDs) for cross-asset scale, lighting, and outline consistency review.
 - `[45.1]` **Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill:** Add `pixelforge doctor` (`--format llm|json|human`) validating toolchain (`uv`, `ruff`, `pyright`), stale/missing `*_palette.py` stubs, duplicate IDs, tracked `.pixelforge/` scratch files, and `critic` router config; add hermetic `.agent/skills/blind-critic/SKILL.md` for unbiased read-only subagent review.
 - `[46.1]` **Native Stdio MCP Server (`pixelforge mcp`):** Consultative dependency decision (`mcp` SDK vs zero-dep JSON-RPC 2.0 stdio transport) + stdio MCP server exposing `inspect_*`, `check_asset`, `probe_canvas`, `render_contact_sheet`, `compose_dry_run`, and `diff_asset` (returning contact-sheet/diff PNGs directly as MCP image content blocks).
 
