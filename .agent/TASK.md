@@ -8,10 +8,11 @@
 
 ## Active Task
 
-### `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check`
+### `[31.2]` Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode
 
-- [ ] Extend `pixelforge check` with deterministic `*.scene.py` validation (occlusion thresholds, anchor-within-parent-bbox checks, duplicate mount detection, and strict bounds/perspective audits).
-- [ ] Add unit and CLI tests covering valid scenes and each deterministic scene guard violation.
+- [ ] Extend `pixelforge critic` to score composed `*.scene.py` outputs.
+- [ ] Enrich `pixelforge diff` output with pixel/emissive/orphan/canvas-coverage deltas.
+- [ ] Support Markdown PR regression summaries in CI, with unit and CLI tests.
 
 ---
 
@@ -19,6 +20,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check` (`be22749`)
 - `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification (`a4f1f9f`)
 - `[29.1]` Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob) (`719b8ab`)
 - `[28.1]` UI Pixel Art Primitives & 9-Slice Export (`nine_slice`) (`a4ba768`)
@@ -33,7 +35,7 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track C — Deterministic Spatial Guards & Visual Critic Loop
-- `[31.2]` **Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode:** Extend `pixelforge critic` to score composed `*.scene.py` outputs, enrich `pixelforge diff` output with pixel/emissive/orphan/canvas-coverage deltas, and support Markdown PR regression summaries in CI.
+_All Track C items promoted or completed._
 
 ### Track D — Consumption Experience & Distribution
 - `[32.1]` **Lightweight Local Preview Studio (`pixelforge watch --serve`):** Add an optional zero-dependency local preview server (or generated self-contained HTML studio) fed by `watch` to inspect spritesheets, toggle `day`/`night` variants, preview simulated emissive bloom, and inspect anchors/mounts interactively.
