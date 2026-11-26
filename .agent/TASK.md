@@ -8,11 +8,7 @@
 
 ## Active Task
 
-### `[15.1]` Reusable Micro-Props Library (`assets/props/*.asset.py`) & Scene Composition Pack
-
-- [ ] Create starter `iso-2:1` micro-props under `assets/props/` (e.g., `desk_lamp_iso.asset.py`, `monitor_iso.asset.py`, `potted_plant_iso.asset.py`, `storage_crate_iso.asset.py`, `network_switch_iso.asset.py`, `coffee_mug_iso.asset.py`) with `mount_bottom` anchors, `hitboxes`, and multi-state support (`day`/`night` or `idle`/`active`).
-- [ ] Add `tests/test_props_compose.py` verifying `compose_scene` mounts the props onto `bedroom_desk_iso` anchors with `in_bounds=True` and zero clipping, plus `pixelforge check` and visual `.contact.png` inspection.
-- [ ] Run `uv run ruff check . && uv run ruff format --check .`, `uv run pyright`, `uv run pytest`, and `git diff --check`.
+_None currently queued — all roadmap tasks completed. Awaiting next task or explicit human instruction for `[99.1]` release._
 
 ---
 
@@ -43,6 +39,7 @@
 | `[12.1]` | Structured `pixelforge diff` (`--json` & Anchor/Hitbox Metadata Diff) | `1690b36` | 2026-11-25 |
 | `[13.1]` | CI TypeScript Validation (`tsc --noEmit` for `manifest.d.ts` & `--indexed-ts`) | `6f5929f` | 2026-11-25 |
 | `[14.1]` | Environment & Detail Prefab Kits (`src/pixelforge/core/prefabs/`) | `0a7f4fb` | 2026-11-25 |
+| `[15.1]` | Reusable Micro-Props Library (`assets/props/*.asset.py`) & Scene Composition Pack | `c426ed1` | 2026-11-25 |
 
 ---
 
