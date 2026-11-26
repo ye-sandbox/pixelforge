@@ -262,6 +262,11 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
                 else {}
             ),
             **(
+                {"semantics": bundle.manifest.semantics.model_dump(mode="json")}
+                if bundle.manifest.semantics is not None
+                else {}
+            ),
+            **(
                 {
                     "frameMetadata": {
                         st: [entry.model_dump(exclude_none=True, mode="json") for entry in entries]

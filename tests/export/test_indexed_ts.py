@@ -138,6 +138,10 @@ def test_export_indexed_ts_lazy_defers_rle_decoding() -> None:
     assert "get data(): Uint8Array {" in result.sprites_ts
     assert "if (cached === undefined) {" in result.sprites_ts
     assert "export function getIndexedSpriteFrame<" in result.sprites_ts
+    assert '"semantics": {' in result.manifest_ts
+    assert '"y_sort_pivot": {' in result.manifest_ts
+    assert '"collision_grid": {' in result.manifest_ts
+    assert '"walkable_mask": {' in result.manifest_ts
 
     lazy_calls = re.findall(
         r'createLazySpriteFrame\("([A-Za-z0-9+/=]+)", 8, 8\)',

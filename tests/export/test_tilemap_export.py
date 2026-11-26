@@ -142,10 +142,15 @@ def test_tilemap_exports_tiled_godot_phaser_svelte_indexed_ts_and_aseprite() -> 
     assert tiled["columns"] == 4
     assert tiled["wangsets"][0]["name"] == "cable"
     assert len(tiled["wangsets"][0]["wangtiles"]) == 16
+    assert any(p["name"] == "y_sort_pivot_y" for p in tiled["properties"])
+    assert any(p["name"] == "walkable" for p in tiled["tiles"][0]["properties"])
 
     godot = json.loads(bundle.files["cable_tiles.godot.json"].decode("utf-8"))
     assert godot["format"] == "godot-tileset-v1"
     assert godot["terrain_set_mode"] == "match_sides"
+    assert "physics_layers" in godot
+    assert "y_sort_origin" in godot
+    assert "walkable" in godot["tiles"][0]
     assert godot["tiles"][15]["atlas_coords"] == [3, 3]
     assert godot["tiles"][15]["peering_bits"] == {
         "top": 1,

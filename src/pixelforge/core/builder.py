@@ -9,6 +9,7 @@ from types import TracebackType
 from typing import Literal, Self, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from pixelforge.core.iso import IsoAnchor, iso_box, iso_tile
 from pixelforge.core.palette import PaletteLookup
@@ -25,6 +26,7 @@ from pixelforge.core.types import (
     AnchorPoint,
     AssetSpec,
     HitboxRect,
+    LayerRole,
     StylePack,
 )
 
@@ -43,9 +45,42 @@ def _derive_seed(base_seed: int, state: str, frame: int) -> int:
     return h
 
 
+@dataclass(frozen=True)
+class LayerSemanticSpan:
+    """Global opaque bounding box and mask captured from a semantic `Layer`."""
+
+    name: str
+    role: LayerRole
+    x: int
+    y: int
+    w: int
+    h: int
+    mask: NDArray[np.bool_]
+
+
+def _infer_layer_role(name: str) -> LayerRole:
+    lower = name.lower()
+    if lower in {"collision", "solid", "wall", "walls", "blocker", "colliders"} or lower.startswith(
+        "collision_"
+    ):
+        return "collision"
+    if lower in {"walkable", "floor", "floors", "ground", "path"} or lower.startswith("walkable_"):
+        return "walkable"
+    if lower in {"occlusion", "occluder", "roof", "canopy", "foreground"} or lower.startswith(
+        "occlusion_"
+    ):
+        return "occlusion"
+    if lower in {"interact", "trigger", "portal", "switch", "terminal"} or lower.startswith(
+        "interact_"
+    ):
+        return "interact"
+    return "visual"
+
+
 @dataclass
 class _LayerFrame:
     name: str
+    role: LayerRole
     surface: IndexedSurface
     offset: tuple[int, int]
     outline: int | None
@@ -564,6 +599,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
     _layer_stack: list[_LayerFrame]
     _anchors: list[AnchorPoint]
     _hitboxes: list[HitboxRect]
+    _layer_spans: list[LayerSemanticSpan]
 
     def __init__(
         self,
@@ -602,6 +638,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         self._layer_stack = []
         self._anchors = []
         self._hitboxes = []
+        self._layer_spans = []
 
     def __enter__(self) -> Self:
         return self
@@ -665,6 +702,11 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         """Snapshot of recorded global hitboxes."""
         return tuple(self._hitboxes)
 
+    @property
+    def layer_spans(self) -> tuple[LayerSemanticSpan, ...]:
+        """Snapshot of recorded semantic layer spans."""
+        return tuple(self._layer_spans)
+
     def hashf(self, x: int, y: int, salt: int = 0) -> float:
         """Stateless deterministic `[0, 1)` coordinate hash salted by asset seed."""
         return hashf(x, y, (self.spec.seed + self.frame + salt) & 0xFFFFFFFF)
@@ -697,11 +739,13 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         sel_out: SelOutSpec | None = None,
         bevel: tuple[int, int] | None = None,
         mirror_x: bool | MirrorSource = False,
+        role: LayerRole | None = None,
     ) -> Layer:
         """Push an isolated compositional layer composited onto its parent on exit."""
         if not name:
             msg = "Layer name must be non-empty"
             raise ValueError(msg)
+        resolved_role = role if role is not None else _infer_layer_role(name)
         parent = self.surface
         lw, lh = size if size is not None else (parent.width, parent.height)
         layer_surf = IndexedSurface(lw, lh)
@@ -727,6 +771,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         layer_frame.append(
             _LayerFrame(
                 name=name,
+                role=resolved_role,
                 surface=layer_surf,
                 offset=(ox, oy),
                 outline=outline,
@@ -792,8 +837,35 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         if frame.sel_out is not None:
             _apply_sel_out(surf, frame.sel_out)
 
+        if frame.role != "visual":
+            self._record_layer_span(frame, surf)
+
         parent = self.surface
         parent.blit_layer(surf, frame.offset[0], frame.offset[1])
+
+    def _record_layer_span(self, frame: _LayerFrame, surf: IndexedSurface) -> None:
+        ys, xs = np.nonzero(surf.data != TRANSPARENT_INDEX)
+        if len(xs) == 0:
+            return
+        parent_ox, parent_oy = self._current_offset()
+        gx_off = parent_ox + frame.offset[0]
+        gy_off = parent_oy + frame.offset[1]
+        min_x = int(xs.min())
+        max_x = int(xs.max())
+        min_y = int(ys.min())
+        max_y = int(ys.max())
+        patch = (surf.data[min_y : max_y + 1, min_x : max_x + 1] != TRANSPARENT_INDEX).copy()
+        self._layer_spans.append(
+            LayerSemanticSpan(
+                name=frame.name,
+                role=frame.role,
+                x=gx_off + min_x,
+                y=gy_off + min_y,
+                w=max_x - min_x + 1,
+                h=max_y - min_y + 1,
+                mask=patch,
+            )
+        )
 
     def _current_offset(self) -> tuple[int, int]:
         ox = sum(frame.offset[0] for frame in self._layer_stack)

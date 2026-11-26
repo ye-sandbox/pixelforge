@@ -21,6 +21,7 @@ MAX_PALETTE_INDEX: Final[int] = 254
 PerspectiveMode = Literal["front-2.5d", "iso-2:1", "top-down", "side"]
 LightingAngle = Literal["top-left", "top-right", "top"]
 AutotileMode = Literal["cardinal16", "blob47"]
+LayerRole = Literal["visual", "collision", "walkable", "occlusion", "interact"]
 PaletteFlag = Literal[
     "outline",
     "emissive",
@@ -156,6 +157,67 @@ class NineSliceMargins(BaseModel):
     right: int = Field(ge=0)
     top: int = Field(ge=0)
     bottom: int = Field(ge=0)
+
+
+class SemanticPoint(BaseModel):
+    """Integer 2D coordinate used for derived gameplay pivots (e.g., y-sort)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    x: int
+    y: int
+
+
+class SemanticGrid(BaseModel):
+    """Row-major binary occupancy grid (`0` or `1`) for collision or walkability."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cell_width: int = Field(gt=0)
+    cell_height: int = Field(gt=0)
+    columns: int = Field(gt=0)
+    rows: int = Field(gt=0)
+    cells: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def _validate_cells(self) -> SemanticGrid:
+        expected = self.columns * self.rows
+        if len(self.cells) != expected:
+            msg = (
+                f"SemanticGrid cells length {len(self.cells)} does not match "
+                f"{self.columns}x{self.rows} ({expected})"
+            )
+            raise ValueError(msg)
+        for idx, val in enumerate(self.cells):
+            if val not in (0, 1):
+                msg = f"SemanticGrid cell[{idx}] must be 0 or 1, got {val}"
+                raise ValueError(msg)
+        return self
+
+
+class SemanticZone(BaseModel):
+    """Derived axis-aligned gameplay zone (occlusion or interaction trigger)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    x: int
+    y: int
+    w: int = Field(gt=0)
+    h: int = Field(gt=0)
+    kind: str = Field(min_length=1)
+
+
+class GameplaySemantics(BaseModel):
+    """Derived collision, walkability, y-sort pivot, occlusion, and interaction metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    y_sort_pivot: SemanticPoint
+    collision_grid: SemanticGrid
+    walkable_mask: SemanticGrid
+    occlusion_zones: tuple[SemanticZone, ...] = ()
+    interact_zones: tuple[SemanticZone, ...] = ()
 
 
 class TilemapSpec(BaseModel):

@@ -13,11 +13,13 @@ from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from pixelforge.core.builder import Asset
+from pixelforge.core.builder import Asset, LayerSemanticSpan
+from pixelforge.core.semantics import derive_gameplay_semantics
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import (
     AnchorPoint,
     AssetSpec,
+    GameplaySemantics,
     HitboxRect,
     NineSliceMargins,
     StylePack,
@@ -77,6 +79,7 @@ class RenderedFrame:
     surface: IndexedSurface
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
+    layer_spans: tuple[LayerSemanticSpan, ...] = ()
 
 
 class FrameMetadataEntry(BaseModel):
@@ -121,6 +124,7 @@ class ExportedAssetManifestEntry(BaseModel):
     nineSlice: NineSliceMargins | None = None
     tilemap: TilemapSpec | None = None
     frameMetadata: dict[str, tuple[FrameMetadataEntry, ...]] | None = None
+    semantics: GameplaySemantics | None = None
     sha256: str
 
 
@@ -179,6 +183,7 @@ def render_asset_frames(
                     surface=builder.root_surface,
                     anchors=builder.anchors,
                     hitboxes=builder.hitboxes,
+                    layer_spans=builder.layer_spans,
                 )
             )
 
@@ -238,6 +243,7 @@ def _compute_bundle_digest(
     anchors: tuple[AnchorPoint, ...],
     hitboxes: tuple[HitboxRect, ...],
     frame_metadata: dict[str, tuple[FrameMetadataEntry, ...]] | None,
+    semantics: GameplaySemantics | None = None,
 ) -> str:
     hasher = hashlib.sha256()
     header_payload = {
@@ -253,6 +259,7 @@ def _compute_bundle_digest(
         "hitboxes": [h.model_dump() for h in hitboxes],
         **({"nineSlice": spec.nine_slice.model_dump()} if spec.nine_slice is not None else {}),
         **({"tilemap": spec.tilemap.model_dump()} if spec.tilemap is not None else {}),
+        **({"semantics": semantics.model_dump()} if semantics is not None else {}),
         "frameMetadata": (
             {
                 state: [entry.model_dump() for entry in entries]
@@ -387,6 +394,7 @@ def _export_atlas_outputs(
     opts: ExportBundleOptions,
     *,
     has_sheet_png: bool,
+    semantics: GameplaySemantics | None = None,
 ) -> dict[str, bytes]:
     if opts.atlas is None:
         return {}
@@ -419,11 +427,15 @@ def _export_atlas_outputs(
     if tile_fmt is not None and spec.tilemap is not None:
         if tile_fmt in ("tiled", "all"):
             files[f"{spec.id}.tiled.json"] = serialize_tilemap_json(
-                build_tiled_tileset(spec, scale=opts.scale, image_name=image_name)
+                build_tiled_tileset(
+                    spec, scale=opts.scale, image_name=image_name, semantics=semantics
+                )
             )
         if tile_fmt in ("godot", "all"):
             files[f"{spec.id}.godot.json"] = serialize_tilemap_json(
-                build_godot_tileset(spec, scale=opts.scale, image_name=image_name)
+                build_godot_tileset(
+                    spec, scale=opts.scale, image_name=image_name, semantics=semantics
+                )
             )
         if tile_fmt in ("phaser", "all"):
             files[f"{spec.id}.phaser.json"] = serialize_tilemap_json(
@@ -438,11 +450,26 @@ def export_rendered_frames_bundle(
     rendered_frames: tuple[RenderedFrame, ...],
     style: StylePack,
     options: ExportBundleOptions | None = None,
+    *,
+    semantics: GameplaySemantics | None = None,
 ) -> ExportBundleResult:
     """Package pre-rendered frames into PNGs, spritesheets, masks, LUTs, and manifest."""
     opts = options or ExportBundleOptions()
     include_emissive = _has_emissive_colors(style) if opts.emissive is None else opts.emissive
     by_key = {(item.state, item.frame): item for item in rendered_frames}
+
+    baseline = rendered_frames[0]
+    resolved_semantics = (
+        semantics
+        if semantics is not None
+        else derive_gameplay_semantics(
+            spec,
+            baseline.surface,
+            anchors=baseline.anchors,
+            hitboxes=baseline.hitboxes,
+            layer_spans=baseline.layer_spans,
+        )
+    )
 
     state_out = _export_state_outputs(
         spec,
@@ -464,6 +491,7 @@ def export_rendered_frames_bundle(
         rendered_frames,
         opts,
         has_sheet_png=sheet_name is not None,
+        semantics=resolved_semantics,
     )
     files = {**state_out.files, **sheet_files, **atlas_files}
 
@@ -472,7 +500,6 @@ def export_rendered_frames_bundle(
         lut_name = f"{style.id}_lut.png"
         files[lut_name] = style_to_lut_png(style)
 
-    baseline = rendered_frames[0]
     frame_metadata = _build_frame_metadata(
         spec,
         rendered_frames,
@@ -485,6 +512,7 @@ def export_rendered_frames_bundle(
         baseline.anchors,
         baseline.hitboxes,
         frame_metadata,
+        resolved_semantics,
     )
 
     export_files = ExportedAssetFiles(
@@ -511,6 +539,7 @@ def export_rendered_frames_bundle(
         nineSlice=spec.nine_slice,
         tilemap=spec.tilemap,
         frameMetadata=frame_metadata,
+        semantics=resolved_semantics,
         sha256=sha256,
     )
 

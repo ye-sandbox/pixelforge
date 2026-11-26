@@ -5,6 +5,7 @@ from pixelforge.core.builder import (
     AnchorAlign,
     Asset,
     Layer,
+    LayerSemanticSpan,
     ScatterMask,
     SelOutSpec,
 )
@@ -26,6 +27,7 @@ from pixelforge.core.palette_stub import (
 )
 from pixelforge.core.plane import GridMode, Plane, Point2D
 from pixelforge.core.prng import hashf, mulberry32, xorshift32
+from pixelforge.core.semantics import derive_gameplay_semantics
 from pixelforge.core.surface import (
     DitherMask,
     DitherPattern,
@@ -65,12 +67,17 @@ from pixelforge.core.types import (
     AnchorPoint,
     AssetSpec,
     AutotileMode,
+    GameplaySemantics,
     HitboxRect,
+    LayerRole,
     LightingAngle,
     NineSliceMargins,
     PaletteColor,
     PaletteFlag,
     PerspectiveMode,
+    SemanticGrid,
+    SemanticPoint,
+    SemanticZone,
     StylePack,
     TilemapSpec,
 )
@@ -101,11 +108,14 @@ __all__ = [
     "AutotileStyle",
     "DitherMask",
     "DitherPattern",
+    "GameplaySemantics",
     "GridMode",
     "HitboxRect",
     "IndexedSurface",
     "IsoAnchor",
     "Layer",
+    "LayerRole",
+    "LayerSemanticSpan",
     "LightingAngle",
     "MirrorSource",
     "NineSliceMargins",
@@ -118,6 +128,9 @@ __all__ = [
     "Point2D",
     "ScatterMask",
     "SelOutSpec",
+    "SemanticGrid",
+    "SemanticPoint",
+    "SemanticZone",
     "StylePack",
     "TilemapSpec",
     "autotile_cables",
@@ -129,6 +142,7 @@ __all__ = [
     "build_rgba_lut",
     "canonical_blob47_masks",
     "compute_grid_bitmasks",
+    "derive_gameplay_semantics",
     "generate_palette_stub",
     "hashf",
     "hex_to_rgb",

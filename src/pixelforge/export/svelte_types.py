@@ -102,6 +102,8 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
         lines.append("  readonly nineSlice: PixelForgeNineSlice;")
     if entry.tilemap is not None:
         lines.append("  readonly tilemap: PixelForgeTilemap;")
+    if entry.semantics is not None:
+        lines.append("  readonly semantics: PixelForgeGameplaySemantics;")
     if entry.frameMetadata is not None:
         lines.append(
             f"  readonly frameMetadata?: Readonly<Record<{type_name}State, "
@@ -164,6 +166,36 @@ def generate_svelte_manifest_dts(
         "  readonly terrain_name: string;",
         "  readonly margin: number;",
         "  readonly spacing: number;",
+        "}",
+        "",
+        "export interface PixelForgePoint {",
+        "  readonly x: number;",
+        "  readonly y: number;",
+        "}",
+        "",
+        "export interface PixelForgeSemanticGrid {",
+        "  readonly cell_width: number;",
+        "  readonly cell_height: number;",
+        "  readonly columns: number;",
+        "  readonly rows: number;",
+        "  readonly cells: readonly (0 | 1)[];",
+        "}",
+        "",
+        "export interface PixelForgeSemanticZone {",
+        "  readonly name: string;",
+        "  readonly x: number;",
+        "  readonly y: number;",
+        "  readonly w: number;",
+        "  readonly h: number;",
+        "  readonly kind: string;",
+        "}",
+        "",
+        "export interface PixelForgeGameplaySemantics {",
+        "  readonly y_sort_pivot: PixelForgePoint;",
+        "  readonly collision_grid: PixelForgeSemanticGrid;",
+        "  readonly walkable_mask: PixelForgeSemanticGrid;",
+        "  readonly occlusion_zones: readonly PixelForgeSemanticZone[];",
+        "  readonly interact_zones: readonly PixelForgeSemanticZone[];",
         "}",
         "",
         "export interface PixelForgeFrameMetadata<",

@@ -518,3 +518,6 @@ def test_homelab_desk_scene_module_compiles_cleanly() -> None:
     assert bundle.manifest.states == ("day", "night")
     assert bundle.manifest.frames == 2
     assert "homelab_desk_scene_sheet.png" in bundle.files
+    assert bundle.manifest.semantics is not None
+    assert bundle.manifest.semantics.collision_grid.columns > 0
+    assert bundle.manifest.semantics.walkable_mask.rows > 0

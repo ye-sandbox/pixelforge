@@ -52,6 +52,8 @@ def test_generate_svelte_manifest_dts_contains_strict_unions() -> None:
     assert 'export type ThinkpadR51IsoAnchorName = "screen";' in dts
     assert 'export type ThinkpadR51IsoHitboxName = "chassis";' in dts
     assert "readonly frameMetadata?:" in dts
+    assert "readonly semantics: PixelForgeGameplaySemantics;" in dts
+    assert "export interface PixelForgeGameplaySemantics {" in dts
     assert "readonly sheet: string;" in dts
     assert "readonly sheetEmissive: string;" in dts
     assert "readonly lut: string;" in dts

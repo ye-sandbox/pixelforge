@@ -12,7 +12,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field
 
-from pixelforge.core.builder import Asset
+from pixelforge.core.builder import Asset, LayerSemanticSpan
+from pixelforge.core.semantics import derive_gameplay_semantics
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, AssetSpec, HitboxRect, StylePack
 from pixelforge.export._canvas import Rgb, composite_rgba, draw_checkerboard
@@ -150,6 +151,9 @@ class SceneCompositionResult:
     placements: tuple[MountedPropPlacement, ...]
     warnings: tuple[str, ...]
     parent_hitboxes: tuple[HitboxRect, ...] = ()
+    semantic_anchors: tuple[AnchorPoint, ...] = ()
+    semantic_hitboxes: tuple[HitboxRect, ...] = ()
+    layer_spans: tuple[LayerSemanticSpan, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -187,6 +191,7 @@ def _render_single_frame(
         surface=builder.root_surface,
         anchors=builder.anchors,
         hitboxes=builder.hitboxes,
+        layer_spans=builder.layer_spans,
     )
 
 
@@ -342,7 +347,13 @@ def _blit_mounted_prop(
     *,
     strict_bounds: bool,
     strict_perspective: bool,
-) -> tuple[_StagedPlacement, list[str]]:
+) -> tuple[
+    _StagedPlacement,
+    list[str],
+    tuple[AnchorPoint, ...],
+    tuple[HitboxRect, ...],
+    tuple[LayerSemanticSpan, ...],
+]:
     prop, perspective_match, warnings = _validate_mounted_prop(
         mount,
         parent_spec,
@@ -407,7 +418,40 @@ def _blit_mounted_prop(
         clipped_pixels=clipped_pixels,
         canvas_mask=canvas_mask,
     )
-    return staged, warnings
+    shifted_anchors = tuple(
+        AnchorPoint(
+            name=f"{mount.prop_id}.{a.name}",
+            x=a.x + dest_x,
+            y=a.y + dest_y,
+            kind=a.kind,
+            dir=a.dir,
+        )
+        for a in prop_rendered.anchors
+    )
+    shifted_hitboxes = tuple(
+        HitboxRect(
+            name=f"{mount.prop_id}.{h.name}",
+            x=h.x + dest_x,
+            y=h.y + dest_y,
+            w=h.w,
+            h=h.h,
+            kind=h.kind,
+        )
+        for h in prop_rendered.hitboxes
+    )
+    shifted_spans = tuple(
+        LayerSemanticSpan(
+            name=f"{mount.prop_id}.{s.name}",
+            role=s.role,
+            x=s.x + dest_x,
+            y=s.y + dest_y,
+            w=s.w,
+            h=s.h,
+            mask=s.mask,
+        )
+        for s in prop_rendered.layer_spans
+    )
+    return staged, warnings, shifted_anchors, shifted_hitboxes, shifted_spans
 
 
 def _finalize_placements(
@@ -493,8 +537,11 @@ def compose_scene(
 
     staged: list[_StagedPlacement] = []
     warnings: list[str] = []
+    semantic_anchors: list[AnchorPoint] = list(parent_rendered.anchors)
+    semantic_hitboxes: list[HitboxRect] = list(parent_rendered.hitboxes)
+    layer_spans: list[LayerSemanticSpan] = list(parent_rendered.layer_spans)
     for mount, parent_anchor in ordered_mounts:
-        entry, prop_warnings = _blit_mounted_prop(
+        entry, prop_warnings, prop_anchors, prop_hitboxes, prop_spans = _blit_mounted_prop(
             composite,
             parent.SPEC,
             parent_state,
@@ -508,6 +555,9 @@ def compose_scene(
         )
         staged.append(entry)
         warnings.extend(prop_warnings)
+        semantic_anchors.extend(prop_anchors)
+        semantic_hitboxes.extend(prop_hitboxes)
+        layer_spans.extend(prop_spans)
 
     placements, occlusion_warnings = _finalize_placements(staged)
     warnings.extend(occlusion_warnings)
@@ -522,6 +572,9 @@ def compose_scene(
         placements=tuple(placements),
         warnings=tuple(warnings),
         parent_hitboxes=parent_rendered.hitboxes,
+        semantic_anchors=tuple(semantic_anchors),
+        semantic_hitboxes=tuple(semantic_hitboxes),
+        layer_spans=tuple(layer_spans),
     )
 
 
@@ -662,14 +715,39 @@ def export_scene_bundle(
 ) -> ExportBundleResult:
     """Compile a declarative `SceneSpec` into a full `ExportBundleResult`."""
     opts = options or ExportBundleOptions()
-    asset_spec, rendered_frames, _ = compose_scene_frames(
+    asset_spec, results, _ = compose_scene_results(
         scene_spec,
         parent,
         props_by_id,
         style,
         variant=opts.variant,
     )
-    return export_rendered_frames_bundle(asset_spec, rendered_frames, style, opts)
+    rendered_frames = tuple(
+        RenderedFrame(
+            state=res.parent_state,
+            frame=idx % asset_spec.frames,
+            surface=res.surface,
+            anchors=res.parent_anchors,
+            hitboxes=res.parent_hitboxes,
+            layer_spans=res.layer_spans,
+        )
+        for idx, res in enumerate(results)
+    )
+    baseline = results[0]
+    scene_semantics = derive_gameplay_semantics(
+        asset_spec,
+        baseline.surface,
+        anchors=baseline.semantic_anchors,
+        hitboxes=baseline.semantic_hitboxes,
+        layer_spans=baseline.layer_spans,
+    )
+    return export_rendered_frames_bundle(
+        asset_spec,
+        rendered_frames,
+        style,
+        opts,
+        semantics=scene_semantics,
+    )
 
 
 def _draw_rect_outline(
