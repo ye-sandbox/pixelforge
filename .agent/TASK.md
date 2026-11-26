@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[26.1]` LLM-First CLI Output by Default (`--format llm|json|human`)
+### `[26.2]` Agent Introspection CLI (`pixelforge inspect`) & Modular Skill
 
-- [ ] Add `--format llm|json|human` (plus `--json` / `--human` convenience flags) to `pixelforge` CLI subcommands (`check`, `render`, `diff`, `compose`, `analyze-ref`, `critic`, `watch`), defaulting to `llm`.
-- [ ] Emit concise, token-dense, structured LLM-oriented output by default (deterministic key-value / compact structured fields, exact paths/coordinates, and actionable fix hints), preserving strict JSON in `--format json` / `--json` and readable summaries in `--format human` / `--human`.
-- [ ] Update CLI unit tests (`tests/cli/test_cli.py`), `.agent/NOTES.md`, `README.md`, and `README.pt-br.md`.
+- [ ] Add `pixelforge inspect style|prefabs|assets|scenes` (LLM-first by default + `--format llm|json|human` / `--json` / `--human`) exposing palette tokens grouped by `paint`/`emissive`/`bright`/`reflections`, prefab signatures/categories, and prop/scene anchors/states.
+- [ ] Refactor `.agent/skills/create-pixel-asset/SKILL.md` into a lean core playbook with progressive-disclosure `references/*.md` covering `*.scene.py`, `critic`, and the complete prefab kits.
+- [ ] Add unit/CLI tests for `pixelforge inspect`, update `.agent/NOTES.md`, `README.md`, and `README.pt-br.md`.
 
 ---
 
@@ -20,6 +20,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[26.1]` LLM-First CLI Output by Default (`--format llm|json|human`) (`6cd0ce7`)
 - `[25.1]` Post-v0.3.0 Hygiene, Public Re-Exports & Fuzzy Lookup Diagnostics (`e0ea838`)
 
 ---
@@ -27,7 +28,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track A — Agent Ergonomics & LLM-First CLI
-- `[26.2]` **Agent Introspection CLI (`pixelforge inspect`) & Modular Skill:** Add `pixelforge inspect style|prefabs|assets|scenes` (LLM-first by default + `--json`) exposing palette tokens grouped by `paint`/`emissive`/`bright`/`reflections`, prefab signatures/categories, and prop/scene anchors/states; refactor `.agent/skills/create-pixel-asset/SKILL.md` into a lean core playbook with progressive-disclosure `references/*.md` covering `*.scene.py`, `critic`, and the complete prefab kits.
 - `[26.3]` **Typed StylePack Palette Stubs & Emissive-Bleed Diagnostics:** Add typed palette stub generation/validation so `pyright strict` catches `a.pal.<TOKEN>` typos statically, and add advisory emissive-bleed and canvas-coverage diagnostics to `pixelforge check`.
 
 ### Track B — New Pixel Art Domains
