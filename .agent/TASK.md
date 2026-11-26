@@ -8,9 +8,7 @@
 
 ## Active Task
 
-### `[38.3]` Multi-Genre Preset Showcase & Guard Verification
-- [ ] Add smoke/showcase assets exercising `ink-1bit`, `retro-pocket-4`, `sweetie-16`, `endesga-32`, `cozy-pastel`, and `scifi-neon` (including emissive bloom isolation).
-- [ ] Verify `pixelforge check` + `pytest` across all presets; run `ruff`, `pyright`, and `pytest`.
+_None currently active (all Track F items completed; awaiting release or new roadmap items)._
 
 ---
 
@@ -18,6 +16,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[38.3]` Multi-Genre Preset Showcase & Guard Verification (`304fc34`)
 - `[38.2]` Semantic Palette Aliases & `UniversalPalette` Protocol (`0d03ff8`)
 - `[38.1]` Dynamic `default_style` Resolution & Built-In StylePack Presets (`pixelforge init --style`) (`0c4d5e7`)
 - `[90.5]` Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`) (`5bfea27`)
