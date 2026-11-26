@@ -86,6 +86,13 @@ from pixelforge.export.scene import (
     generate_scene_sheet,
     resolve_scene_asset_spec,
 )
+from pixelforge.export.studio import (
+    StudioServer,
+    StudioState,
+    build_studio_html,
+    dispatch_studio_request,
+    make_studio_handler,
+)
 from pixelforge.export.svelte_types import generate_svelte_manifest_dts
 from pixelforge.export.tilemap import (
     TileAtlasFormat,
@@ -128,6 +135,8 @@ __all__ = [
     "SceneMountSpec",
     "SceneSheetResult",
     "SceneSpec",
+    "StudioServer",
+    "StudioState",
     "TileAtlasFormat",
     "TileEntry",
     "assert_binary_alpha",
@@ -136,6 +145,7 @@ __all__ = [
     "build_manifest_document",
     "build_phaser_tilemap_atlas",
     "build_spritesheet_surface",
+    "build_studio_html",
     "build_texturepacker_atlas",
     "build_tile_entries",
     "build_tiled_tileset",
@@ -147,6 +157,7 @@ __all__ = [
     "decode_rle_bytes",
     "diff_anchors",
     "diff_hitboxes",
+    "dispatch_studio_request",
     "export_asset_bundle",
     "export_indexed_ts",
     "export_rendered_frames_bundle",
@@ -163,6 +174,7 @@ __all__ = [
     "generate_sprites_ts",
     "generate_surface_diff",
     "generate_svelte_manifest_dts",
+    "make_studio_handler",
     "render_asset_frames",
     "resolve_atlas_image_name",
     "resolve_scene_asset_spec",

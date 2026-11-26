@@ -26,7 +26,9 @@ from pixelforge.export.bundle import (
 )
 from pixelforge.export.indexed_ts import export_indexed_ts, write_indexed_ts_bundle
 from pixelforge.export.scene import LoadedScene
+from pixelforge.export.studio import StudioServer, StudioState
 from pixelforge.guard.runner import (
+    CheckReport,
     discover_asset_files,
     discover_scene_files,
     discover_style_files,
@@ -53,6 +55,8 @@ class _WatchGraph:
         default_factory=dict[Path, tuple[str, str | None, tuple[str, ...]]]
     )
     assets_by_id: dict[str, LoadedAsset] = field(default_factory=dict[str, LoadedAsset])
+    styles_by_id: dict[str, StylePack] = field(default_factory=dict[str, StylePack])
+    scenes_by_id: dict[str, LoadedScene] = field(default_factory=dict[str, LoadedScene])
     bundles_by_id: dict[str, ExportBundleResult] = field(
         default_factory=dict[str, ExportBundleResult]
     )
@@ -61,6 +65,37 @@ class _WatchGraph:
     )
     initial_render_done: bool = False
     output_format: OutputFormat = "llm"
+
+
+def _emit_watch_serve(url: str, output_format: OutputFormat, out: OutputFn) -> None:
+    if output_format == "json":
+        out(json.dumps({"event": "serve", "url": url}))
+        return
+    if output_format == "human":
+        out(f"preview studio listening at {url}")
+        return
+    out(f"watch event=serve url={url}")
+
+
+def _sync_studio(
+    graph: _WatchGraph,
+    studio_state: StudioState | None,
+    *,
+    last_error: str | None = None,
+) -> None:
+    if studio_state is None:
+        return
+    studio_state.sync(
+        graph.styles_by_id,
+        graph.bundles_by_id,
+        scenes=graph.scenes_by_id,
+        assets_by_id=graph.assets_by_id,
+        last_error=last_error,
+    )
+
+
+def _format_check_errors(report: CheckReport) -> str:
+    return "; ".join(v.format_line() for v in report.violations if v.severity == "error")
 
 
 def _emit_watch_render(
@@ -396,6 +431,8 @@ def _render_watch_full(
     graph.bundles_by_id.clear()
     graph.manifests_by_id.clear()
     graph.assets_by_id.clear()
+    graph.scenes_by_id.clear()
+    graph.styles_by_id = dict(styles)
     all_loaded: list[LoadedAsset] = []
     bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
     rendered_count = 0
@@ -441,6 +478,7 @@ def _render_watch_full(
     if scene_result is None:
         return False
     all_scenes, scene_count = scene_result
+    graph.scenes_by_id = {scene.SCENE.id: scene for scene in all_scenes}
 
     if rendered_count + scene_count == 0:
         err(f"Asset {asset_id!r} not found under assets/")
@@ -511,10 +549,12 @@ def _render_watch_incremental(
         err(str(exc))
         return False
 
+    graph.styles_by_id = dict(styles)
     for dead_id in deleted_asset_ids:
         graph.bundles_by_id.pop(dead_id, None)
         graph.manifests_by_id.pop(dead_id, None)
         graph.assets_by_id.pop(dead_id, None)
+        graph.scenes_by_id.pop(dead_id, None)
 
     rendered_any = False
     for asset_path in sorted(affected_asset_paths):
@@ -547,6 +587,7 @@ def _render_watch_incremental(
         if not scene_path.exists():
             continue
         loaded_scene = load_scene_module(scene_path)
+        graph.scenes_by_id[loaded_scene.SCENE.id] = loaded_scene
         if asset_id is not None and loaded_scene.SCENE.id != asset_id:
             continue
         compiled = compile_and_write_scene(
@@ -633,6 +674,7 @@ def _process_watch_change(
     options: ExportBundleOptions,
     indexed_ts: bool,
     indexed_ts_lazy: bool,
+    studio_state: StudioState | None = None,
     out: OutputFn,
     err: OutputFn,
 ) -> None:
@@ -643,7 +685,7 @@ def _process_watch_change(
         report = run_checks(root, asset_id=asset_id)
         _emit_check_violations(report.violations, out, err)
         if report.passed:
-            _render_watch_full(
+            ok = _render_watch_full(
                 root,
                 graph,
                 asset_id=asset_id,
@@ -656,6 +698,10 @@ def _process_watch_change(
                 out=out,
                 err=err,
             )
+            if ok:
+                _sync_studio(graph, studio_state, last_error=None)
+        elif studio_state is not None:
+            studio_state.set_error(_format_check_errors(report))
         return
 
     if asset_id is not None:
@@ -677,9 +723,11 @@ def _process_watch_change(
         report = run_checks(root, asset_id=asset_id, asset_paths=check_paths)
         _emit_check_violations(report.violations, out, err)
         if not report.passed:
+            if studio_state is not None:
+                studio_state.set_error(_format_check_errors(report))
             return
 
-    _render_watch_incremental(
+    ok = _render_watch_incremental(
         root,
         graph,
         affected_asset_paths=affected_paths,
@@ -696,6 +744,8 @@ def _process_watch_change(
         out=out,
         err=err,
     )
+    if ok:
+        _sync_studio(graph, studio_state, last_error=None)
 
 
 def _init_watch_session(
@@ -709,6 +759,7 @@ def _init_watch_session(
     indexed_ts: bool,
     indexed_ts_lazy: bool,
     output_format: OutputFormat,
+    studio_state: StudioState | None = None,
     out: OutputFn,
     err: OutputFn,
 ) -> _WatchGraph:
@@ -722,7 +773,7 @@ def _init_watch_session(
     _seed_watch_graph_metadata(graph)
     report = run_checks(root, asset_id=asset_id)
     if report.passed:
-        _render_watch_full(
+        ok = _render_watch_full(
             root,
             graph,
             asset_id=asset_id,
@@ -735,8 +786,12 @@ def _init_watch_session(
             out=out,
             err=err,
         )
+        if ok:
+            _sync_studio(graph, studio_state, last_error=None)
     else:
         _emit_check_violations(report.violations, out, err)
+        if studio_state is not None:
+            studio_state.set_error(_format_check_errors(report))
     return graph
 
 
@@ -760,6 +815,9 @@ def watch_loop(
     err: OutputFn,
     interval: float = 0.5,
     max_cycles: int | None = None,
+    serve: bool = False,
+    serve_host: str = "127.0.0.1",
+    serve_port: int = 4173,
 ) -> int:
     """Poll `.asset.py` and `.style.py` mtimes and incrementally rebuild affected assets."""
     _ = previews_dir
@@ -771,6 +829,12 @@ def watch_loop(
         animate=False,
         atlas=atlas,
     )
+    studio_state = StudioState() if serve else None
+    studio_server = (
+        StudioServer(studio_state, host=serve_host, port=serve_port)
+        if studio_state is not None
+        else None
+    )
     graph = _init_watch_session(
         root,
         asset_id=asset_id,
@@ -781,12 +845,16 @@ def watch_loop(
         indexed_ts=indexed_ts,
         indexed_ts_lazy=indexed_ts_lazy,
         output_format=output_format,
+        studio_state=studio_state,
         out=out,
         err=err,
     )
 
     cycles = 0
     try:
+        if studio_server is not None:
+            url = studio_server.start()
+            _emit_watch_serve(url, output_format, out)
         while max_cycles is None or cycles < max_cycles:
             time.sleep(interval)
             cycles += 1
@@ -810,9 +878,13 @@ def watch_loop(
                 options=options,
                 indexed_ts=indexed_ts,
                 indexed_ts_lazy=indexed_ts_lazy,
+                studio_state=studio_state,
                 out=out,
                 err=err,
             )
     except KeyboardInterrupt:
         _emit_watch_stop(output_format, out)
+    finally:
+        if studio_server is not None:
+            studio_server.stop()
     return 0

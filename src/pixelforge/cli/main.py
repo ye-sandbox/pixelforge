@@ -164,6 +164,9 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         err=_err,
         interval=float(args.interval),
         max_cycles=args.max_cycles,
+        serve=bool(args.serve),
+        serve_host=str(args.host),
+        serve_port=int(args.port),
     )
 
 
@@ -429,6 +432,22 @@ def build_parser() -> argparse.ArgumentParser:
     watch_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
     watch_p.add_argument("--interval", type=float, default=0.5, help="Poll interval in seconds")
     watch_p.add_argument("--max-cycles", type=int, default=None, help="Stop after N poll cycles")
+    watch_p.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start zero-dependency local Preview Studio HTTP server",
+    )
+    watch_p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Preview Studio bind host when --serve is set (default: 127.0.0.1)",
+    )
+    watch_p.add_argument(
+        "--port",
+        type=int,
+        default=4173,
+        help="Preview Studio bind port when --serve is set (default: 4173, 0 for ephemeral)",
+    )
     add_format_arguments(watch_p)
     watch_p.add_argument("--root", default=None, help="Project root directory")
 

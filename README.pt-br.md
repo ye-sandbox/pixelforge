@@ -87,8 +87,8 @@ uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] 
 # Gerar comparação lado a lado + diff de pixels em magenta contra uma ref Git
 uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
-# Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente
-uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--format llm|json|human] [--json] [--human] [--root .]
+# Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente (opcional --serve Preview Studio)
+uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Extrair proporção, histograma de paleta e rascunho ASCII quantizado efêmeros de uma imagem de referência local
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--format llm|json|human] [--json] [--human] [--root .]

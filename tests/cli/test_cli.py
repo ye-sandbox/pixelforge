@@ -1006,3 +1006,119 @@ def test_cli_output_formats_llm_json_human_and_conflicts(
     assert "Cannot combine --json and --human" in capsys.readouterr().err
     assert main(["render", "--format", "llm", "--json", "--root", str(tmp_path)]) == 2
     assert "Conflicting output flags" in capsys.readouterr().err
+
+
+def test_cli_watch_serve_updates_studio_state_and_stops(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `watch --serve` feeds StudioState across edits/errors and shuts down cleanly."""
+    from pixelforge.export.studio import StudioState
+
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    captured: dict[str, object] = {}
+
+    class _FakeStudioServer:
+        def __init__(
+            self, state: StudioState, *, host: str = "127.0.0.1", port: int = 4173
+        ) -> None:
+            self.state = state
+            self.host = host
+            self.port = port
+            self.started = False
+            self.stopped = False
+            captured["server"] = self
+
+        def start(self) -> str:
+            self.started = True
+            return f"http://{self.host}:{self.port}/"
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    asset_path = tmp_path / "assets" / "example_crate.asset.py"
+    original_src = asset_path.read_text(encoding="utf-8")
+    cycle = 0
+    revisions: list[tuple[int, str | None]] = []
+
+    def fake_sleep(_interval: float) -> None:
+        nonlocal cycle
+        srv = captured["server"]
+        assert isinstance(srv, _FakeStudioServer)
+        revisions.append((srv.state.revision, srv.state.last_error))
+        cycle += 1
+        if cycle == 1:
+            # Introduce a guard error (raw hex) -> studio should keep serving with error banner
+            asset_path.write_text(original_src + '\n_BAD = "#ff00ff"\n', encoding="utf-8")
+            os.utime(
+                asset_path,
+                ns=(asset_path.stat().st_atime_ns, asset_path.stat().st_mtime_ns + 1_000_000),
+            )
+        elif cycle == 2:
+            # Fix the error -> studio clears last_error and advances revision
+            asset_path.write_text(original_src + "\n# fixed\n", encoding="utf-8")
+            os.utime(
+                asset_path,
+                ns=(asset_path.stat().st_atime_ns, asset_path.stat().st_mtime_ns + 2_000_000),
+            )
+
+    monkeypatch.setattr("pixelforge.cli.watch_cmd.StudioServer", _FakeStudioServer)
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    rc = main(
+        [
+            "watch",
+            "--serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "4321",
+            "--root",
+            str(tmp_path),
+            "--interval",
+            "0.01",
+            "--max-cycles",
+            "3",
+        ]
+    )
+    assert rc == 0
+    out_text = capsys.readouterr().out
+    assert "watch event=serve url=http://127.0.0.1:4321/" in out_text
+
+    srv = captured["server"]
+    assert isinstance(srv, _FakeStudioServer)
+    assert srv.started is True
+    assert srv.stopped is True
+    assert revisions[0] == (1, None)
+    assert revisions[1][0] == 2
+    assert revisions[1][1] is not None and "raw-hex" in revisions[1][1]
+    assert revisions[2] == (3, None)
+    assert srv.state.render_png("example_crate", sheet=False)
+
+    # Also verify `--json` serve event formatting
+    assert (
+        main(
+            [
+                "watch",
+                "--serve",
+                "--port",
+                "4322",
+                "--json",
+                "--root",
+                str(tmp_path),
+                "--interval",
+                "0.01",
+                "--max-cycles",
+                "1",
+            ]
+        )
+        == 0
+    )
+    json_lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines() if line]
+    assert any(
+        ev.get("event") == "serve" and ev.get("url") == "http://127.0.0.1:4322/"
+        for ev in json_lines
+    )
