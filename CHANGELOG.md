@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
+### Added
+- LLM-first CLI output (`--format llm|json|human`, default `llm`), `pixelforge inspect` (`style`, `prefabs`, `assets`, `scenes`), and fuzzy lookup diagnostics.
+- Typed `StylePack` palette `Protocol` stubs (`styles/*_palette.py`, `pixelforge check --sync-stubs`) and advisory emissive-bleed / coverage diagnostics.
+- Modular character avatar primitives and animation cycles, UI pixel primitives with `nine_slice` export metadata, deterministic 16/47-tile autotile generators (Godot, Tiled, Phaser, Svelte), and deterministic bitmap fonts (`pixelforge.core.font`) with glyph atlas compilation.
+- Second reference `topdown-rpg` `StylePack` with sample assets, zero-dependency Preview Studio (`pixelforge watch --serve`), and scoped `--root` `.env` settings for external repositories.
+- Deterministic scene ergonomics guards in `pixelforge check`, scene-aware `pixelforge critic`, enriched `diff` metrics with PR summary mode, `analyze-ref --scaffold`, and multi-scene portal graph validation (`ScenePortalSpec`).
+- Derived gameplay semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot`, `interact_zones`), 2D normal/height maps (`--normals` / `--height`), and typed per-frame events / audio cues (`frameMetadata.events`).
+
+### Changed
+- Decomposed dense scene, prefab details, builder, and watch modules into focused subpackages.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added
