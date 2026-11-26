@@ -40,6 +40,7 @@ _None currently queued — all roadmap tasks completed. Awaiting next task or ex
 | `[13.1]` | CI TypeScript Validation (`tsc --noEmit` for `manifest.d.ts` & `--indexed-ts`) | `6f5929f` | 2026-11-25 |
 | `[14.1]` | Environment & Detail Prefab Kits (`src/pixelforge/core/prefabs/`) | `0a7f4fb` | 2026-11-25 |
 | `[15.1]` | Reusable Micro-Props Library (`assets/props/*.asset.py`) & Scene Composition Pack | `c426ed1` | 2026-11-25 |
+| `[16.1]` | Rich Atmospheric Prefabs, Clipped Window Scenes & Authoring Instructions | `3070848` | 2026-11-25 |
 
 ---
 
