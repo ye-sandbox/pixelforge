@@ -23,12 +23,11 @@ from pixelforge.core.types import AssetSpec, StylePack
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.scene import (
     LoadedScene,
-    SceneCompositionError,
     SceneSpec,
-    compose_scene_frames,
 )
 from pixelforge.guard.ast_rules import check_ast_file
 from pixelforge.guard.runtime_rules import check_asset_runtime
+from pixelforge.guard.scene_rules import check_scene_runtime
 from pixelforge.guard.types import GuardViolation
 
 
@@ -466,11 +465,13 @@ def _check_single_scene(
             f"Referenced style {missing_style!r} not found in styles/",
         )
 
-    try:
-        compose_scene_frames(scene_spec, parent, loaded_assets_by_id, style)
-    except SceneCompositionError as exc:
-        return 1, _file_violation(scene_path, "scene-error", str(exc))
-    return 1, []
+    return 1, check_scene_runtime(
+        scene_spec,
+        parent,
+        loaded_assets_by_id,
+        style,
+        file_path=str(scene_path),
+    )
 
 
 def run_checks(

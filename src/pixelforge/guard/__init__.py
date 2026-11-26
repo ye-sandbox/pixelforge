@@ -15,6 +15,7 @@ from pixelforge.guard.runner import (
     run_checks,
 )
 from pixelforge.guard.runtime_rules import check_asset_runtime, find_orphan_pixel_coords
+from pixelforge.guard.scene_rules import check_scene_runtime
 from pixelforge.guard.types import GuardSeverity, GuardViolation
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "check_asset_runtime",
     "check_ast_file",
     "check_ast_source",
+    "check_scene_runtime",
     "discover_asset_files",
     "discover_style_files",
     "find_orphan_pixel_coords",

@@ -43,6 +43,19 @@ _VIOLATION_HINTS: dict[str, str] = {
     "missing-style": "Ensure SPEC.style_id matches a valid StylePack in styles/*.style.py.",
     "missing-parent": "Ensure SCENE.parent_id matches an existing AssetSpec id.",
     "scene-error": "Verify mount anchors, bounds, and perspective alignment in *.scene.py.",
+    "duplicate-mount": "Assign each SceneMountSpec in SCENE.mounts to a distinct parent anchor.",
+    "scene-anchor-bounds": (
+        "Place mounted parent anchors inside the parent asset's opaque bounding box."
+    ),
+    "scene-bounds": (
+        "Adjust mount offsets, prop_anchor, or parent canvas size so props stay within bounds."
+    ),
+    "scene-perspective": (
+        "Mount only props matching the parent asset's perspective (or update SceneSpec)."
+    ),
+    "scene-occlusion": (
+        "Adjust z_index, anchor spacing, or offsets to reduce prop overlap below threshold."
+    ),
     "palette-stub-missing": (
         "Run `pixelforge check --sync-stubs` to generate typed *_palette.py stubs."
     ),

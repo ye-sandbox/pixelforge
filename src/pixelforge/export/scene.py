@@ -134,6 +134,7 @@ class MountedPropPlacement(BaseModel):
     clipped_pixels: int
     occluded_by: tuple[str, ...]
     occluded_pixels: int
+    opaque_pixels: int = 0
 
 
 @dataclass(frozen=True)
@@ -222,19 +223,20 @@ def _compute_placed_bounds(
     dest_y: int,
     canvas_w: int,
     canvas_h: int,
-) -> tuple[tuple[int, int, int, int] | None, bool, int, NDArray[np.bool_]]:
+) -> tuple[tuple[int, int, int, int] | None, bool, int, int, NDArray[np.bool_]]:
     opaque_local = prop_surface.data != TRANSPARENT_INDEX
     ys, xs = np.nonzero(opaque_local)
     canvas_mask = np.zeros((canvas_h, canvas_w), dtype=bool)
+    opaque_pixels = len(xs)
 
-    if len(xs) == 0:
+    if opaque_pixels == 0:
         in_bounds = (
             dest_x >= 0
             and dest_y >= 0
             and dest_x + prop_surface.width <= canvas_w
             and dest_y + prop_surface.height <= canvas_h
         )
-        return None, in_bounds, 0, canvas_mask
+        return None, in_bounds, 0, 0, canvas_mask
 
     world_xs = xs + dest_x
     world_ys = ys + dest_y
@@ -246,11 +248,11 @@ def _compute_placed_bounds(
     )
 
     inside = (world_xs >= 0) & (world_xs < canvas_w) & (world_ys >= 0) & (world_ys < canvas_h)
-    clipped_pixels = int(len(xs) - int(np.count_nonzero(inside)))
+    clipped_pixels = int(opaque_pixels - int(np.count_nonzero(inside)))
     if np.any(inside):
         canvas_mask[world_ys[inside], world_xs[inside]] = True
 
-    return bbox, clipped_pixels == 0, clipped_pixels, canvas_mask
+    return bbox, clipped_pixels == 0, clipped_pixels, opaque_pixels, canvas_mask
 
 
 @dataclass(frozen=True)
@@ -265,6 +267,7 @@ class _StagedPlacement:
     width: int
     height: int
     opaque_bbox: tuple[int, int, int, int] | None
+    opaque_pixels: int
     in_bounds: bool
     clipped_pixels: int
     canvas_mask: NDArray[np.bool_]
@@ -371,7 +374,7 @@ def _blit_mounted_prop(
     dest_x = parent_anchor.x - align_x + mount.offset_x
     dest_y = parent_anchor.y - align_y + mount.offset_y
 
-    bbox, in_bounds, clipped_pixels, canvas_mask = _compute_placed_bounds(
+    bbox, in_bounds, clipped_pixels, opaque_pixels, canvas_mask = _compute_placed_bounds(
         prop_rendered.surface,
         dest_x,
         dest_y,
@@ -399,6 +402,7 @@ def _blit_mounted_prop(
         width=prop_rendered.surface.width,
         height=prop_rendered.surface.height,
         opaque_bbox=bbox,
+        opaque_pixels=opaque_pixels,
         in_bounds=in_bounds,
         clipped_pixels=clipped_pixels,
         canvas_mask=canvas_mask,
@@ -443,6 +447,7 @@ def _finalize_placements(
                 width=entry.width,
                 height=entry.height,
                 opaque_bbox=entry.opaque_bbox,
+                opaque_pixels=entry.opaque_pixels,
                 in_bounds=entry.in_bounds,
                 clipped_pixels=entry.clipped_pixels,
                 occluded_by=tuple(occluded_by),
@@ -560,18 +565,24 @@ def resolve_scene_asset_spec(
     )
 
 
-def compose_scene_frames(
+def compose_scene_results(
     scene_spec: SceneSpec,
     parent: AssetModule,
     props_by_id: Mapping[str, AssetModule],
     style: StylePack,
     *,
     variant: str | None = None,
-) -> tuple[AssetSpec, tuple[RenderedFrame, ...], tuple[str, ...]]:
-    """Synchronously compose all `(state, frame)` pairs for a declarative `SceneSpec`."""
+    strict_bounds: bool | None = None,
+    strict_perspective: bool | None = None,
+) -> tuple[AssetSpec, tuple[SceneCompositionResult, ...], tuple[str, ...]]:
+    """Synchronously compose all `(state, frame)` pairs and return scene results."""
     asset_spec = resolve_scene_asset_spec(scene_spec, parent, props_by_id)
     effective_variant = variant if variant is not None else scene_spec.variant
-    rendered_frames: list[RenderedFrame] = []
+    eff_strict_bounds = scene_spec.strict_bounds if strict_bounds is None else strict_bounds
+    eff_strict_perspective = (
+        scene_spec.strict_perspective if strict_perspective is None else strict_perspective
+    )
+    results: list[SceneCompositionResult] = []
     seen_warnings: dict[str, None] = {}
 
     for state in asset_spec.states:
@@ -603,22 +614,43 @@ def compose_scene_frames(
                 props_by_id,
                 style,
                 comp_spec,
-                strict_bounds=scene_spec.strict_bounds,
-                strict_perspective=scene_spec.strict_perspective,
+                strict_bounds=eff_strict_bounds,
+                strict_perspective=eff_strict_perspective,
             )
             for warning in res.warnings:
                 seen_warnings.setdefault(warning, None)
-            rendered_frames.append(
-                RenderedFrame(
-                    state=state,
-                    frame=frame_idx,
-                    surface=res.surface,
-                    anchors=res.parent_anchors,
-                    hitboxes=res.parent_hitboxes,
-                )
-            )
+            results.append(res)
 
-    return asset_spec, tuple(rendered_frames), tuple(seen_warnings.keys())
+    return asset_spec, tuple(results), tuple(seen_warnings.keys())
+
+
+def compose_scene_frames(
+    scene_spec: SceneSpec,
+    parent: AssetModule,
+    props_by_id: Mapping[str, AssetModule],
+    style: StylePack,
+    *,
+    variant: str | None = None,
+) -> tuple[AssetSpec, tuple[RenderedFrame, ...], tuple[str, ...]]:
+    """Synchronously compose all `(state, frame)` pairs for a declarative `SceneSpec`."""
+    asset_spec, results, warnings = compose_scene_results(
+        scene_spec,
+        parent,
+        props_by_id,
+        style,
+        variant=variant,
+    )
+    rendered_frames = tuple(
+        RenderedFrame(
+            state=res.parent_state,
+            frame=idx % asset_spec.frames,
+            surface=res.surface,
+            anchors=res.parent_anchors,
+            hitboxes=res.parent_hitboxes,
+        )
+        for idx, res in enumerate(results)
+    )
+    return asset_spec, rendered_frames, warnings
 
 
 def export_scene_bundle(
