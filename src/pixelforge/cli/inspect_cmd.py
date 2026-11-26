@@ -10,8 +10,12 @@ from pathlib import Path
 from typing import Final
 
 from pixelforge.cli.output import OutputFn, OutputFormat
+from pixelforge.core import font as font_mod
 from pixelforge.core import prefabs
-from pixelforge.core.builder import Asset
+from pixelforge.core import tilemap as tilemap_mod
+from pixelforge.core.builder import Asset, Layer
+from pixelforge.core.plane import Plane
+from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import AnchorPoint, HitboxRect, PaletteColor, StylePack
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.scene import SceneSpec
@@ -32,6 +36,26 @@ _PREFAB_CATEGORIES: Final[tuple[str, ...]] = (
     "characters",
     "ui",
 )
+
+_API_SECTIONS: Final[tuple[str, ...]] = (
+    "Asset",
+    "Layer",
+    "Plane",
+    "IndexedSurface",
+    "tilemap",
+    "font",
+)
+
+
+@dataclass(frozen=True)
+class ApiMemberInfo:
+    """Introspected core drawing API method, property, or function."""
+
+    name: str
+    section: str
+    kind: str
+    signature: str
+    summary: str
 
 
 @dataclass(frozen=True)
@@ -658,4 +682,171 @@ def inspect_scenes_workflow(
         )
 
     _emit_scenes(inspections, output_format=output_format, out=out)
+    return 0
+
+
+def _strip_self_param(sig: inspect.Signature) -> inspect.Signature:
+    params = list(sig.parameters.values())
+    if params and params[0].name == "self":
+        return sig.replace(parameters=params[1:])
+    return sig
+
+
+def _first_doc_line(obj: object) -> str:
+    doc = inspect.getdoc(obj) or ""
+    return doc.splitlines()[0].strip() if doc else ""
+
+
+def _collect_class_api(cls: type[object], section: str) -> list[ApiMemberInfo]:
+    items: list[ApiMemberInfo] = []
+    for name in sorted(dir(cls)):
+        if name.startswith("_"):
+            continue
+        raw = inspect.getattr_static(cls, name)
+        if isinstance(raw, property):
+            if raw.fget is None:
+                continue
+            sig = str(_strip_self_param(inspect.signature(raw.fget)))
+            summary = _first_doc_line(raw.fget) or _first_doc_line(raw)
+            items.append(
+                ApiMemberInfo(
+                    name=name,
+                    section=section,
+                    kind="property",
+                    signature=sig,
+                    summary=summary,
+                )
+            )
+            continue
+
+        attr: object = getattr(cls, name, None)
+        if not callable(attr) or isinstance(attr, type):
+            continue
+        sig = str(_strip_self_param(inspect.signature(attr)))
+        summary = _first_doc_line(attr)
+        items.append(
+            ApiMemberInfo(
+                name=name,
+                section=section,
+                kind="method",
+                signature=sig,
+                summary=summary,
+            )
+        )
+    return items
+
+
+def _collect_module_api(module: object, section: str) -> list[ApiMemberInfo]:
+    mod_name = getattr(module, "__name__", "")
+    items: list[ApiMemberInfo] = []
+    for name in sorted(dir(module)):
+        if name.startswith("_"):
+            continue
+        obj: object = getattr(module, name, None)
+        if not inspect.isfunction(obj) or getattr(obj, "__module__", "") != mod_name:
+            continue
+        sig = str(inspect.signature(obj))
+        summary = _first_doc_line(obj)
+        items.append(
+            ApiMemberInfo(
+                name=name,
+                section=section,
+                kind="function",
+                signature=sig,
+                summary=summary,
+            )
+        )
+    return items
+
+
+def _collect_api() -> list[ApiMemberInfo]:
+    items: list[ApiMemberInfo] = []
+    items.extend(_collect_class_api(Asset, "Asset"))
+    items.extend(_collect_class_api(Layer, "Layer"))
+    items.extend(_collect_class_api(Plane, "Plane"))
+    items.extend(_collect_class_api(IndexedSurface, "IndexedSurface"))
+    items.extend(_collect_module_api(tilemap_mod, "tilemap"))
+    items.extend(_collect_module_api(font_mod, "font"))
+    return items
+
+
+def _emit_api(
+    items: list[ApiMemberInfo],
+    *,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    grouped: dict[str, list[ApiMemberInfo]] = {sec: [] for sec in _API_SECTIONS}
+    for item in items:
+        grouped.setdefault(item.section, []).append(item)
+    non_empty = [sec for sec in _API_SECTIONS if grouped[sec]]
+
+    if output_format == "json":
+        payload = {
+            "total": len(items),
+            "sections": {
+                sec: [
+                    {
+                        "name": entry.name,
+                        "kind": entry.kind,
+                        "signature": entry.signature,
+                        "summary": entry.summary,
+                    }
+                    for entry in grouped[sec]
+                ]
+                for sec in non_empty
+            },
+        }
+        out(json.dumps(payload, indent=2))
+        return
+
+    if output_format == "human":
+        out(f"Core Drawing API ({len(items)} total across {len(non_empty)} sections):")
+        for sec in non_empty:
+            out(f"\n[{sec}] ({len(grouped[sec])})")
+            for entry in grouped[sec]:
+                prefix = "@property " if entry.kind == "property" else ""
+                out(f"  {prefix}{entry.name}{entry.signature}")
+                if entry.summary:
+                    out(f"    {entry.summary}")
+        return
+
+    out(f"api={len(items)} sections={','.join(non_empty)}")
+    for sec in non_empty:
+        out(f"[{sec}]")
+        for entry in grouped[sec]:
+            prefix = "@property " if entry.kind == "property" else ""
+            summary = f" | {entry.summary}" if entry.summary else ""
+            out(f"{prefix}{entry.name}{entry.signature}{summary}")
+
+
+def inspect_api_workflow(
+    *,
+    target: str | None,
+    output_format: OutputFormat,
+    out: OutputFn,
+    err: OutputFn,
+) -> int:
+    """Inspect public methods, signatures, and summaries of core drawing APIs."""
+    all_items = _collect_api()
+    if target is None:
+        _emit_api(all_items, output_format=output_format, out=out)
+        return 0
+
+    needle = target.lower()
+    section_map = {sec.lower(): sec for sec in _API_SECTIONS}
+    if needle in section_map:
+        matched_section = section_map[needle]
+        filtered = [item for item in all_items if item.section == matched_section]
+    else:
+        exact = [item for item in all_items if item.name.lower() == needle]
+        filtered = exact or [item for item in all_items if needle in item.name.lower()]
+
+    if not filtered:
+        candidates = [*_API_SECTIONS, *(item.name for item in all_items)]
+        suggestion = _suggest_close(target, candidates)
+        err(f"No API symbols matching {target!r}; sections: {', '.join(_API_SECTIONS)}{suggestion}")
+        return 1
+
+    _emit_api(filtered, output_format=output_format, out=out)
     return 0

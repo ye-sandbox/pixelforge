@@ -121,7 +121,7 @@ uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>]
 uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Inspecionar grupos de tokens de StylePack, assinaturas de prefabs, âncoras/estados de assets e montagens de cenas
-uv run pixelforge inspect {style|presets|prefabs|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge inspect {style|presets|prefabs|api|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Integração com Svelte 5

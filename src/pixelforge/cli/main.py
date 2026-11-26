@@ -12,6 +12,7 @@ from pixelforge.cli.compose_cmd import compose_scene_workflow, parse_mount_arg
 from pixelforge.cli.critic_cmd import critic_workflow
 from pixelforge.cli.diff_cmd import diff_asset
 from pixelforge.cli.inspect_cmd import (
+    inspect_api_workflow,
     inspect_assets_workflow,
     inspect_prefabs_workflow,
     inspect_presets_workflow,
@@ -338,6 +339,13 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
             out=_out,
             err=_err,
         )
+    if target == "api":
+        return inspect_api_workflow(
+            target=args.target,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
     if target == "presets":
         return inspect_presets_workflow(
             preset_id=args.preset_id,
@@ -643,7 +651,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     inspect_p = sub.add_parser(
         "inspect",
-        help="Introspect StylePacks, prefabs, assets, and scenes",
+        help="Introspect StylePacks, prefabs, core API, assets, and scenes",
     )
     inspect_p.set_defaults(_inspect_parser=inspect_p)
     inspect_sub = inspect_p.add_subparsers(dest="inspect_target")
@@ -681,6 +689,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional category (architecture|furniture|details|atmosphere) or name filter",
     )
     add_format_arguments(inspect_prefabs_p)
+
+    inspect_api_p = inspect_sub.add_parser(
+        "api",
+        help="Inspect core drawing API methods, signatures, and summaries",
+    )
+    inspect_api_p.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Optional section (Asset|Layer|Plane|IndexedSurface|tilemap|font) or member name",
+    )
+    add_format_arguments(inspect_api_p)
 
     inspect_assets_p = inspect_sub.add_parser(
         "assets",

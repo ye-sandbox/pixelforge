@@ -41,6 +41,7 @@ def test_inspect_no_subcommand_prints_help(capsys: pytest.CaptureFixture[str]) -
     out = capsys.readouterr().out
     assert "style" in out
     assert "prefabs" in out
+    assert "api" in out
     assert "assets" in out
     assert "scenes" in out
 
@@ -159,3 +160,47 @@ def test_inspect_assets_and_scenes(
     # Missing scene error
     assert main(["inspect", "scenes", "sample_scen", "--root", str(tmp_path)]) == 1
     assert "sample_scene" in capsys.readouterr().err
+
+
+def test_inspect_api_formats_filtering_and_errors(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `inspect api` exposes all core sections, formats, filters, and suggestions."""
+    # Default LLM-first output covers all 6 sections
+    assert main(["inspect", "api"]) == 0
+    llm_out = capsys.readouterr().out
+    assert "sections=Asset,Layer,Plane,IndexedSurface,tilemap,font" in llm_out
+    assert "[Asset]" in llm_out
+    assert "[Layer]" in llm_out
+    assert "[Plane]" in llm_out
+    assert "[IndexedSurface]" in llm_out
+    assert "[tilemap]" in llm_out
+    assert "[font]" in llm_out
+    assert "extrude_y(" in llm_out
+    assert "autotile_walls(" in llm_out
+    assert "draw_indexed_text(" in llm_out
+
+    # Section filtering (case-insensitive) + JSON output
+    assert main(["inspect", "api", "plane", "--json"]) == 0
+    plane_json = json.loads(capsys.readouterr().out)
+    assert list(plane_json["sections"]) == ["Plane"]
+    assert plane_json["total"] == len(plane_json["sections"]["Plane"])
+    names = {m["name"] for m in plane_json["sections"]["Plane"]}
+    assert {"rect", "extrude_y", "grid", "dither", "anchor"}.issubset(names)
+
+    # Member name filtering + Human output
+    assert main(["inspect", "api", "extrude_y", "--human"]) == 0
+    human_out = capsys.readouterr().out
+    assert "Core Drawing API (1 total across 1 sections):" in human_out
+    assert "[Plane] (1)" in human_out
+    assert "extrude_y(" in human_out
+
+    # Unknown target error with fuzzy suggestion
+    assert main(["inspect", "api", "extrud_y"]) == 1
+    err = capsys.readouterr().err
+    assert "No API symbols matching" in err
+    assert "extrude_y" in err
+
+    # Unknown section typo suggestion
+    assert main(["inspect", "api", "Plne"]) == 1
+    assert "Plane" in capsys.readouterr().err

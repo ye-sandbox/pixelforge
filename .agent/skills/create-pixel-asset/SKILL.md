@@ -36,6 +36,7 @@ All CLI commands emit LLM-first compact output by default (`--format llm|json|hu
 1. **Introspect First (`pixelforge inspect`):**
    - `uv run pixelforge inspect style [style_id]` — Palette tokens grouped by `paint`, `emissive`, `bright`, and `reflections`.
    - `uv run pixelforge inspect prefabs [category|name]` — Live prefab signatures and categories (`architecture`, `furniture`, `details`, `atmosphere`).
+   - `uv run pixelforge inspect api [target]` — Public methods, signatures, and 1-line summaries of `Asset`, `Layer`, `Plane`, `IndexedSurface`, `tilemap`, and `font`.
    - `uv run pixelforge inspect assets [asset_id]` — Existing asset dimensions, states, anchors, and hitboxes.
    - `uv run pixelforge inspect scenes [scene_id]` — Declarative `.scene.py` mounts, state maps, and strict flags.
 2. **Optional Reference Proportions:**
