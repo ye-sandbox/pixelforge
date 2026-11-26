@@ -74,6 +74,8 @@ class MountedPropPlacement(BaseModel):
     prop_id: str
     anchor: str
     prop_anchor: str | None
+    perspective: str
+    perspective_match: bool
     state: str
     frame: int
     z_index: int
@@ -206,6 +208,7 @@ def compose_scene(
     spec: SceneCompositionSpec,
     *,
     strict_bounds: bool = False,
+    strict_perspective: bool = False,
 ) -> SceneCompositionResult:
     """Deterministically compose child prop assets onto a parent scene's declared anchors."""
     if parent.SPEC.id != spec.parent_id:
@@ -236,6 +239,8 @@ def compose_scene(
         tuple[
             SceneMountSpec,
             str,
+            bool,
+            str,
             int,
             int,
             int,
@@ -259,6 +264,16 @@ def compose_scene(
                 f"cannot compose onto {style.id!r}"
             )
             raise SceneCompositionError(msg)
+
+        perspective_match = prop.SPEC.perspective == parent.SPEC.perspective
+        if not perspective_match:
+            persp_detail = (
+                f"Prop {prop.SPEC.id!r} has perspective {prop.SPEC.perspective!r}, "
+                f"which differs from parent {parent.SPEC.id!r} ({parent.SPEC.perspective!r})"
+            )
+            if strict_perspective:
+                raise SceneCompositionError(persp_detail)
+            warnings.append(persp_detail)
 
         parent_anchor = _resolve_anchor_point(
             parent_rendered.anchors,
@@ -308,6 +323,8 @@ def compose_scene(
         staged.append(
             (
                 mount,
+                prop.SPEC.perspective,
+                perspective_match,
                 prop_state,
                 dest_x,
                 dest_y,
@@ -324,6 +341,8 @@ def compose_scene(
     for idx, entry in enumerate(staged):
         (
             mount,
+            prop_perspective,
+            perspective_match,
             prop_state,
             dest_x,
             dest_y,
@@ -354,6 +373,8 @@ def compose_scene(
                 prop_id=mount.prop_id,
                 anchor=mount.anchor,
                 prop_anchor=mount.prop_anchor,
+                perspective=prop_perspective,
+                perspective_match=perspective_match,
                 state=prop_state,
                 frame=mount.frame,
                 z_index=mount.z_index,
@@ -410,11 +431,12 @@ def _draw_rect_outline(
 
 def _format_placement_line(p: MountedPropPlacement) -> str:
     status = "OK" if p.in_bounds else f"CLIP({p.clipped_pixels}px)"
+    persp = "" if p.perspective_match else f" [PERSP:{p.perspective}]"
     occ = f" occ={p.occluded_pixels}px({','.join(p.occluded_by)})" if p.occluded_pixels > 0 else ""
     pa = f":{p.prop_anchor}" if p.prop_anchor else ""
     return (
         f"{p.prop_id}{pa}@{p.anchor} -> ({p.dest_x},{p.dest_y}) "
-        f"{p.width}x{p.height} z={p.z_index} [{status}]{occ}"
+        f"{p.width}x{p.height} z={p.z_index} [{status}]{persp}{occ}"
     )
 
 
@@ -448,9 +470,11 @@ def generate_scene_sheet(
     )
     oob_count = sum(1 for p in result.placements if not p.in_bounds)
     occ_count = sum(1 for p in result.placements if p.occluded_pixels > 0)
+    persp_mismatch_count = sum(1 for p in result.placements if not p.perspective_match)
     summary_line = (
         f"canvas={surf.width}x{surf.height}  zoom={zoom_val}x  "
-        f"props={len(result.placements)}  oob={oob_count}  occluded={occ_count}"
+        f"props={len(result.placements)}  oob={oob_count}  "
+        f"occluded={occ_count}  persp_mismatch={persp_mismatch_count}"
     )
 
     right_col_w = max(surf.width + 24, 180)
@@ -470,7 +494,8 @@ def generate_scene_sheet(
     fill_rgba_rect(canvas, 0, header_h, canvas_w, 1, _BORDER_SUBTLE)
 
     draw_bitmap_text(canvas, title_line, pad, 8, _TEXT_LIGHT)
-    summary_color = _TEXT_ERR if oob_count > 0 else (_TEXT_WARN if occ_count > 0 else _TEXT_MUTED)
+    has_warn = occ_count > 0 or persp_mismatch_count > 0
+    summary_color = _TEXT_ERR if oob_count > 0 else (_TEXT_WARN if has_warn else _TEXT_MUTED)
     draw_bitmap_text(canvas, summary_line, pad, 22, summary_color)
 
     rgba_1x = surface_to_rgba(surf, style, variant=variant)
@@ -510,9 +535,8 @@ def generate_scene_sheet(
                 p.height,
             )
         )
-        color = (
-            _TEXT_ERR if not p.in_bounds else (_TEXT_WARN if p.occluded_pixels > 0 else _TEXT_OK)
-        )
+        has_prop_warn = p.occluded_pixels > 0 or not p.perspective_match
+        color = _TEXT_ERR if not p.in_bounds else (_TEXT_WARN if has_prop_warn else _TEXT_OK)
         rx = zoom_x + bx * zoom_val
         ry = zoom_y + by * zoom_val
         _draw_rect_outline(canvas, rx, ry, bw * zoom_val, bh * zoom_val, color)
@@ -535,10 +559,9 @@ def generate_scene_sheet(
     for idx, line in enumerate(placement_lines):
         if idx < len(result.placements):
             pl = result.placements[idx]
+            has_row_warn = pl.occluded_pixels > 0 or not pl.perspective_match
             row_col = (
-                _TEXT_ERR
-                if not pl.in_bounds
-                else (_TEXT_WARN if pl.occluded_pixels > 0 else _TEXT_MUTED)
+                _TEXT_ERR if not pl.in_bounds else (_TEXT_WARN if has_row_warn else _TEXT_MUTED)
             )
         else:
             row_col = _TEXT_MUTED

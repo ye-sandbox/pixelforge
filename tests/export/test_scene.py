@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from pixelforge import Asset, AssetSpec, PaletteColor, StylePack
+from pixelforge.core.types import PerspectiveMode
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.scene import (
     SceneCompositionError,
@@ -60,6 +61,7 @@ def _prop_asset(
     *,
     palette_key: str = "ACCENT",
     style_id: str = "test-style",
+    perspective: PerspectiveMode = "iso-2:1",
     width: int = 12,
     height: int = 10,
 ) -> LoadedAsset:
@@ -68,7 +70,7 @@ def _prop_asset(
         style_id=style_id,
         width=width,
         height=height,
-        perspective="front-2.5d",
+        perspective=perspective,
         states=("day",),
     )
 
@@ -174,35 +176,88 @@ def test_compose_scene_detects_bounds_clipping_and_occlusion() -> None:
     assert occ_res.placements[1].occluded_pixels == 0
 
 
+def test_compose_scene_warns_and_rejects_perspective_mismatch() -> None:
+    style = _test_style()
+    parent = _parent_asset()
+    front_prop = _prop_asset("front_prop", perspective="front-2.5d")
+    iso_prop = _prop_asset("iso_prop", perspective="iso-2:1")
+
+    mismatch_spec = SceneCompositionSpec(
+        parent_id="room",
+        mounts=(SceneMountSpec(prop_id="front_prop", anchor="slot_a", prop_anchor="foot"),),
+    )
+    warn_res = compose_scene(
+        parent,
+        {"front_prop": front_prop},
+        style,
+        mismatch_spec,
+        strict_perspective=False,
+    )
+    assert warn_res.placements[0].perspective == "front-2.5d"
+    assert warn_res.placements[0].perspective_match is False
+    assert any("differs from parent" in w for w in warn_res.warnings)
+
+    sheet = generate_scene_sheet(warn_res, style)
+    assert sheet.width > 64
+
+    with pytest.raises(SceneCompositionError, match="differs from parent"):
+        compose_scene(
+            parent,
+            {"front_prop": front_prop},
+            style,
+            mismatch_spec,
+            strict_perspective=True,
+        )
+
+    match_spec = SceneCompositionSpec(
+        parent_id="room",
+        mounts=(SceneMountSpec(prop_id="iso_prop", anchor="slot_a", prop_anchor="foot"),),
+    )
+    ok_res = compose_scene(
+        parent,
+        {"iso_prop": iso_prop},
+        style,
+        match_spec,
+        strict_perspective=True,
+    )
+    assert ok_res.placements[0].perspective == "iso-2:1"
+    assert ok_res.placements[0].perspective_match is True
+    assert ok_res.warnings == ()
+
+
 def test_compose_homelab_bedroom_desk_iso_and_sheet() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     style = load_style_module(repo_root / "styles" / "homelab_16bit.style.py")
     parent = load_asset_module(repo_root / "assets" / "homelab" / "bedroom_desk_iso.asset.py")
-    laptop = load_asset_module(repo_root / "assets" / "homelab" / "old_laptop.asset.py")
-    gpu_rig = load_asset_module(repo_root / "assets" / "homelab" / "used_gpu_rig.asset.py")
-    ai_node = load_asset_module(repo_root / "assets" / "homelab" / "ai_cluster_node.asset.py")
+    laptop = load_asset_module(repo_root / "assets" / "homelab" / "old_laptop_iso.asset.py")
+    gpu_rig = load_asset_module(repo_root / "assets" / "homelab" / "used_gpu_rig_iso.asset.py")
+    ai_node = load_asset_module(repo_root / "assets" / "homelab" / "ai_cluster_node_iso.asset.py")
 
     spec = SceneCompositionSpec(
         parent_id="bedroom_desk_iso",
         parent_state="night",
         mounts=(
-            SceneMountSpec(prop_id="old_laptop", anchor="hardware_0", prop_anchor="foot"),
-            SceneMountSpec(prop_id="used_gpu_rig", anchor="hardware_1"),
-            SceneMountSpec(prop_id="ai_cluster_node", anchor="hardware_2"),
+            SceneMountSpec(prop_id="old_laptop_iso", anchor="hardware_0", prop_anchor="foot"),
+            SceneMountSpec(prop_id="used_gpu_rig_iso", anchor="hardware_1", prop_anchor="foot"),
+            SceneMountSpec(prop_id="ai_cluster_node_iso", anchor="hardware_2", prop_anchor="foot"),
         ),
     )
     res = compose_scene(
         parent,
         {
-            "old_laptop": laptop,
-            "used_gpu_rig": gpu_rig,
-            "ai_cluster_node": ai_node,
+            "old_laptop_iso": laptop,
+            "used_gpu_rig_iso": gpu_rig,
+            "ai_cluster_node_iso": ai_node,
         },
         style,
         spec,
         strict_bounds=True,
+        strict_perspective=True,
     )
     assert all(p.in_bounds for p in res.placements)
+    assert all(p.perspective_match for p in res.placements)
+    assert all(p.occluded_pixels == 0 for p in res.placements)
+    assert res.warnings == ()
 
     sheet = generate_scene_sheet(res, style)
     assert sheet.width > 320
