@@ -8,7 +8,11 @@
 
 ## Active Task
 
-_None currently active (awaiting next roadmap item)._
+### `[42.1]` Exact Pixel & Layer Diagnostics (`pixelforge probe`)
+- [ ] Add `pixelforge probe <asset_id> [--region x,y,w,h] [--state ...] [--frame ...] [--layers]` emitting token-mapped ASCII slices with exact palette legend
+- [ ] Emit per-layer `opaque_bbox` and pixel counts, actual token usage histogram (highlighting `emissive` tokens), and exact `(x, y)` coordinates of `orphan-pixels`
+- [ ] Support `--format llm|json|human` and `difflib` fuzzy asset suggestions
+- [ ] Add unit and CLI tests in `tests/cli/` covering region slicing, layer diagnostics, token histograms, and orphan coordinates
 
 ---
 
@@ -16,6 +20,7 @@ _None currently active (awaiting next roadmap item)._
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[41.1]` Core Drawing API Introspection (`pixelforge inspect api`) (`4a561c9`)
 - `[40.1]` Spatial Ergonomics Guards & Snapped Furniture Sets (`e2e6ff4`)
 - `[39.1]` Multi-Room Portal Prefab, Real Scene World Graph & Window Prefabs (`08bdbc7`)
 
@@ -45,6 +50,12 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ---
 
 ## Backlog (Upcoming, in priority order)
+
+### Track G — Agent QoL & Developer Ergonomics
+- `[43.1]` **Zero-Reference Asset, Scene & Style Scaffolders (`pixelforge new`):** Add `pixelforge new {asset,scene,style}` with `--kind iso-prop|front-prop|character|tile-blob47|9slice|font`, `--parent`, and `--from-preset`, emitting `Asset[<Name>Palette]` typed skeletons, starter anchors/hitboxes, and automatic `sync_palette_stubs`.
+- `[44.1]` **Batch Pack Contact Sheet (`pixelforge render --pack-sheet`):** Compile a single comparative 1x + 2x grid `.contact.png` across multiple assets (filterable by directory/pack/IDs) for cross-asset scale, lighting, and outline consistency review.
+- `[45.1]` **Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill:** Add `pixelforge doctor` (`--format llm|json|human`) validating toolchain (`uv`, `ruff`, `pyright`), stale/missing `*_palette.py` stubs, duplicate IDs, tracked `.pixelforge/` scratch files, and `critic` router config; add hermetic `.agent/skills/blind-critic/SKILL.md` for unbiased read-only subagent review.
+- `[46.1]` **Native Stdio MCP Server (`pixelforge mcp`):** Consultative dependency decision (`mcp` SDK vs zero-dep JSON-RPC 2.0 stdio transport) + stdio MCP server exposing `inspect_*`, `check_asset`, `probe_canvas`, `render_contact_sheet`, `compose_dry_run`, and `diff_asset` (returning contact-sheet/diff PNGs directly as MCP image content blocks).
 
 ### Track F — Generic Multi-Game Palette & Preset System
 _All Track F items promoted or completed._
