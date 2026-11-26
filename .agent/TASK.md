@@ -8,9 +8,9 @@
 
 ## Active Task
 
-### `[36.1]` Typed Frame Events & Audio Cues (`frameMetadata.events`)
+### `[37.1]` AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph)
 
-- [ ] Extend `AssetSpec`, `manifest.d.ts`, `--indexed-ts`, and Aseprite atlas exports with deterministic per-`(state, frame)` event tags (e.g., `footstep`, `spark`, `beep`) so external runtimes and audio compilers sync deterministically to animations.
+- [ ] Generate initial `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeletons via `pixelforge analyze-ref --scaffold`, and extend `*.scene.py` + `scene_rules.py` to validate multi-scene portal/transition graphs.
 
 ---
 
@@ -18,6 +18,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[36.1]` Typed Frame Events & Audio Cues (`frameMetadata.events`) (`2cfcf42`)
 - `[35.1]` First-Class Bitmap Fonts & Pixel Text Atlas (`14747b9`)
 - `[34.1]` Derived Lighting & Surface Maps (`_normal.png` & `_height.png`) (`b8659fc`)
 - `[33.1]` Derived Gameplay Semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot` & `interact_zones`) (`98fc73c`)
@@ -45,7 +46,7 @@ _All Track C items promoted or completed._
 _All Track D items promoted or completed._
 
 ### Track E — Gameplay Semantics, Derived Maps & AI Ergonomics
-- `[37.1]` **AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph):** Generate initial `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeletons via `pixelforge analyze-ref --scaffold`, and extend `*.scene.py` + `scene_rules.py` to validate multi-scene portal/transition graphs.
+_All Track E items promoted or completed._
 
 ### Refactoring
 - `[90.5]` **Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`):** Split `export/scene.py` (models, composition engine, scene contact sheet) and `core/prefabs/details.py` (wall decor vs. shadows/cables), and streamline `core/builder.py` and `cli/watch_cmd.py` preserving public exports.
