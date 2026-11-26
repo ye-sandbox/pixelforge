@@ -131,6 +131,7 @@ uv run pixelforge new {asset|scene|style} <name> [--kind iso-prop|front-prop|cha
 
 # Validar toolchain (uv/ruff/pyright), stubs de paleta, IDs duplicados, higiene do .pixelforge/ no git e config do critic
 uv run pixelforge doctor [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge mcp [--root .]
 ```
 
 ## Integração com Svelte 5

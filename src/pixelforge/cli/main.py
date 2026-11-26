@@ -20,6 +20,7 @@ from pixelforge.cli.inspect_cmd import (
     inspect_scenes_workflow,
     inspect_style_workflow,
 )
+from pixelforge.cli.mcp_cmd import run_mcp_stdio
 from pixelforge.cli.new_cmd import (
     ASSET_KINDS,
     emit_new_result,
@@ -890,6 +891,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_format_arguments(doctor_p)
     doctor_p.add_argument("--root", default=None, help="Project root directory")
 
+    mcp_p = sub.add_parser(
+        "mcp",
+        help="Run the native stdio MCP server for AI editor/agent integration",
+    )
+    mcp_p.add_argument("--root", default=None, help="Default project root directory")
+
     return parser
 
 
@@ -928,6 +935,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if output_format is None:
             return 2
         return doctor_workflow(root, output_format=output_format, out=_out)
+    if args.command == "mcp":
+        return run_mcp_stdio(root=root)
     if args.command == "new":
         new_parser: argparse.ArgumentParser = getattr(args, "_new_parser", parser)
         return _cmd_new(args, settings, new_parser)
