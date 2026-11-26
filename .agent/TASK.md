@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[26.2]` Agent Introspection CLI (`pixelforge inspect`) & Modular Skill
+### `[26.3]` Typed StylePack Palette Stubs & Emissive-Bleed Diagnostics
 
-- [ ] Add `pixelforge inspect style|prefabs|assets|scenes` (LLM-first by default + `--format llm|json|human` / `--json` / `--human`) exposing palette tokens grouped by `paint`/`emissive`/`bright`/`reflections`, prefab signatures/categories, and prop/scene anchors/states.
-- [ ] Refactor `.agent/skills/create-pixel-asset/SKILL.md` into a lean core playbook with progressive-disclosure `references/*.md` covering `*.scene.py`, `critic`, and the complete prefab kits.
-- [ ] Add unit/CLI tests for `pixelforge inspect`, update `.agent/NOTES.md`, `README.md`, and `README.pt-br.md`.
+- [ ] Add typed palette stub generation/validation so `pyright strict` catches `a.pal.<TOKEN>` typos statically.
+- [ ] Add advisory emissive-bleed and canvas-coverage diagnostics to `pixelforge check`.
+- [ ] Add unit/guard tests for palette stubs and diagnostics, and update `.agent/NOTES.md`.
 
 ---
 
@@ -20,15 +20,13 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[26.2]` Agent Introspection CLI (`pixelforge inspect`) & Modular Skill (`4a49910`)
 - `[26.1]` LLM-First CLI Output by Default (`--format llm|json|human`) (`6cd0ce7`)
 - `[25.1]` Post-v0.3.0 Hygiene, Public Re-Exports & Fuzzy Lookup Diagnostics (`e0ea838`)
 
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### Track A — Agent Ergonomics & LLM-First CLI
-- `[26.3]` **Typed StylePack Palette Stubs & Emissive-Bleed Diagnostics:** Add typed palette stub generation/validation so `pyright strict` catches `a.pal.<TOKEN>` typos statically, and add advisory emissive-bleed and canvas-coverage diagnostics to `pixelforge check`.
 
 ### Track B — New Pixel Art Domains
 - `[27.1]` **Modular Characters, Avatars & Part-Based Animation Kits:** Build compositional character/avatar primitives (`head`, `torso`, `legs`, `hair`, `accessory`), deterministic animation cycles (`idle`, `walk`, `typing`, `alert`), and `PaletteLookup.with_overrides` skin/hair/outfit variants with showcase assets.
