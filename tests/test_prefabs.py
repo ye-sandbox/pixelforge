@@ -588,3 +588,123 @@ def test_furniture_slots_and_rack_front_styles() -> None:
     unique_indices = set(np.unique(asset.root_surface.data).tolist())
     allowed = {c.index for c in asset.style.palette} | {TRANSPARENT_INDEX}
     assert unique_indices <= allowed
+
+
+def test_point_light_spill_radial_and_conical() -> None:
+    asset = _make_asset(80, 60)
+    p = asset.pal
+    asset.rect(0, 0, 80, 60, p.FLOOR, fill=True)
+    prefabs.point_light_spill(
+        asset,
+        40,
+        30,
+        16,
+        8,
+        color=p.SUN,
+        secondary_color=p.WOOD_L,
+        direction=(1.0, 0.0),
+        cone_cos=0.3,
+    )
+    # Conical spill pointing right (+x) should not illuminate left of center
+    assert not np.any(asset.root_surface.data[:, :38] == p.SUN)
+    assert np.any(asset.root_surface.data[:, 41:56] == p.SUN)
+
+
+def test_cast_shadow_respects_lighting_angle() -> None:
+    for angle, expected_side in (("top-left", "right"), ("top-right", "left"), ("top", "center")):
+        style = _make_style().model_copy(update={"lighting_angle": angle})
+        spec = AssetSpec(
+            id="shadow_probe",
+            style_id="prefab-test",
+            width=64,
+            height=48,
+            perspective="iso-2:1",
+            states=("day",),
+            seed=1,
+        )
+        asset = Asset(spec, style)
+        p = asset.pal
+        prefabs.cast_shadow(asset, 32, 24, 4, 2, color=p.FLOOR_D, length=10, dither_ratio=1.0)
+        if expected_side == "right":
+            assert np.any(asset.root_surface.data[26:, 37:] == p.FLOOR_D)
+        elif expected_side == "left":
+            assert np.any(asset.root_surface.data[26:, :28] == p.FLOOR_D)
+        else:
+            assert np.any(asset.root_surface.data[26:, 28:37] == p.FLOOR_D)
+            assert not np.any(asset.root_surface.data[:, 40:] == p.FLOOR_D)
+
+
+def test_floor_reflection_uses_style_reflections_lut() -> None:
+    style = _make_style().model_copy(update={"reflections": {"SUN": "WOOD_L", "LED": "SKY"}})
+    spec = AssetSpec(
+        id="refl_probe",
+        style_id="prefab-test",
+        width=32,
+        height=32,
+        perspective="front-2.5d",
+        states=("day",),
+        seed=2,
+    )
+    asset = Asset(spec, style)
+    p = asset.pal
+    asset.rect(0, 16, 32, 16, p.FLOOR, fill=True)
+    asset.rect(8, 8, 8, 8, p.SUN, fill=True)
+    prefabs.floor_reflection(asset, (8, 8, 8, 8), y_floor=16, dither_ratio=1.0)
+    assert np.all(asset.root_surface.data[16:24, 8:16] == p.WOOD_L)
+
+
+def test_internal_atmospheric_and_telemetry_prefabs_loop_and_clip() -> None:
+    asset_a = _make_asset(120, 90)
+    asset_b = _make_asset(120, 90)
+    for asset, phase in ((asset_a, 0.0), (asset_b, 1.0)):
+        p = asset.pal
+        region = (12, 10, 32, 24)
+        with prefabs.clipped_pane(asset, region) as pane:
+            prefabs.sky_backdrop(pane, bands=(p.SKY_DARK, p.SKY))
+            prefabs.horizon_silhouette(pane, color=p.FLOOR_D, accent=p.CLOUD, mode="mountains")
+            prefabs.horizon_silhouette(
+                pane, color=p.INK, accent=p.LED, mode="industrial", base_v=0.82
+            )
+            prefabs.weather_lightning(pane, color=p.CLOUD, glow_color=p.SKY, phase=0.1, seed=5)
+            prefabs.window_condensation(
+                pane, color=p.METAL_H, droplet_color=p.SKY, phase=phase, seed=5
+            )
+            prefabs.dust_motes(pane, color=p.SUN, alt_color=p.CLOUD, phase=phase, seed=5)
+        prefabs.rising_steam(asset, 64, 50, color=p.CLOUD, alt_color=p.METAL_H, phase=phase, seed=5)
+        with asset.plane(p0=(60, 12), p1=(96, 12), p2=(60, 36)) as screen:
+            prefabs.screen_telemetry(
+                screen,
+                color=p.LED,
+                bg_color=p.SKY_DARK,
+                accent=p.SUN,
+                mode="waveform",
+                phase=phase,
+                seed=5,
+            )
+        with prefabs.clipped_pane(asset, (60, 44, 36, 20)) as pane2:
+            prefabs.screen_telemetry(
+                pane2,
+                color=p.LED,
+                bg_color=p.SKY_DARK,
+                accent=p.SUN,
+                mode="bars",
+                phase=phase,
+                seed=6,
+            )
+            prefabs.screen_telemetry(pane2, color=p.CLOUD, mode="sparkline", phase=phase, seed=7)
+            prefabs.screen_telemetry(pane2, color=p.SUN, mode="grid_scan", phase=phase, seed=8)
+
+    assert np.array_equal(asset_a.root_surface.data, asset_b.root_surface.data)
+    # Lightning inactive outside active_window
+    quiet = _make_asset(40, 30)
+    prefabs.weather_lightning(quiet, color=quiet.pal.CLOUD, phase=0.8, region=(4, 4, 20, 20))
+    assert np.all(quiet.root_surface.data == TRANSPARENT_INDEX)
+    # Dust motes clipped to 4-vertex quad
+    quad_asset = _make_asset(40, 30)
+    prefabs.dust_motes(
+        quad_asset,
+        color=quad_asset.pal.SUN,
+        count=20,
+        points=((10, 5), (20, 5), (24, 20), (6, 20)),
+    )
+    assert np.all(quad_asset.root_surface.data[:, :5] == TRANSPARENT_INDEX)

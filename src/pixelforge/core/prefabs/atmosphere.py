@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pixelforge.core.builder import Asset, Layer
-from pixelforge.core.plane import Point2D
+from pixelforge.core.plane import Plane, Point2D
 from pixelforge.core.prng import mulberry32
 from pixelforge.core.surface import (
     DitherMask,
@@ -28,7 +28,8 @@ RectRegion = tuple[int | float, int | float, int | float, int | float]
 PlaneRegion = tuple[Point2D, Point2D, Point2D]
 PaneRegion = RectRegion | PlaneRegion
 SkyPreset = Literal["day", "dusk", "cycle", "starry_night", "full_moon", "rain", "snow"]
-HorizonMode = Literal["city", "hills", "trees", "rooftops"]
+HorizonMode = Literal["city", "hills", "trees", "rooftops", "industrial", "mountains"]
+TelemetryMode = Literal["waveform", "bars", "sparkline", "grid_scan"]
 
 
 @dataclass(frozen=True)
@@ -437,20 +438,33 @@ def clouds(
         cloud_mask = np.zeros_like(pane.mask, dtype=bool)
         shade_mask = np.zeros_like(pane.mask, dtype=bool)
 
-        for _ in range(int(count)):
+        # INVARIANT: Stratify vertical bands across `count` and permute deterministically
+        # so multi-cloud vistas never collapse onto the same height or identical silhouette.
+        n_clouds = int(count)
+        band_h = (v_hi - v_lo) / float(n_clouds)
+        slots = list(range(n_clouds))
+        for idx in range(n_clouds - 1, 0, -1):
+            swap_idx = int(rng() * (idx + 1))
+            slots[idx], slots[swap_idx] = slots[swap_idx], slots[idx]
+
+        for idx in range(n_clouds):
             u0 = rng()
-            v0 = v_lo + rng() * (v_hi - v_lo)
-            rx = 0.13 + rng() * 0.09
-            ry = 0.07 + rng() * 0.04
+            slot = slots[idx]
+            v0 = v_lo + (slot + 0.15 + 0.70 * rng()) * band_h
+            size_t = (idx + 0.20 + 0.65 * rng()) / float(max(1, n_clouds))
+            rx = 0.09 + size_t * 0.16
+            ry = 0.05 + size_t * 0.09
+            left_scale = 0.58 + rng() * 0.22
+            right_scale = 0.60 + rng() * 0.24
             uc = ((u0 + p) % 1.0) * 1.56 - 0.28
 
             puff_a = (((pane.u_grid - uc) / rx) ** 2 + ((pane.v_grid - v0) / ry) ** 2) <= 1.0
             puff_b = (
-                ((pane.u_grid - (uc - 0.55 * rx)) / (0.68 * rx)) ** 2
+                ((pane.u_grid - (uc - 0.55 * rx)) / (left_scale * rx)) ** 2
                 + ((pane.v_grid - (v0 + 0.14 * ry)) / (0.76 * ry)) ** 2
             ) <= 1.0
             puff_c = (
-                ((pane.u_grid - (uc + 0.58 * rx)) / (0.72 * rx)) ** 2
+                ((pane.u_grid - (uc + 0.58 * rx)) / (right_scale * rx)) ** 2
                 + ((pane.v_grid - (v0 + 0.10 * ry)) / (0.80 * ry)) ** 2
             ) <= 1.0
             flat_base = pane.v_grid <= (v0 + 0.58 * ry)
@@ -528,6 +542,46 @@ def horizon_silhouette(
             if accent is not None:
                 pane.surface.data[pane.mask & (v >= (ridge - 0.04))] = int(accent)
             pane.surface.data[pane.mask & (v >= ridge)] = int(color)
+            return
+
+        if mode == "mountains":
+            p_a = rng() * math.tau
+            p_b = rng() * math.tau
+            tri_a = np.abs(((u * 2.5 + p_a / math.tau) % 1.0) - 0.5) * 2.0
+            tri_b = np.abs(((u * 4.5 + p_b / math.tau) % 1.0) - 0.5) * 2.0
+            ridge = (bv - 0.20) + tri_a * 0.22 + tri_b * 0.07
+            sil = pane.mask & (v >= ridge)
+            pane.surface.data[sil] = int(color)
+            if accent is not None:
+                # Snowcap / sunlit upper slope on peaks above threshold
+                cap = sil & (v <= (bv - 0.09))
+                pane.surface.data[cap] = int(accent)
+            return
+
+        if mode == "industrial":
+            ridge = np.full_like(v, bv)
+            bays = 4
+            for idx in range(bays):
+                u0 = idx / float(bays)
+                u1 = (idx + 1) / float(bays)
+                in_bay = (u >= u0) & (u <= u1)
+                # Sawtooth factory roof slope
+                local_u = (u - u0) / max(1e-6, u1 - u0)
+                roof_v = (bv - 0.10) + local_u * 0.08
+                ridge = np.where(in_bay, np.minimum(ridge, roof_v), ridge)
+            # Add deterministic smokestacks
+            for stack_idx in range(2):
+                su = 0.18 + stack_idx * 0.48 + (rng() - 0.5) * 0.08
+                sw = 0.05
+                in_stack = (u >= su) & (u <= su + sw)
+                stack_top = max(0.28, bv - 0.24 - rng() * 0.08)
+                ridge = np.where(in_stack, np.minimum(ridge, stack_top), ridge)
+                if accent is not None:
+                    pane.put_uv(su + sw * 0.5, stack_top + 0.02, accent)
+            pane.surface.data[pane.mask & (v >= ridge)] = int(color)
+            if accent is not None:
+                for _ in range(3):
+                    pane.put_uv(0.12 + rng() * 0.76, min(0.92, bv + 0.03 + rng() * 0.08), accent)
             return
 
         msg = f"Unsupported horizon mode: {mode!r}"
@@ -874,6 +928,441 @@ def light_beam(
     )
 
 
+def point_light_spill(
+    target: Canvas,
+    cx: int | float,
+    cy: int | float,
+    rx: int | float,
+    ry: int | float,
+    *,
+    color: int,
+    secondary_color: int | None = None,
+    direction: tuple[float, float] | None = None,
+    cone_cos: float = 0.0,
+    pattern: DitherPattern = "bayer4",
+    near_ratio: float = 0.75,
+    far_ratio: float = 0.05,
+    mask: DitherMask = "opaque",
+) -> None:
+    """Project a non-emissive radial or conical dithered light pool for lamps/monitors.
+
+    INVARIANT: Light spill targets floor/wall surfaces using strictly non-emissive palette
+    tokens so WebGL2 bloom masks remain confined to true emitters.
+    """
+    frx = max(1.0, float(rx))
+    fry = max(1.0, float(ry))
+    min_x = max(0, round(cx - frx))
+    min_y = max(0, round(cy - fry))
+    max_x = min(target.surface.width - 1, round(cx + frx))
+    max_y = min(target.surface.height - 1, round(cy + fry))
+    if min_x > max_x or min_y > max_y:
+        return
+
+    w = max_x - min_x + 1
+    h = max_y - min_y + 1
+    ly, lx = np.mgrid[0:h, 0:w]
+    gx = min_x + lx
+    gy = min_y + ly
+    dx = gx - float(cx)
+    dy = gy - float(cy)
+    dist = np.sqrt((dx / frx) ** 2 + (dy / fry) ** 2)
+    in_pool = dist <= 1.0
+
+    if direction is not None:
+        d_len = math.hypot(direction[0], direction[1])
+        if d_len > 1e-6:
+            ux = direction[0] / d_len
+            uy = direction[1] / d_len
+            pix_len = np.sqrt(dx * dx + dy * dy)
+            dot = np.where(pix_len > 1e-6, (dx * ux + dy * uy) / np.maximum(1e-6, pix_len), 1.0)
+            in_pool &= dot >= float(cone_cos)
+
+    region = target.surface.data[min_y : max_y + 1, min_x : max_x + 1]
+    active = in_pool & (region != TRANSPARENT_INDEX) if mask == "opaque" else in_pool
+    if not np.any(active):
+        return
+
+    t = np.clip(dist, 0.0, 1.0)
+    ratio_grid = float(near_ratio) + t * (float(far_ratio) - float(near_ratio))
+    thresholds = compute_dither_thresholds(
+        min_x,
+        min_y,
+        max_x + 1,
+        max_y + 1,
+        pattern=pattern,
+    )
+    select_primary = active & (
+        (ratio_grid >= 1.0) | ((ratio_grid > 0.0) & (thresholds < ratio_grid))
+    )
+    if secondary_color is not None:
+        sec_ratio = ratio_grid * 0.55
+        select_secondary = (
+            active & (~select_primary) & ((sec_ratio > 0.0) & (thresholds < sec_ratio))
+        )
+        region[select_secondary] = int(secondary_color)
+    region[select_primary] = int(color)
+
+
+def dust_motes(
+    target: TargetCanvas,
+    *,
+    color: int,
+    alt_color: int | None = None,
+    count: int = 12,
+    phase: float = 0.0,
+    drift: float = 0.06,
+    seed: int = 0,
+    region: PaneRegion | None = None,
+    points: tuple[Point2D, Point2D, Point2D, Point2D] | None = None,
+) -> None:
+    """Render deterministic looping dust motes clipped to a light beam, spill quad, or pane."""
+    if count <= 0:
+        return
+    rng = mulberry32(int(seed) ^ 0xD0570001)
+    p = _wrap_phase(phase)
+
+    if points is not None:
+        if isinstance(target, ClippedPane):
+            msg = "points cannot be combined with a ClippedPane target"
+            raise ValueError(msg)
+        verts = [(round(pt[0]), round(pt[1])) for pt in points]
+        min_x = max(0, min(px for px, _ in verts))
+        min_y = max(0, min(py for _, py in verts))
+        max_x = min(target.surface.width - 1, max(px for px, _ in verts))
+        max_y = min(target.surface.height - 1, max(py for _, py in verts))
+        if min_x > max_x or min_y > max_y:
+            return
+        w = max_x - min_x + 1
+        h = max_y - min_y + 1
+        quad_surf = IndexedSurface(w, h)
+        shifted = tuple((px - min_x, py - min_y) for px, py in verts)
+        quad_surf.quad(shifted[0], shifted[1], shifted[2], shifted[3], 0, fill=True)
+        in_quad = quad_surf.data != TRANSPARENT_INDEX
+        for idx in range(int(count)):
+            u0 = rng()
+            v0 = rng()
+            ph = rng()
+            u = (u0 + drift * math.sin(math.tau * (p + ph))) % 1.0
+            v = (v0 + drift * 0.7 * math.cos(math.tau * (p + ph * 1.3))) % 1.0
+            lx = min(w - 1, max(0, round(u * (w - 1))))
+            ly = min(h - 1, max(0, round(v * (h - 1))))
+            if bool(in_quad[ly, lx]):
+                col = alt_color if (alt_color is not None and idx % 2 == 1) else color
+                target.surface.put(min_x + lx, min_y + ly, col)
+        return
+
+    with _open_pane(target, region) as pane:
+        if not np.any(pane.mask):
+            return
+        for idx in range(int(count)):
+            u0 = rng()
+            v0 = rng()
+            ph = rng()
+            u = (u0 + drift * math.sin(math.tau * (p + ph))) % 1.0
+            v = (v0 + drift * 0.7 * math.cos(math.tau * (p + ph * 1.3))) % 1.0
+            col = alt_color if (alt_color is not None and idx % 2 == 1) else color
+            pane.put_uv(u, v, col)
+
+
+def rising_steam(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    *,
+    color: int,
+    alt_color: int | None = None,
+    height: int = 12,
+    spread: int = 3,
+    count: int = 6,
+    phase: float = 0.0,
+    seed: int = 0,
+) -> None:
+    """Render deterministic looping rising vapor wisps for mugs, vents, or faulty hardware."""
+    if count <= 0 or height <= 0:
+        return
+    rng = mulberry32(int(seed) ^ 0x57EA0001)
+    p = _wrap_phase(phase)
+    ox = float(x)
+    oy = float(y)
+
+    for _ in range(int(count)):
+        t0 = rng()
+        sway_phase = rng()
+        base_off = (rng() - 0.5) * 2.0
+        t = (t0 + p) % 1.0
+        py = round(oy - t * float(height))
+        sway = math.sin(math.tau * (t + sway_phase)) * float(spread) * (0.35 + 0.65 * t)
+        px = round(ox + base_off + sway)
+        col = alt_color if (alt_color is not None and t > 0.62) else color
+        target.surface.put(px, py, col)
+        if t < 0.45:
+            target.surface.put(px + 1, py, col)
+
+
+def weather_lightning(
+    target: TargetCanvas,
+    *,
+    color: int,
+    glow_color: int | None = None,
+    phase: float = 0.0,
+    active_window: tuple[float, float] = (0.0, 0.25),
+    branches: int = 2,
+    seed: int = 0,
+    region: PaneRegion | None = None,
+) -> None:
+    """Render a clip-safe jagged lightning bolt inside a window pane during `active_window`."""
+    p = _wrap_phase(phase)
+    start, end = active_window
+    is_active = start <= p < end if start <= end else p >= start or p < end
+    if not is_active:
+        return
+
+    with _open_pane(target, region) as pane:
+        if not np.any(pane.mask):
+            return
+        rng = mulberry32(int(seed) ^ 0x11647001)
+        u_cur = 0.30 + rng() * 0.40
+        v_cur = 0.02
+        segments = 6
+        pts: list[tuple[float, float]] = [(u_cur, v_cur)]
+        for step_idx in range(1, segments + 1):
+            v_next = 0.02 + (0.84 * step_idx) / float(segments)
+            u_next = max(0.08, min(0.92, u_cur + (rng() - 0.5) * 0.24))
+            pts.append((u_next, v_next))
+            u_cur, v_cur = u_next, v_next
+
+        branch_segs: list[tuple[tuple[float, float], tuple[float, float]]] = []
+        for _ in range(max(0, int(branches))):
+            anchor_idx = 1 + int(rng() * max(1, len(pts) - 2))
+            bu0, bv0 = pts[anchor_idx]
+            bu1 = max(0.05, min(0.95, bu0 + (-0.18 if rng() < 0.5 else 0.18)))
+            bv1 = min(0.95, bv0 + 0.16)
+            branch_segs.append(((bu0, bv0), (bu1, bv1)))
+
+        if glow_color is not None:
+            for idx in range(len(pts) - 1):
+                x0, y0 = pane.project(pts[idx][0], pts[idx][1])
+                x1, y1 = pane.project(pts[idx + 1][0], pts[idx + 1][1])
+                pane.surface.line(x0 + 1, y0, x1 + 1, y1, glow_color)
+
+        for idx in range(len(pts) - 1):
+            x0, y0 = pane.project(pts[idx][0], pts[idx][1])
+            x1, y1 = pane.project(pts[idx + 1][0], pts[idx + 1][1])
+            pane.surface.line(x0, y0, x1, y1, color)
+
+        for (bu0, bv0), (bu1, bv1) in branch_segs:
+            bx0, by0 = pane.project(bu0, bv0)
+            bx1, by1 = pane.project(bu1, bv1)
+            pane.surface.line(bx0, by0, bx1, by1, color)
+
+
+def window_condensation(
+    target: TargetCanvas,
+    *,
+    color: int,
+    droplet_color: int | None = None,
+    edge_thickness: float = 0.18,
+    density: float = 0.45,
+    droplets: int = 4,
+    phase: float = 0.0,
+    seed: int = 0,
+    region: PaneRegion | None = None,
+) -> None:
+    """Render frosted edge condensation and slow-creeping droplets inside a window pane."""
+    with _open_pane(target, region) as pane:
+        if not np.any(pane.mask):
+            return
+        u = pane.u_grid
+        v = pane.v_grid
+        edge_dist = np.minimum(np.minimum(u, 1.0 - u), np.minimum(v, 1.0 - v))
+        thick = max(1e-4, float(edge_thickness))
+        ratio = np.clip(1.0 - edge_dist / thick, 0.0, 1.0) * float(density)
+        thresholds = compute_dither_thresholds(
+            pane.ox,
+            pane.oy,
+            pane.ox + pane.width,
+            pane.oy + pane.height,
+            pattern="bayer4",
+        )
+        frost_mask = pane.mask & (ratio > 0.0) & (thresholds < ratio)
+        pane.surface.data[frost_mask] = int(color)
+
+        if droplets > 0:
+            rng = mulberry32(int(seed) ^ 0xC0AD0001)
+            p = _wrap_phase(phase)
+            drop_col = droplet_color if droplet_color is not None else color
+            for _ in range(int(droplets)):
+                du = 0.12 + rng() * 0.76
+                dv0 = rng()
+                dv = 0.10 + ((dv0 + p) % 1.0) * 0.78
+                pane.put_uv(du, dv, drop_col)
+                pane.put_uv(du, min(0.96, dv + 0.04), drop_col)
+
+
+def _telemetry_project(
+    target: Plane | ClippedPane,
+    u: float,
+    v: float,
+    color: int,
+) -> None:
+    if isinstance(target, Plane):
+        target.dot(u, v, color)
+    else:
+        target.put_uv(u, v, color)
+
+
+def _telemetry_line(
+    target: Plane | ClippedPane,
+    u0: float,
+    v0: float,
+    u1: float,
+    v1: float,
+    color: int,
+) -> None:
+    if isinstance(target, Plane):
+        target.line(u0, v0, u1, v1, color)
+    else:
+        x0, y0 = target.project(u0, v0)
+        x1, y1 = target.project(u1, v1)
+        target.surface.line(x0, y0, x1, y1, color)
+
+
+def _telemetry_rect(
+    target: Plane | ClippedPane,
+    u: float,
+    v: float,
+    w: float,
+    h: float,
+    fill: int,
+) -> None:
+    if isinstance(target, Plane):
+        target.rect(u, v, w, h, fill=fill)
+    else:
+        c00 = target.project(u, v)
+        c10 = target.project(u + w, v)
+        c11 = target.project(u + w, v + h)
+        c01 = target.project(u, v + h)
+        target.surface.quad(c00, c10, c11, c01, fill, fill=True)
+
+
+def _draw_telemetry_body(
+    target: Plane | ClippedPane,
+    *,
+    color: int,
+    bg_color: int | None,
+    accent: int | None,
+    mode: TelemetryMode,
+    phase: float,
+    samples: int,
+    seed: int,
+) -> None:
+    if bg_color is not None:
+        _telemetry_rect(target, 0.0, 0.0, 1.0, 1.0, bg_color)
+
+    rng = mulberry32(int(seed) ^ 0x7E1E0001)
+    p = _wrap_phase(phase)
+    n = max(3, int(samples))
+
+    if mode == "waveform":
+        if accent is not None:
+            _telemetry_line(target, 0.06, 0.50, 0.94, 0.50, accent)
+        prev_u = 0.08
+        prev_v = 0.50 + 0.28 * math.sin(math.tau * p)
+        for idx in range(1, n):
+            t = idx / float(n - 1)
+            u = 0.08 + t * 0.84
+            amp = 0.16 + 0.16 * rng()
+            v = 0.50 + amp * math.sin(math.tau * (t * 2.0 + p))
+            _telemetry_line(target, prev_u, prev_v, u, v, color)
+            prev_u, prev_v = u, v
+        return
+
+    if mode == "bars":
+        bar_span = 0.84 / float(n)
+        bar_w = bar_span * 0.65
+        for idx in range(n):
+            base_h = 0.20 + 0.50 * rng()
+            pulse = 0.14 * math.sin(math.tau * (p + idx / float(n)))
+            bh = max(0.10, min(0.76, base_h + pulse))
+            bu = 0.08 + idx * bar_span
+            bv = 0.88 - bh
+            _telemetry_rect(target, bu, bv, bar_w, bh, color)
+            if accent is not None and bh > 0.52:
+                _telemetry_project(target, bu + bar_w * 0.5, bv, accent)
+        return
+
+    if mode == "sparkline":
+        pts: list[tuple[float, float]] = []
+        for idx in range(n):
+            t = idx / float(n - 1)
+            u = 0.08 + t * 0.84
+            jitter = 0.24 * math.sin(math.tau * (p + t * 1.5 + rng()))
+            v = max(0.14, min(0.86, 0.50 + jitter))
+            pts.append((u, v))
+        for idx in range(len(pts) - 1):
+            _telemetry_line(
+                target, pts[idx][0], pts[idx][1], pts[idx + 1][0], pts[idx + 1][1], color
+            )
+        if accent is not None:
+            for u, v in pts[::2]:
+                _telemetry_project(target, u, v, accent)
+        return
+
+    if mode == "grid_scan":
+        grid_col = accent if accent is not None else color
+        _telemetry_line(target, 0.08, 0.50, 0.92, 0.50, grid_col)
+        _telemetry_line(target, 0.50, 0.10, 0.50, 0.90, grid_col)
+        scan_u = 0.10 + p * 0.80
+        _telemetry_line(target, scan_u, 0.12, scan_u, 0.88, color)
+        blip_v = 0.25 + 0.50 * rng()
+        _telemetry_project(target, scan_u, blip_v, accent if accent is not None else color)
+        return
+
+    msg = f"Unsupported telemetry mode: {mode!r}"
+    raise ValueError(msg)
+
+
+def screen_telemetry(
+    target: Plane | TargetCanvas,
+    *,
+    color: int,
+    bg_color: int | None = None,
+    accent: int | None = None,
+    mode: TelemetryMode = "waveform",
+    phase: float = 0.0,
+    samples: int = 8,
+    seed: int = 0,
+    region: PaneRegion | None = None,
+) -> None:
+    """Render animated charts, waveforms, or scanlines inside a `Plane` or `ClippedPane`."""
+    if isinstance(target, (Plane, ClippedPane)):
+        _draw_telemetry_body(
+            target,
+            color=color,
+            bg_color=bg_color,
+            accent=accent,
+            mode=mode,
+            phase=phase,
+            samples=samples,
+            seed=seed,
+        )
+        return
+
+    with _open_pane(target, region) as pane:
+        if not np.any(pane.mask):
+            return
+        _draw_telemetry_body(
+            pane,
+            color=color,
+            bg_color=bg_color,
+            accent=accent,
+            mode=mode,
+            phase=phase,
+            samples=samples,
+            seed=seed,
+        )
+
+
 __all__ = [
     "ClippedPane",
     "CycleStep",
@@ -883,17 +1372,24 @@ __all__ = [
     "RectRegion",
     "SkyPreset",
     "TargetCanvas",
+    "TelemetryMode",
     "clipped_pane",
     "clouds",
     "day_night_cycle",
+    "dust_motes",
     "eval_day_night_cycle",
     "horizon_silhouette",
     "light_beam",
     "moon",
+    "point_light_spill",
+    "rising_steam",
+    "screen_telemetry",
     "sky_backdrop",
     "starfield",
     "sun",
+    "weather_lightning",
     "weather_rain",
     "weather_snow",
+    "window_condensation",
     "window_light_spill",
 ]
