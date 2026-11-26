@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
-from pixelforge.cli.render_cmd import OutputFn
+from pixelforge.cli.output import OutputFn, OutputFormat
 from pixelforge.core.types import StylePack
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.png import frames_to_apng, frames_to_gif, surface_to_png, surface_to_rgba
@@ -72,9 +73,8 @@ def _write_composed_animation(
     animate_format: Literal["gif", "apng"],
     scale: int,
     out_dir: Path,
-    out: OutputFn,
     err: OutputFn,
-) -> int:
+) -> tuple[Path, int, int] | None:
     anim_spec = SceneSpec(
         id=f"{parent_id}_composed",
         parent_id=parent_id,
@@ -96,7 +96,7 @@ def _write_composed_animation(
         )
     except SceneCompositionError as exc:
         err(str(exc))
-        return 1
+        return None
 
     rgba_frames = [
         surface_to_rgba(item.surface, style, variant=variant, scale=scale) for item in anim_frames
@@ -109,8 +109,7 @@ def _write_composed_animation(
     )
     anim_path = out_dir / f"{parent_id}_{parent_state}_composed.{ext}"
     anim_path.write_bytes(anim_bytes)
-    out(f"animated {anim_path} ({len(rgba_frames)} frame(s) @ {resolved_spec.fps} fps)")
-    return 0
+    return (anim_path, len(rgba_frames), resolved_spec.fps)
 
 
 def _compose_and_write_png(
@@ -126,9 +125,8 @@ def _compose_and_write_png(
     strict_perspective: bool,
     scale: int,
     out_dir: Path,
-    out: OutputFn,
     err: OutputFn,
-) -> tuple[LoadedAsset, dict[str, LoadedAsset], StylePack, SceneCompositionResult] | None:
+) -> tuple[LoadedAsset, dict[str, LoadedAsset], StylePack, SceneCompositionResult, Path] | None:
     try:
         styles = load_all_styles(root / "styles")
     except ValueError as exc:
@@ -168,10 +166,75 @@ def _compose_and_write_png(
     out_dir.mkdir(parents=True, exist_ok=True)
     png_path = out_dir / f"{parent_id}_{result.parent_state}_composed.png"
     png_path.write_bytes(surface_to_png(result.surface, style, variant=variant, scale=scale))
-    out(f"composed {png_path} ({len(result.placements)} prop(s))")
+    return (parent, loaded_by_id, style, result, png_path)
+
+
+def _emit_compose_output(
+    *,
+    parent_id: str,
+    frame: int,
+    result: SceneCompositionResult,
+    png_path: Path,
+    anim_info: tuple[Path, int, int] | None,
+    sheet_path: Path | None,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    if output_format == "json":
+        payload: dict[str, object] = {
+            "parent_id": parent_id,
+            "state": result.parent_state,
+            "frame": frame,
+            "width": result.surface.width,
+            "height": result.surface.height,
+            "props_count": len(result.placements),
+            "placements": [
+                {
+                    "prop_id": p.prop_id,
+                    "anchor": p.anchor,
+                    "prop_anchor": p.prop_anchor,
+                    "x": p.dest_x,
+                    "y": p.dest_y,
+                }
+                for p in result.placements
+            ],
+            "png": str(png_path),
+            "animation": (
+                {
+                    "path": str(anim_info[0]),
+                    "frames": anim_info[1],
+                    "fps": anim_info[2],
+                }
+                if anim_info is not None
+                else None
+            ),
+            "sheet": str(sheet_path) if sheet_path is not None else None,
+            "warnings": list(result.warnings),
+        }
+        out(json.dumps(payload, indent=2))
+        return
+
+    if output_format == "human":
+        out(f"composed {png_path} ({len(result.placements)} prop(s))")
+        for warning in result.warnings:
+            out(f"warning: {warning}")
+        if anim_info is not None:
+            out(f"animated {anim_info[0]} ({anim_info[1]} frame(s) @ {anim_info[2]} fps)")
+        if sheet_path is not None:
+            out(f"sheet {sheet_path}")
+        return
+
+    out(
+        f"status=ok parent={parent_id} state={result.parent_state} frame={frame} "
+        f"size={result.surface.width}x{result.surface.height} "
+        f"props={len(result.placements)} png={png_path}"
+    )
+    if anim_info is not None:
+        out(f"anim path={anim_info[0]} frames={anim_info[1]} fps={anim_info[2]}")
+    if sheet_path is not None:
+        out(f"sheet path={sheet_path}")
     for warning in result.warnings:
-        out(f"warning: {warning}")
-    return (parent, loaded_by_id, style, result)
+        out(f"warn={warning}")
 
 
 def compose_scene_workflow(
@@ -191,6 +254,7 @@ def compose_scene_workflow(
     out_dir: Path,
     sheets_dir: Path,
     sheet: bool,
+    output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
 ) -> int:
@@ -207,15 +271,15 @@ def compose_scene_workflow(
         strict_perspective=strict_perspective,
         scale=scale,
         out_dir=out_dir,
-        out=out,
         err=err,
     )
     if composed is None:
         return 1
-    parent, loaded_by_id, style, result = composed
+    parent, loaded_by_id, style, result, png_path = composed
 
+    anim_info: tuple[Path, int, int] | None = None
     if animate:
-        rc = _write_composed_animation(
+        anim_info = _write_composed_animation(
             parent,
             loaded_by_id,
             style,
@@ -229,17 +293,26 @@ def compose_scene_workflow(
             animate_format=animate_format,
             scale=scale,
             out_dir=out_dir,
-            out=out,
             err=err,
         )
-        if rc != 0:
-            return rc
+        if anim_info is None:
+            return 1
 
+    sheet_path: Path | None = None
     if sheet:
         sheets_dir.mkdir(parents=True, exist_ok=True)
         sheet_result = generate_scene_sheet(result, style, variant=variant)
         sheet_path = sheets_dir / f"{parent_id}_composed.contact.png"
         sheet_path.write_bytes(sheet_result.png)
-        out(f"sheet {sheet_path}")
 
+    _emit_compose_output(
+        parent_id=parent_id,
+        frame=frame,
+        result=result,
+        png_path=png_path,
+        anim_info=anim_info,
+        sheet_path=sheet_path,
+        output_format=output_format,
+        out=out,
+    )
     return 0

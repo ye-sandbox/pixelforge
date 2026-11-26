@@ -79,25 +79,25 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 uv run pixelforge init [--style homelab-16bit] [--force] [--root .]
 
 # Compilar módulos .asset.py em PNGs, spritesheets, máscaras emissivas, manifestos e diagnósticos
-uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--root .]
+uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Executar guard tests estáticos (AST) e de runtime (código de saída 0 se aprovado)
-uv run pixelforge check [asset_id] [--strict-orphans] [--root .]
+uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Gerar comparação lado a lado + diff de pixels em magenta contra uma ref Git
-uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--json] [--root .]
+uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente
-uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--root .]
+uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Extrair proporção, histograma de paleta e rascunho ASCII quantizado efêmeros de uma imagem de referência local
-uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--root .]
+uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Compor props filhos sobre âncoras declaradas de uma cena pai e validar limites/oclusão
-uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--root .]
+uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Pontuar assets alterados via crítico multimodal interno hydra-llm-router (OpenAI v1, modelo virtual 'fast')
-uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--json] [--root .]
+uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Integração com Svelte 5

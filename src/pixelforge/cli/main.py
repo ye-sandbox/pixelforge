@@ -11,6 +11,13 @@ from pixelforge import __version__
 from pixelforge.cli.compose_cmd import compose_scene_workflow, parse_mount_arg
 from pixelforge.cli.critic_cmd import critic_workflow
 from pixelforge.cli.diff_cmd import diff_asset
+from pixelforge.cli.output import (
+    OutputFormat,
+    add_format_arguments,
+    emit_check_report,
+    emit_reference_analysis,
+    resolve_output_format,
+)
 from pixelforge.cli.render_cmd import render_once
 from pixelforge.cli.scaffold import scaffold_project
 from pixelforge.cli.settings import HydraSettings, PixelforgeSettings
@@ -44,6 +51,14 @@ def _is_within(path: Path, parent: Path) -> bool:
     return True
 
 
+def _resolve_format_or_err(args: argparse.Namespace) -> OutputFormat | None:
+    try:
+        return resolve_output_format(args)
+    except ValueError as exc:
+        _err(str(exc))
+        return None
+
+
 def _cmd_init(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     root = _resolve_root(args.root)
     style_id: str = args.style or settings.default_style
@@ -56,23 +71,23 @@ def _cmd_init(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     report = run_checks(
         root,
         asset_id=args.asset_id,
         strict_orphans=bool(args.strict_orphans),
     )
-    for violation in report.violations:
-        target = _err if violation.severity == "error" else _out
-        target(violation.format_line())
-    _out(
-        f"checked {report.assets_checked} asset(s), {report.styles_checked} style(s): "
-        f"{report.errors} error(s), {report.warnings} warning(s)"
-    )
+    emit_check_report(report, output_format=output_format, out=_out, err=_err)
     return 0 if report.passed else 1
 
 
 def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     return render_once(
         root,
@@ -90,12 +105,16 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
+        output_format=output_format,
         out=_out,
         err=_err,
     )
 
 
 def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     return diff_asset(
         root,
@@ -104,13 +123,16 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         out_dir=_resolve_dir(root, settings.diffs_dir, args.out),
         scale=int(args.scale),
         variant=args.variant,
-        json_output=bool(args.json),
+        output_format=output_format,
         out=_out,
         err=_err,
     )
 
 
 def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     emissive: bool | None = True if args.emissive else None
     return watch_loop(
@@ -127,6 +149,7 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
+        output_format=output_format,
         out=_out,
         err=_err,
         interval=float(args.interval),
@@ -135,6 +158,9 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
 
 
 def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     image_path = Path(args.image_path).resolve()
 
@@ -171,11 +197,14 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
         _err(f"failed to analyze reference image {image_path}: {exc}")
         return 1
 
-    _out(analysis.format_report())
+    emit_reference_analysis(analysis, output_format=output_format, out=_out)
     return 0
 
 
 def _cmd_compose(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     try:
         mounts = [parse_mount_arg(str(raw)) for raw in (args.mount or ())]
@@ -199,12 +228,16 @@ def _cmd_compose(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         out_dir=_resolve_dir(root, settings.previews_dir, args.out),
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
         sheet=bool(args.sheet),
+        output_format=output_format,
         out=_out,
         err=_err,
     )
 
 
 def _cmd_critic(args: argparse.Namespace) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
     root = _resolve_root(args.root)
     hydra = HydraSettings()
     return critic_workflow(
@@ -217,7 +250,7 @@ def _cmd_critic(args: argparse.Namespace) -> int:
         model=hydra.model_fast,
         timeout_seconds=hydra.timeout_seconds,
         threshold=int(args.threshold),
-        json_output=bool(args.json),
+        output_format=output_format,
         out=_out,
         err=_err,
     )
@@ -281,6 +314,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     render_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    add_format_arguments(render_p)
     render_p.add_argument("--root", default=None, help="Project root directory")
 
     check_p = sub.add_parser("check", help="Run AST static and runtime guard checks")
@@ -290,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Treat isolated 1x1 orphan pixels as errors",
     )
+    add_format_arguments(check_p)
     check_p.add_argument("--root", default=None, help="Project root directory")
 
     diff_p = sub.add_parser("diff", help="Generate visual pixel-diff PNG against a git ref")
@@ -298,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff_p.add_argument("--out", default=None, help="Output directory for diff PNGs")
     diff_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     diff_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
-    diff_p.add_argument("--json", action="store_true", help="Emit JSON diff summary")
+    add_format_arguments(diff_p)
     diff_p.add_argument("--root", default=None, help="Project root directory")
 
     watch_p = sub.add_parser("watch", help="Watch .asset.py/.style.py and hot-reload outputs")
@@ -327,6 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
     watch_p.add_argument("--interval", type=float, default=0.5, help="Poll interval in seconds")
     watch_p.add_argument("--max-cycles", type=int, default=None, help="Stop after N poll cycles")
+    add_format_arguments(watch_p)
     watch_p.add_argument("--root", default=None, help="Project root directory")
 
     analyze_p = sub.add_parser(
@@ -339,6 +375,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_p.add_argument("--style", default=None, help="Target StylePack ID")
     analyze_p.add_argument("--size", default="32x32", help="Sketch dimensions WxH (default: 32x32)")
+    add_format_arguments(analyze_p)
     analyze_p.add_argument("--root", default=None, help="Project root directory")
 
     compose_p = sub.add_parser(
@@ -385,6 +422,7 @@ def build_parser() -> argparse.ArgumentParser:
     compose_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     compose_p.add_argument("--out", default=None, help="Output directory for composed PNG")
     compose_p.add_argument("--sheet", action="store_true", help="Generate composed .contact.png")
+    add_format_arguments(compose_p)
     compose_p.add_argument("--root", default=None, help="Project root directory")
 
     critic_p = sub.add_parser(
@@ -404,7 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum passing visual score 0-100 (default: 70)",
     )
     critic_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
-    critic_p.add_argument("--json", action="store_true", help="Emit JSON report")
+    add_format_arguments(critic_p)
     critic_p.add_argument("--root", default=None, help="Project root directory")
 
     return parser

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
+from pixelforge.cli.output import OutputFn, OutputFormat
 from pixelforge.core.types import StylePack
 from pixelforge.export.atlas import AtlasFormat
 from pixelforge.export.bundle import (
@@ -37,8 +39,6 @@ from pixelforge.guard.runner import (
     load_asset_module,
     load_scene_module,
 )
-
-OutputFn = Callable[[str], None]
 
 
 def compile_style_indexed_bundles(
@@ -219,7 +219,6 @@ def _render_asset_targets(
     *,
     asset_id: str | None,
     sheet: bool,
-    out: OutputFn,
     err: OutputFn,
 ) -> (
     tuple[
@@ -268,7 +267,6 @@ def _render_asset_targets(
         style, bundle = compiled
         bundles_by_style.setdefault(style.id, (style, []))[1].append(bundle)
         rendered_count += 1
-        out(f"rendered {loaded.SPEC.id} -> {out_dir}")
 
     return (all_loaded, loaded_by_id, seen_ids, bundles_by_style, rendered_count)
 
@@ -287,7 +285,6 @@ def _render_scene_targets(
     asset_id: str | None,
     sheet: bool,
     animate: bool,
-    out: OutputFn,
     err: OutputFn,
 ) -> tuple[list[LoadedScene], int] | None:
     all_scenes: list[LoadedScene] = []
@@ -324,7 +321,6 @@ def _render_scene_targets(
         style, bundle = compiled
         bundles_by_style.setdefault(style.id, (style, []))[1].append(bundle)
         rendered_count += 1
-        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
 
     return (all_scenes, rendered_count)
 
@@ -362,6 +358,58 @@ def _finalize_render_outputs(
         )
 
 
+def _emit_render_summary(
+    bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]],
+    *,
+    out_dir: Path,
+    indexed_ts: bool,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    entries = [
+        bundle.manifest
+        for _, style_bundles in bundles_by_style.values()
+        for bundle in style_bundles
+    ]
+    if output_format == "json":
+        payload = {
+            "count": len(entries),
+            "out_dir": str(out_dir),
+            "manifest": str(out_dir / "manifest.json"),
+            "indexed_ts": indexed_ts,
+            "rendered": [
+                {
+                    "id": e.id,
+                    "style_id": e.styleId,
+                    "width": e.width,
+                    "height": e.height,
+                    "states": list(e.states),
+                    "frames": e.frames,
+                }
+                for e in entries
+            ],
+        }
+        out(json.dumps(payload, indent=2))
+        return
+
+    if output_format == "human":
+        for entry in entries:
+            out(f"rendered {entry.id} -> {out_dir}")
+        return
+
+    for entry in entries:
+        states_csv = ",".join(entry.states)
+        out(
+            f"asset={entry.id} style={entry.styleId} size={entry.width}x{entry.height} "
+            f"states={states_csv} frames={entry.frames} out={out_dir}"
+        )
+    ts_flag = " indexed_ts=true" if indexed_ts else ""
+    out(
+        f"summary rendered={len(entries)} out={out_dir} "
+        f"manifest={out_dir / 'manifest.json'}{ts_flag}"
+    )
+
+
 def render_once(
     root: Path,
     *,
@@ -379,6 +427,7 @@ def render_once(
     atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
+    output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
 ) -> int:
@@ -412,7 +461,6 @@ def render_once(
         previews_dir if animate else None,
         asset_id=asset_id,
         sheet=sheet,
-        out=out,
         err=err,
     )
     if asset_result is None:
@@ -432,7 +480,6 @@ def render_once(
         asset_id=asset_id,
         sheet=sheet,
         animate=animate,
-        out=out,
         err=err,
     )
     if scene_result is None:
@@ -453,5 +500,12 @@ def render_once(
         asset_id=asset_id,
         indexed_ts=indexed_ts,
         indexed_ts_lazy=indexed_ts_lazy,
+    )
+    _emit_render_summary(
+        bundles_by_style,
+        out_dir=out_dir,
+        indexed_ts=indexed_ts,
+        output_format=output_format,
+        out=out,
     )
     return 0

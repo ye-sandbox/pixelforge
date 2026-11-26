@@ -99,7 +99,7 @@ def test_cli_diff_against_git_head(tmp_path: Path, capsys: pytest.CaptureFixture
     rc = main(["diff", "example_crate", "--base", "HEAD", "--root", str(tmp_path)])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "changed pixel(s)" in captured.out
+    assert "changed=2/576" in captured.out
     assert (tmp_path / ".pixelforge" / "diffs" / "example_crate_idle.diff.png").is_file()
 
 
@@ -125,8 +125,8 @@ def test_cli_diff_palette_only_against_git_head(
     rc = main(["diff", "example_crate", "--base", "HEAD", "--root", str(tmp_path)])
     assert rc == 0
     out = capsys.readouterr().out
-    assert ": 0/" not in out
-    assert ": 2/576 changed pixel(s)" in out
+    assert "changed=0/" not in out
+    assert "changed=2/576" in out
 
     diff_path = tmp_path / ".pixelforge" / "diffs" / "example_crate_idle.diff.png"
     assert diff_path.is_file()
@@ -290,8 +290,8 @@ def test_cli_analyze_ref_ephemeral_and_guardrails(
     )
     assert rc == 0
     out = capsys.readouterr().out
-    assert "EPHEMERAL REFERENCE SKETCH" in out
-    assert "32x24" in out
+    assert "ephemeral=true" in out
+    assert "src=32x24" in out
     assert "4:3" in out
     assert "ACCENT_CYAN" in out
     assert sorted((tmp_path / "assets").rglob("*")) == before_assets
@@ -486,8 +486,8 @@ def test_cli_compose_mounts_props_and_validates_anchors(
     )
     assert rc == 0
     captured = capsys.readouterr()
-    assert "composed " in captured.out
-    assert "2 prop(s)" in captured.out
+    assert "status=ok parent=bedroom_desk_iso" in captured.out
+    assert "props=2" in captured.out
     assert (tmp_path / "composed" / "bedroom_desk_iso_night_composed.png").is_file()
     sheet_path = repo_root / ".pixelforge" / "sheets" / "bedroom_desk_iso_composed.contact.png"
     assert sheet_path.is_file()
@@ -528,7 +528,7 @@ def test_cli_compose_validates_perspective(
     )
     assert warn_rc == 0
     warn_captured = capsys.readouterr()
-    assert "warning: Prop 'old_laptop' has perspective 'front-2.5d'" in warn_captured.out
+    assert "warn=Prop 'old_laptop' has perspective 'front-2.5d'" in warn_captured.out
 
     strict_rc = main(
         [
@@ -569,8 +569,8 @@ def test_cli_compose_validates_perspective(
     )
     assert iso_rc == 0
     iso_captured = capsys.readouterr()
-    assert "3 prop(s)" in iso_captured.out
-    assert "warning:" not in iso_captured.out
+    assert "props=3" in iso_captured.out
+    assert "warn=" not in iso_captured.out
 
 
 def test_cli_render_and_watch_with_atlas_flags(tmp_path: Path) -> None:
@@ -716,18 +716,18 @@ def test_cli_watch_incremental_dependency_invalidation(
     cycle_logs.append(capsys.readouterr().out)
 
     # Initial pass rendered all 3 assets
-    assert "rendered example_crate" in cycle_logs[0]
-    assert "rendered sibling_crate" in cycle_logs[0]
-    assert "rendered alt_box" in cycle_logs[0]
+    assert "watch event=render target=example_crate" in cycle_logs[0]
+    assert "watch event=render target=sibling_crate" in cycle_logs[0]
+    assert "watch event=render target=alt_box" in cycle_logs[0]
 
     # Cycle 1: only sibling_crate rebuilt
-    assert "rendered sibling_crate" in cycle_logs[1]
-    assert "rendered example_crate" not in cycle_logs[1]
-    assert "rendered alt_box" not in cycle_logs[1]
+    assert "watch event=render target=sibling_crate" in cycle_logs[1]
+    assert "watch event=render target=example_crate" not in cycle_logs[1]
+    assert "watch event=render target=alt_box" not in cycle_logs[1]
 
     # Cycle 2: homelab-16bit assets rebuilt, alt-style asset untouched
-    assert "rendered example_crate" in cycle_logs[2]
-    assert "rendered sibling_crate" in cycle_logs[2]
+    assert "watch event=render target=example_crate" in cycle_logs[2]
+    assert "watch event=render target=sibling_crate" in cycle_logs[2]
     assert "rendered alt_box" not in cycle_logs[2]
 
     # Cycle 3: deletion pruned sibling_crate from manifest and indexed-ts
@@ -858,6 +858,123 @@ def test_cli_declarative_scene_render_check_compose_and_watch(
         == 0
     )
     cycle_logs.append(capsys.readouterr().out)
-    assert "rendered lamp_prop" in cycle_logs[1]
-    assert "rendered crate_scene" in cycle_logs[1]
-    assert "rendered example_crate" not in cycle_logs[1]
+    assert "watch event=render target=lamp_prop" in cycle_logs[1]
+    assert "watch event=render target=crate_scene" in cycle_logs[1]
+    assert "watch event=render target=example_crate" not in cycle_logs[1]
+
+
+def test_cli_output_formats_llm_json_human_and_conflicts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `--format llm|json|human`, `--json`, `--human`, and conflict errors."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    # 1. check: default llm, --json, --human, and violation hint
+    assert main(["check", "--root", str(tmp_path)]) == 0
+    out_llm = capsys.readouterr().out
+    assert "status=pass assets=1 styles=1 errors=0 warnings=0" in out_llm
+
+    assert main(["check", "--json", "--root", str(tmp_path)]) == 0
+    check_json = json.loads(capsys.readouterr().out)
+    assert check_json["passed"] is True
+    assert check_json["assets_checked"] == 1
+
+    assert main(["check", "--human", "--root", str(tmp_path)]) == 0
+    assert "checked 1 asset(s), 1 style(s): 0 error(s), 0 warning(s)" in capsys.readouterr().out
+
+    # 2. render: default llm, --format json, --format human
+    assert main(["render", "--root", str(tmp_path)]) == 0
+    render_llm = capsys.readouterr().out
+    assert "asset=example_crate style=homelab-16bit size=24x24" in render_llm
+    assert "summary rendered=1" in render_llm
+
+    assert main(["render", "--format", "json", "--root", str(tmp_path)]) == 0
+    render_json = json.loads(capsys.readouterr().out)
+    assert render_json["count"] == 1
+    assert render_json["rendered"][0]["id"] == "example_crate"
+
+    assert main(["render", "--format", "human", "--root", str(tmp_path)]) == 0
+    assert "rendered example_crate -> " in capsys.readouterr().out
+
+    # 3. analyze-ref: --json and --human
+    ref_png = tmp_path / ".pixelforge" / "refs" / "sample.png"
+    ref_png.parent.mkdir(parents=True, exist_ok=True)
+    rgba = np.full((16, 16, 4), (56, 189, 248, 255), dtype=np.uint8)
+    Image.fromarray(rgba, mode="RGBA").save(ref_png, format="PNG")
+
+    assert (
+        main(["analyze-ref", str(ref_png), "--size", "4x4", "--json", "--root", str(tmp_path)]) == 0
+    )
+    ref_json = json.loads(capsys.readouterr().out)
+    assert ref_json["ephemeral"] is True
+    assert ref_json["target_width"] == 4
+
+    assert (
+        main(["analyze-ref", str(ref_png), "--size", "4x4", "--human", "--root", str(tmp_path)])
+        == 0
+    )
+    assert "EPHEMERAL REFERENCE SKETCH" in capsys.readouterr().out
+
+    # 4. compose: --json and --human
+    repo_root = Path(__file__).resolve().parents[2]
+    assert (
+        main(
+            [
+                "compose",
+                "bedroom_desk_iso",
+                "--mount",
+                "old_laptop_iso@hardware_0:foot",
+                "--json",
+                "--out",
+                str(tmp_path / "comp"),
+                "--root",
+                str(repo_root),
+            ]
+        )
+        == 0
+    )
+    comp_json = json.loads(capsys.readouterr().out)
+    assert comp_json["parent_id"] == "bedroom_desk_iso"
+    assert comp_json["props_count"] == 1
+
+    # 5. watch: --json
+    assert (
+        main(
+            [
+                "watch",
+                "--json",
+                "--root",
+                str(tmp_path),
+                "--max-cycles",
+                "1",
+                "--interval",
+                "0.01",
+            ]
+        )
+        == 0
+    )
+    watch_lines = [line for line in capsys.readouterr().out.strip().splitlines() if line]
+    assert json.loads(watch_lines[0])["event"] == "render"
+
+    # 6. critic: --human and --json (with git no-changes skip)
+    def _no_changes(_root: Path, *, base_ref: str) -> set[Path]:
+        _ = base_ref
+        return set()
+
+    monkeypatch.setattr(
+        "pixelforge.cli.critic_cmd.discover_changed_paths_from_git",
+        _no_changes,
+    )
+    assert main(["critic", "--base", "HEAD", "--human", "--root", str(tmp_path)]) == 0
+    assert "skipping critic" in capsys.readouterr().out
+    assert main(["critic", "--base", "HEAD", "--json", "--root", str(tmp_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["passed"] is True
+
+    # 7. Conflicting format flags fail cleanly with exit code 2
+    assert main(["check", "--json", "--human", "--root", str(tmp_path)]) == 2
+    assert "Cannot combine --json and --human" in capsys.readouterr().err
+    assert main(["render", "--format", "llm", "--json", "--root", str(tmp_path)]) == 2
+    assert "Conflicting output flags" in capsys.readouterr().err

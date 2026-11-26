@@ -236,4 +236,4 @@ def test_cli_critic_skips_cleanly_when_no_git_changes(
     code = main(["critic", "--root", str(tmp_path), "--base", "HEAD"])
     assert code == 0
     captured = capsys.readouterr()
-    assert "no changed assets or styles vs HEAD; skipping critic" in captured.out
+    assert "status=skip reason=no_changes base=HEAD threshold=70 passed=true" in captured.out

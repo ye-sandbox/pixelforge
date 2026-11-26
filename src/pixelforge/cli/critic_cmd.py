@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from pixelforge.cli.diff_cmd import load_styles_with_paths, resolve_baseline_style
-from pixelforge.cli.render_cmd import OutputFn
+from pixelforge.cli.output import OutputFn, OutputFormat
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import StylePack
 from pixelforge.export.bundle import LoadedAsset, render_asset_frames
@@ -98,7 +98,7 @@ def _select_critic_targets(
     asset_id: str | None,
     base_ref: str | None,
     threshold: int,
-    json_output: bool,
+    output_format: OutputFormat,
     out: OutputFn,
     err: OutputFn,
 ) -> list[tuple[Path, LoadedAsset]] | int:
@@ -127,26 +127,47 @@ def _select_critic_targets(
         if p.resolve() in changed_paths or a.SPEC.style_id in changed_style_ids
     ]
     if not targets:
-        if json_output:
+        if output_format == "json":
             out('{"verdicts": [], "passed": true, "threshold": ' + str(threshold) + "}")
-        else:
+        elif output_format == "human":
             out(f"no changed assets or styles vs {base_ref}; skipping critic")
+        else:
+            out(f"status=skip reason=no_changes base={base_ref} threshold={threshold} passed=true")
         return 0
     return targets
 
 
-def _emit_critic_report(report: CriticBatchReport, *, json_output: bool, out: OutputFn) -> None:
-    if json_output:
+def _emit_critic_report(
+    report: CriticBatchReport,
+    *,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    if output_format == "json":
         out(report.model_dump_json(indent=2))
+        return
+    if output_format == "human":
+        for verdict in report.verdicts:
+            status = "PASS" if verdict.passed else "FAIL"
+            out(f"critic {verdict.asset_id}: {verdict.score}/100 [{status}] — {verdict.summary}")
+            for finding in verdict.findings:
+                out(f"  - {finding}")
+        out(
+            f"critic summary: {len(report.verdicts)} asset(s), "
+            f"avg {report.average_score}/100, threshold {report.threshold}"
+        )
         return
     for verdict in report.verdicts:
         status = "PASS" if verdict.passed else "FAIL"
-        out(f"critic {verdict.asset_id}: {verdict.score}/100 [{status}] — {verdict.summary}")
+        out(
+            f"critic asset={verdict.asset_id} score={verdict.score}/100 "
+            f"status={status} summary={verdict.summary}"
+        )
         for finding in verdict.findings:
-            out(f"  - {finding}")
+            out(f"finding asset={verdict.asset_id} detail={finding}")
     out(
-        f"critic summary: {len(report.verdicts)} asset(s), "
-        f"avg {report.average_score}/100, threshold {report.threshold}"
+        f"summary count={len(report.verdicts)} avg={report.average_score}/100 "
+        f"threshold={report.threshold} passed={str(report.passed).lower()}"
     )
 
 
@@ -161,7 +182,7 @@ def critic_workflow(
     model: str,
     timeout_seconds: float,
     threshold: int,
-    json_output: bool,
+    output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
 ) -> int:
@@ -180,7 +201,7 @@ def critic_workflow(
         asset_id=asset_id,
         base_ref=base_ref,
         threshold=threshold,
-        json_output=json_output,
+        output_format=output_format,
         out=out,
         err=err,
     )
@@ -221,5 +242,5 @@ def critic_workflow(
         err(str(exc))
         return 1
 
-    _emit_critic_report(report, json_output=json_output, out=out)
+    _emit_critic_report(report, output_format=output_format, out=out)
     return 0 if report.passed else 1

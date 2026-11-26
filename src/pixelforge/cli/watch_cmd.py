@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pixelforge.cli.output import OutputFn, OutputFormat
 from pixelforge.cli.render_cmd import (
-    OutputFn,
     compile_and_write_asset,
     compile_and_write_scene,
     compile_style_indexed_bundles,
@@ -59,6 +60,32 @@ class _WatchGraph:
         default_factory=dict[str, ExportedAssetManifestEntry]
     )
     initial_render_done: bool = False
+    output_format: OutputFormat = "llm"
+
+
+def _emit_watch_render(
+    target_id: str,
+    out_dir: Path,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    if output_format == "json":
+        out(json.dumps({"event": "render", "target": target_id, "out_dir": str(out_dir)}))
+        return
+    if output_format == "human":
+        out(f"rendered {target_id} -> {out_dir}")
+        return
+    out(f"watch event=render target={target_id} out={out_dir}")
+
+
+def _emit_watch_stop(output_format: OutputFormat, out: OutputFn) -> None:
+    if output_format == "json":
+        out(json.dumps({"event": "stop"}))
+        return
+    if output_format == "human":
+        out("watch stopped")
+        return
+    out("watch event=stop")
 
 
 def _snapshot_watch_mtimes(
@@ -337,7 +364,7 @@ def _render_watch_full_scenes(
             return None
         _record_watch_bundle(graph, bundles_by_style, compiled[0], compiled[1])
         rendered_count += 1
-        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
+        _emit_watch_render(loaded_scene.SCENE.id, out_dir, graph.output_format, out)
     return (all_scenes, rendered_count)
 
 
@@ -396,7 +423,7 @@ def _render_watch_full(
             return False
         _record_watch_bundle(graph, bundles_by_style, compiled[0], compiled[1])
         rendered_count += 1
-        out(f"rendered {loaded.SPEC.id} -> {out_dir}")
+        _emit_watch_render(loaded.SPEC.id, out_dir, graph.output_format, out)
 
     scene_result = _render_watch_full_scenes(
         root,
@@ -514,7 +541,7 @@ def _render_watch_incremental(
         graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
         affected_style_ids.add(style.id)
         rendered_any = True
-        out(f"rendered {loaded.SPEC.id} -> {out_dir}")
+        _emit_watch_render(loaded.SPEC.id, out_dir, graph.output_format, out)
 
     for scene_path in sorted(affected_scene_paths):
         if not scene_path.exists():
@@ -543,7 +570,7 @@ def _render_watch_incremental(
         graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
         affected_style_ids.add(style.id)
         rendered_any = True
-        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
+        _emit_watch_render(loaded_scene.SCENE.id, out_dir, graph.output_format, out)
 
     if asset_id is None and (rendered_any or deleted_asset_ids):
         write_manifest(graph.manifests_by_id, out_dir)
@@ -681,6 +708,7 @@ def _init_watch_session(
     options: ExportBundleOptions,
     indexed_ts: bool,
     indexed_ts_lazy: bool,
+    output_format: OutputFormat,
     out: OutputFn,
     err: OutputFn,
 ) -> _WatchGraph:
@@ -689,6 +717,7 @@ def _init_watch_session(
         style_mtimes=style_mtimes,
         asset_mtimes=asset_mtimes,
         scene_mtimes=scene_mtimes,
+        output_format=output_format,
     )
     _seed_watch_graph_metadata(graph)
     report = run_checks(root, asset_id=asset_id)
@@ -726,6 +755,7 @@ def watch_loop(
     atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
+    output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
     interval: float = 0.5,
@@ -750,6 +780,7 @@ def watch_loop(
         options=options,
         indexed_ts=indexed_ts,
         indexed_ts_lazy=indexed_ts_lazy,
+        output_format=output_format,
         out=out,
         err=err,
     )
@@ -783,5 +814,5 @@ def watch_loop(
                 err=err,
             )
     except KeyboardInterrupt:
-        out("watch stopped")
+        _emit_watch_stop(output_format, out)
     return 0

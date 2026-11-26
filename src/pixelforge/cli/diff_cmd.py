@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pixelforge.cli.render_cmd import OutputFn
+from pixelforge.cli.output import OutputFn, OutputFormat
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import StylePack
 from pixelforge.export.bundle import LoadedAsset, RenderedFrame, render_asset_frames
@@ -83,7 +83,7 @@ def _diff_single_frame(
     out_dir: Path,
     scale: int,
     variant: str | None,
-    json_output: bool,
+    output_format: OutputFormat,
     out: OutputFn,
 ) -> tuple[FrameDiffEntry, int, int, bool]:
     base_surface = (
@@ -132,10 +132,18 @@ def _diff_single_frame(
         anchors=anchor_deltas,
         hitboxes=hitbox_deltas,
     )
-    if not json_output:
+    if output_format == "human":
         out(f"diff {diff_path}: {diff.changed_pixels}/{diff.total_pixels} changed pixel(s)")
         for line in format_metadata_deltas(anchor_deltas, hitbox_deltas):
             out(line)
+    elif output_format == "llm":
+        out(
+            f"frame={frame.state}:f{frame.frame} "
+            f"changed={diff.changed_pixels}/{diff.total_pixels} "
+            f"ratio={ratio:.4f} diff={diff_path}"
+        )
+        for line in format_metadata_deltas(anchor_deltas, hitbox_deltas):
+            out(line.strip())
     return (entry, diff.changed_pixels, diff.total_pixels, has_meta)
 
 
@@ -150,13 +158,23 @@ def _emit_diff_summary(
     has_metadata_changes: bool,
     frame_entries: list[FrameDiffEntry],
     removed_frames: list[RemovedFrameRef],
-    json_output: bool,
+    output_format: OutputFormat,
     out: OutputFn,
 ) -> None:
-    if removed_frames and not json_output:
+    if output_format == "human":
         for removed in removed_frames:
             out(f"  removed frame: ({removed.state}, f{removed.frame})")
-    if not json_output:
+        return
+    if output_format == "llm":
+        for removed in removed_frames:
+            out(f"removed_frame={removed.state}:f{removed.frame}")
+        out(
+            f"summary asset={asset_id} base={base_ref} "
+            f"changed={total_changed}/{total_pixels} "
+            f"pixel_changed={str(total_changed > 0).lower()} "
+            f"meta_changed={str(has_metadata_changes).lower()} "
+            f"baseline={str(baseline_exists).lower()}"
+        )
         return
     report = AssetDiffReport(
         asset_id=asset_id,
@@ -182,7 +200,7 @@ def diff_asset(
     out_dir: Path,
     scale: int,
     variant: str | None,
-    json_output: bool = False,
+    output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
 ) -> int:
@@ -238,7 +256,7 @@ def diff_asset(
             out_dir=out_dir,
             scale=scale,
             variant=variant,
-            json_output=json_output,
+            output_format=output_format,
             out=out,
         )
         frame_entries.append(entry)
@@ -261,7 +279,7 @@ def diff_asset(
         has_metadata_changes=has_metadata_changes,
         frame_entries=frame_entries,
         removed_frames=removed_frames,
-        json_output=json_output,
+        output_format=output_format,
         out=out,
     )
     return 0
