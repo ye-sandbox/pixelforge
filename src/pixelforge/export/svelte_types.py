@@ -100,6 +100,8 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
     )
     if entry.nineSlice is not None:
         lines.append("  readonly nineSlice: PixelForgeNineSlice;")
+    if entry.tilemap is not None:
+        lines.append("  readonly tilemap: PixelForgeTilemap;")
     if entry.frameMetadata is not None:
         lines.append(
             f"  readonly frameMetadata?: Readonly<Record<{type_name}State, "
@@ -150,6 +152,18 @@ def generate_svelte_manifest_dts(
         "  readonly right: number;",
         "  readonly top: number;",
         "  readonly bottom: number;",
+        "}",
+        "",
+        "export interface PixelForgeTilemap {",
+        "  readonly mode: 'cardinal16' | 'blob47';",
+        "  readonly tile_width: number;",
+        "  readonly tile_height: number;",
+        "  readonly columns: number;",
+        "  readonly rows: number;",
+        "  readonly bitmasks: readonly number[];",
+        "  readonly terrain_name: string;",
+        "  readonly margin: number;",
+        "  readonly spacing: number;",
         "}",
         "",
         "export interface PixelForgeFrameMetadata<",

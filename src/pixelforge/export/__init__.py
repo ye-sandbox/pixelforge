@@ -87,6 +87,15 @@ from pixelforge.export.scene import (
     resolve_scene_asset_spec,
 )
 from pixelforge.export.svelte_types import generate_svelte_manifest_dts
+from pixelforge.export.tilemap import (
+    TileAtlasFormat,
+    TileEntry,
+    build_godot_tileset,
+    build_phaser_tilemap_atlas,
+    build_tile_entries,
+    build_tiled_tileset,
+    serialize_tilemap_json,
+)
 
 __all__ = [
     "AnchorDelta",
@@ -119,11 +128,17 @@ __all__ = [
     "SceneMountSpec",
     "SceneSheetResult",
     "SceneSpec",
+    "TileAtlasFormat",
+    "TileEntry",
     "assert_binary_alpha",
     "build_aseprite_atlas",
+    "build_godot_tileset",
     "build_manifest_document",
+    "build_phaser_tilemap_atlas",
     "build_spritesheet_surface",
     "build_texturepacker_atlas",
+    "build_tile_entries",
+    "build_tiled_tileset",
     "choose_zoom",
     "compose_scene",
     "compose_scene_frames",
@@ -153,6 +168,7 @@ __all__ = [
     "resolve_scene_asset_spec",
     "rgba_to_png",
     "serialize_atlas_json",
+    "serialize_tilemap_json",
     "style_to_lut_png",
     "style_to_lut_rgba",
     "surface_to_indexed_png",

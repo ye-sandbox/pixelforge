@@ -54,6 +54,10 @@ EXPECTED_UI_IDS = (
     "hud_icons_16",
     "hud_panel_9slice",
 )
+EXPECTED_TILE_IDS = (
+    "datacenter_cables_16",
+    "datacenter_wall_blob47",
+)
 EXPECTED_PROPS_IDS = (
     "air_purifier_iso",
     "books_stack_iso",
@@ -141,6 +145,7 @@ def test_pilot_pack_passes_all_guards_strict_orphans() -> None:
         + len(EXPECTED_PROPS_IDS)
         + len(EXPECTED_CHARACTER_IDS)
         + len(EXPECTED_UI_IDS)
+        + len(EXPECTED_TILE_IDS)
         + len(EXPECTED_SCENE_IDS)
     )
 
@@ -162,6 +167,7 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
                 *EXPECTED_PROPS_IDS,
                 *EXPECTED_CHARACTER_IDS,
                 *EXPECTED_UI_IDS,
+                *EXPECTED_TILE_IDS,
             )
         )
     )

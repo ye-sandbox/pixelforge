@@ -20,6 +20,7 @@ MAX_PALETTE_INDEX: Final[int] = 254
 
 PerspectiveMode = Literal["front-2.5d", "iso-2:1", "top-down", "side"]
 LightingAngle = Literal["top-left", "top-right", "top"]
+AutotileMode = Literal["cardinal16", "blob47"]
 PaletteFlag = Literal[
     "outline",
     "emissive",
@@ -157,6 +158,42 @@ class NineSliceMargins(BaseModel):
     bottom: int = Field(ge=0)
 
 
+class TilemapSpec(BaseModel):
+    """Deterministic autotile sheet layout and bitmask metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: AutotileMode
+    tile_width: int = Field(gt=0)
+    tile_height: int = Field(gt=0)
+    columns: int = Field(gt=0)
+    rows: int = Field(gt=0)
+    bitmasks: tuple[int, ...] = Field(min_length=1)
+    terrain_name: str = Field(default="terrain", min_length=1)
+    margin: int = Field(default=0, ge=0)
+    spacing: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _validate_tilemap(self) -> TilemapSpec:
+        capacity = self.columns * self.rows
+        if len(self.bitmasks) > capacity:
+            msg = f"TilemapSpec bitmasks ({len(self.bitmasks)}) exceed grid capacity ({capacity})"
+            raise ValueError(msg)
+        max_mask = 15 if self.mode == "cardinal16" else 255
+        seen: set[int] = set()
+        for mask in self.bitmasks:
+            if mask < 0 or mask > max_mask:
+                msg = (
+                    f"TilemapSpec bitmask {mask} out of range 0..{max_mask} for mode {self.mode!r}"
+                )
+                raise ValueError(msg)
+            if mask in seen:
+                msg = f"TilemapSpec contains duplicate bitmask {mask}"
+                raise ValueError(msg)
+            seen.add(mask)
+        return self
+
+
 class AssetSpec(BaseModel):
     """Static metadata specification declared by each `.asset.py` module."""
 
@@ -172,6 +209,7 @@ class AssetSpec(BaseModel):
     fps: int = Field(default=6, ge=1)
     seed: int = 0
     nine_slice: NineSliceMargins | None = None
+    tilemap: TilemapSpec | None = None
 
     @model_validator(mode="after")
     def _validate_states(self) -> AssetSpec:
@@ -196,6 +234,16 @@ class AssetSpec(BaseModel):
                     f"AssetSpec {self.id!r} nine_slice vertical margins "
                     f"({self.nine_slice.top} + {self.nine_slice.bottom}) "
                     f"exceed height {self.height}"
+                )
+                raise ValueError(msg)
+        if self.tilemap is not None:
+            tm = self.tilemap
+            req_w = 2 * tm.margin + tm.columns * tm.tile_width + (tm.columns - 1) * tm.spacing
+            req_h = 2 * tm.margin + tm.rows * tm.tile_height + (tm.rows - 1) * tm.spacing
+            if req_w > self.width or req_h > self.height:
+                msg = (
+                    f"AssetSpec {self.id!r} tilemap dimensions ({req_w}x{req_h}) "
+                    f"exceed canvas ({self.width}x{self.height})"
                 )
                 raise ValueError(msg)
         return self

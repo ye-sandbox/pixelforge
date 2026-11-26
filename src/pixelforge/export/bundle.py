@@ -21,6 +21,7 @@ from pixelforge.core.types import (
     HitboxRect,
     NineSliceMargins,
     StylePack,
+    TilemapSpec,
 )
 from pixelforge.export.atlas import (
     AtlasFormat,
@@ -39,6 +40,13 @@ from pixelforge.export.png import (
     surface_to_rgba,
 )
 from pixelforge.export.svelte_types import generate_svelte_manifest_dts
+from pixelforge.export.tilemap import (
+    TileAtlasFormat,
+    build_godot_tileset,
+    build_phaser_tilemap_atlas,
+    build_tiled_tileset,
+    serialize_tilemap_json,
+)
 
 
 @runtime_checkable
@@ -111,6 +119,7 @@ class ExportedAssetManifestEntry(BaseModel):
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
     nineSlice: NineSliceMargins | None = None
+    tilemap: TilemapSpec | None = None
     frameMetadata: dict[str, tuple[FrameMetadataEntry, ...]] | None = None
     sha256: str
 
@@ -127,6 +136,7 @@ class ExportBundleOptions(BaseModel):
     animate: bool = False
     animate_format: Literal["gif", "apng"] = "gif"
     atlas: AtlasFormat | None = None
+    tilemap_atlas: TileAtlasFormat | None = None
     token_overrides: dict[str, str | int] | None = None
 
 
@@ -242,6 +252,7 @@ def _compute_bundle_digest(
         "anchors": [a.model_dump() for a in anchors],
         "hitboxes": [h.model_dump() for h in hitboxes],
         **({"nineSlice": spec.nine_slice.model_dump()} if spec.nine_slice is not None else {}),
+        **({"tilemap": spec.tilemap.model_dump()} if spec.tilemap is not None else {}),
         "frameMetadata": (
             {
                 state: [entry.model_dump() for entry in entries]
@@ -402,6 +413,23 @@ def _export_atlas_outputs(
         )
         files[f"{spec.id}.texturepacker.json"] = serialize_atlas_json(tp_doc)
 
+    tile_fmt: TileAtlasFormat | None = opts.tilemap_atlas
+    if tile_fmt is None and opts.atlas == "all" and spec.tilemap is not None:
+        tile_fmt = "all"
+    if tile_fmt is not None and spec.tilemap is not None:
+        if tile_fmt in ("tiled", "all"):
+            files[f"{spec.id}.tiled.json"] = serialize_tilemap_json(
+                build_tiled_tileset(spec, scale=opts.scale, image_name=image_name)
+            )
+        if tile_fmt in ("godot", "all"):
+            files[f"{spec.id}.godot.json"] = serialize_tilemap_json(
+                build_godot_tileset(spec, scale=opts.scale, image_name=image_name)
+            )
+        if tile_fmt in ("phaser", "all"):
+            files[f"{spec.id}.phaser.json"] = serialize_tilemap_json(
+                build_phaser_tilemap_atlas(spec, scale=opts.scale, image_name=image_name)
+            )
+
     return files
 
 
@@ -481,6 +509,7 @@ def export_rendered_frames_bundle(
         anchors=baseline.anchors,
         hitboxes=baseline.hitboxes,
         nineSlice=spec.nine_slice,
+        tilemap=spec.tilemap,
         frameMetadata=frame_metadata,
         sha256=sha256,
     )

@@ -122,6 +122,28 @@ def _build_aseprite_slices(
                     ],
                 }
             )
+    if spec.tilemap is not None:
+        tm = spec.tilemap
+        for idx, mask in enumerate(tm.bitmasks):
+            col = idx % tm.columns
+            row = idx // tm.columns
+            slices.append(
+                {
+                    "name": f"tile:{idx}:{mask}",
+                    "color": "#ffa500ff",
+                    "keys": [
+                        {
+                            "frame": 0,
+                            "bounds": {
+                                "x": (tm.margin + col * (tm.tile_width + tm.spacing)) * scale,
+                                "y": (tm.margin + row * (tm.tile_height + tm.spacing)) * scale,
+                                "w": tm.tile_width * scale,
+                                "h": tm.tile_height * scale,
+                            },
+                        }
+                    ],
+                }
+            )
     return slices
 
 

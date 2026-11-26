@@ -257,6 +257,11 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
                 else {}
             ),
             **(
+                {"tilemap": bundle.manifest.tilemap.model_dump(mode="json")}
+                if bundle.manifest.tilemap is not None
+                else {}
+            ),
+            **(
                 {
                     "frameMetadata": {
                         st: [entry.model_dump(exclude_none=True, mode="json") for entry in entries]
