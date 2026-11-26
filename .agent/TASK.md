@@ -8,9 +8,7 @@
 
 ## Active Task
 
-### `[90.5]` Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`)
-
-- [ ] Split `export/scene.py` (models, composition engine, scene contact sheet) and `core/prefabs/details.py` (wall decor vs. shadows/cables), and streamline `core/builder.py` and `cli/watch_cmd.py` preserving public exports.
+_None currently active (all queued roadmap tasks completed)._
 
 ---
 
@@ -18,6 +16,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[90.5]` Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`) (`5bfea27`)
 - `[37.1]` AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph) (`43d3adb`)
 
 - `[36.1]` Typed Frame Events & Audio Cues (`frameMetadata.events`) (`2cfcf42`)
