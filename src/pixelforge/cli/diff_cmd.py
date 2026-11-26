@@ -12,8 +12,13 @@ from pixelforge.export.diff import (
     AssetDiffReport,
     FrameDiffEntry,
     RemovedFrameRef,
+    SurfaceMetrics,
+    aggregate_surface_metrics,
+    compute_surface_metrics,
     diff_anchors,
     diff_hitboxes,
+    diff_surface_metrics,
+    format_diff_markdown,
     format_metadata_deltas,
     generate_surface_diff,
 )
@@ -117,6 +122,14 @@ def _diff_single_frame(
     diff_path = out_dir / f"{current_asset.SPEC.id}_{suffix}"
     diff_path.write_bytes(diff.png)
 
+    base_metrics = (
+        compute_surface_metrics(base_frame.surface, base_style)
+        if base_frame is not None
+        else SurfaceMetrics(total_pixels=frame.surface.width * frame.surface.height)
+    )
+    curr_metrics = compute_surface_metrics(frame.surface, style)
+    metrics_delta = diff_surface_metrics(base_metrics, curr_metrics)
+
     ratio = round(diff.changed_pixels / diff.total_pixels, 6) if diff.total_pixels > 0 else 0.0
     entry = FrameDiffEntry(
         state=frame.state,
@@ -129,18 +142,30 @@ def _diff_single_frame(
         baseline_height=base_frame.surface.height if base_frame is not None else None,
         current_width=frame.surface.width,
         current_height=frame.surface.height,
+        metrics=metrics_delta,
         anchors=anchor_deltas,
         hitboxes=hitbox_deltas,
     )
     if output_format == "human":
-        out(f"diff {diff_path}: {diff.changed_pixels}/{diff.total_pixels} changed pixel(s)")
+        out(
+            f"diff {diff_path}: {diff.changed_pixels}/{diff.total_pixels} changed pixel(s) | "
+            f"opaque {curr_metrics.opaque_pixels} ({metrics_delta.opaque_pixel_delta:+d}) | "
+            f"coverage {curr_metrics.coverage_ratio:.1%} ({metrics_delta.coverage_delta:+.1%}) | "
+            f"emissive {curr_metrics.emissive_pixels} ({metrics_delta.emissive_pixel_delta:+d}) | "
+            f"orphans {curr_metrics.orphan_pixels} ({metrics_delta.orphan_pixel_delta:+d})"
+        )
         for line in format_metadata_deltas(anchor_deltas, hitbox_deltas):
             out(line)
     elif output_format == "llm":
         out(
             f"frame={frame.state}:f{frame.frame} "
             f"changed={diff.changed_pixels}/{diff.total_pixels} "
-            f"ratio={ratio:.4f} diff={diff_path}"
+            f"ratio={ratio:.4f} "
+            f"opaque={curr_metrics.opaque_pixels}({metrics_delta.opaque_pixel_delta:+d}) "
+            f"coverage={curr_metrics.coverage_ratio:.1%}({metrics_delta.coverage_delta:+.1%}) "
+            f"emissive={curr_metrics.emissive_pixels}({metrics_delta.emissive_pixel_delta:+d}) "
+            f"orphans={curr_metrics.orphan_pixels}({metrics_delta.orphan_pixel_delta:+d}) "
+            f"diff={diff_path}"
         )
         for line in format_metadata_deltas(anchor_deltas, hitbox_deltas):
             out(line.strip())
@@ -149,46 +174,35 @@ def _diff_single_frame(
 
 def _emit_diff_summary(
     *,
-    asset_id: str,
-    base_ref: str,
-    variant: str | None,
-    baseline_exists: bool,
-    total_changed: int,
-    total_pixels: int,
-    has_metadata_changes: bool,
-    frame_entries: list[FrameDiffEntry],
-    removed_frames: list[RemovedFrameRef],
+    report: AssetDiffReport,
+    summary_md: Path | None,
     output_format: OutputFormat,
     out: OutputFn,
 ) -> None:
+    if summary_md is not None:
+        summary_md.parent.mkdir(parents=True, exist_ok=True)
+        summary_md.write_text(format_diff_markdown(report), encoding="utf-8")
+
+    m = report.metrics
     if output_format == "human":
-        for removed in removed_frames:
+        for removed in report.removed_frames:
             out(f"  removed frame: ({removed.state}, f{removed.frame})")
         return
     if output_format == "llm":
-        for removed in removed_frames:
+        for removed in report.removed_frames:
             out(f"removed_frame={removed.state}:f{removed.frame}")
         out(
-            f"summary asset={asset_id} base={base_ref} "
-            f"changed={total_changed}/{total_pixels} "
-            f"pixel_changed={str(total_changed > 0).lower()} "
-            f"meta_changed={str(has_metadata_changes).lower()} "
-            f"baseline={str(baseline_exists).lower()}"
+            f"summary asset={report.asset_id} base={report.base_ref} "
+            f"changed={report.total_changed_pixels}/{report.total_pixels} "
+            f"opaque_delta={m.opaque_pixel_delta:+d} "
+            f"coverage_delta={m.coverage_delta:+.1%} "
+            f"emissive_delta={m.emissive_pixel_delta:+d} "
+            f"orphan_delta={m.orphan_pixel_delta:+d} "
+            f"pixel_changed={str(report.has_pixel_changes).lower()} "
+            f"meta_changed={str(report.has_metadata_changes).lower()} "
+            f"baseline={str(report.baseline_exists).lower()}"
         )
         return
-    report = AssetDiffReport(
-        asset_id=asset_id,
-        base_ref=base_ref,
-        variant=variant,
-        baseline_exists=baseline_exists,
-        total_changed_pixels=total_changed,
-        total_pixels=total_pixels,
-        has_pixel_changes=total_changed > 0,
-        has_metadata_changes=has_metadata_changes,
-        has_changes=total_changed > 0 or has_metadata_changes or bool(removed_frames),
-        frames=frame_entries,
-        removed_frames=removed_frames,
-    )
     out(report.model_dump_json(indent=2))
 
 
@@ -200,6 +214,7 @@ def diff_asset(
     out_dir: Path,
     scale: int,
     variant: str | None,
+    summary_md: Path | None = None,
     output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
@@ -269,16 +284,25 @@ def diff_asset(
         for (state, frame_idx) in sorted(baseline_frames)
         if (state, frame_idx) not in seen_keys
     ]
-    _emit_diff_summary(
+    agg_base = aggregate_surface_metrics([entry.metrics.baseline for entry in frame_entries])
+    agg_curr = aggregate_surface_metrics([entry.metrics.current for entry in frame_entries])
+    report = AssetDiffReport(
         asset_id=current_asset.SPEC.id,
         base_ref=base_ref,
         variant=variant,
         baseline_exists=baseline_asset is not None,
-        total_changed=total_changed,
+        total_changed_pixels=total_changed,
         total_pixels=total_pixels,
+        has_pixel_changes=total_changed > 0,
         has_metadata_changes=has_metadata_changes,
-        frame_entries=frame_entries,
+        has_changes=total_changed > 0 or has_metadata_changes or bool(removed_frames),
+        metrics=diff_surface_metrics(agg_base, agg_curr),
+        frames=frame_entries,
         removed_frames=removed_frames,
+    )
+    _emit_diff_summary(
+        report=report,
+        summary_md=summary_md,
         output_format=output_format,
         out=out,
     )

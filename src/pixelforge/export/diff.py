@@ -10,8 +10,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-from pixelforge.core.surface import IndexedSurface
-from pixelforge.core.types import AnchorPoint, HitboxRect, StylePack
+from pixelforge.core.surface import IndexedSurface, orphan_pixel_mask
+from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, HitboxRect, StylePack
 from pixelforge.export._canvas import Rgb, composite_rgba, draw_checkerboard
 from pixelforge.export.png import rgba_to_png, surface_to_rgba
 
@@ -138,6 +138,91 @@ class HitboxDelta(BaseModel):
     dh: int | None = None
 
 
+class SurfaceMetrics(BaseModel):
+    """Per-surface opaque, canvas-coverage, emissive, and orphan-pixel metrics."""
+
+    model_config = ConfigDict(frozen=True)
+
+    opaque_pixels: int = 0
+    total_pixels: int = 0
+    coverage_ratio: float = 0.0
+    emissive_pixels: int = 0
+    emissive_ratio: float = 0.0
+    orphan_pixels: int = 0
+
+
+class SurfaceMetricsDelta(BaseModel):
+    """Baseline vs current surface metrics and their signed deltas."""
+
+    model_config = ConfigDict(frozen=True)
+
+    baseline: SurfaceMetrics
+    current: SurfaceMetrics
+    opaque_pixel_delta: int
+    coverage_delta: float
+    emissive_pixel_delta: int
+    emissive_ratio_delta: float
+    orphan_pixel_delta: int
+
+
+def compute_surface_metrics(surface: IndexedSurface, style: StylePack) -> SurfaceMetrics:
+    """Compute opaque, canvas-coverage, emissive, and orphan-pixel metrics for one surface."""
+    data = surface.data
+    total_pixels = int(data.size)
+    opaque_pixels = int(np.count_nonzero(data != TRANSPARENT_INDEX))
+    coverage_ratio = round(opaque_pixels / total_pixels, 6) if total_pixels > 0 else 0.0
+    emissive_indices = [entry.index for entry in style.palette if "emissive" in entry.flags]
+    emissive_pixels = (
+        int(np.count_nonzero(np.isin(data, emissive_indices)))
+        if emissive_indices and opaque_pixels > 0
+        else 0
+    )
+    emissive_ratio = round(emissive_pixels / opaque_pixels, 6) if opaque_pixels > 0 else 0.0
+    orphan_pixels = int(np.count_nonzero(orphan_pixel_mask(surface))) if opaque_pixels > 0 else 0
+    return SurfaceMetrics(
+        opaque_pixels=opaque_pixels,
+        total_pixels=total_pixels,
+        coverage_ratio=coverage_ratio,
+        emissive_pixels=emissive_pixels,
+        emissive_ratio=emissive_ratio,
+        orphan_pixels=orphan_pixels,
+    )
+
+
+def diff_surface_metrics(
+    baseline: SurfaceMetrics,
+    current: SurfaceMetrics,
+) -> SurfaceMetricsDelta:
+    """Compute signed deltas between baseline and current `SurfaceMetrics`."""
+    return SurfaceMetricsDelta(
+        baseline=baseline,
+        current=current,
+        opaque_pixel_delta=current.opaque_pixels - baseline.opaque_pixels,
+        coverage_delta=round(current.coverage_ratio - baseline.coverage_ratio, 6),
+        emissive_pixel_delta=current.emissive_pixels - baseline.emissive_pixels,
+        emissive_ratio_delta=round(current.emissive_ratio - baseline.emissive_ratio, 6),
+        orphan_pixel_delta=current.orphan_pixels - baseline.orphan_pixels,
+    )
+
+
+def aggregate_surface_metrics(items: Sequence[SurfaceMetrics]) -> SurfaceMetrics:
+    """Aggregate `SurfaceMetrics` across multiple frames into an asset-level summary."""
+    if not items:
+        return SurfaceMetrics()
+    total_pixels = sum(m.total_pixels for m in items)
+    opaque_pixels = sum(m.opaque_pixels for m in items)
+    emissive_pixels = sum(m.emissive_pixels for m in items)
+    orphan_pixels = sum(m.orphan_pixels for m in items)
+    return SurfaceMetrics(
+        opaque_pixels=opaque_pixels,
+        total_pixels=total_pixels,
+        coverage_ratio=round(opaque_pixels / total_pixels, 6) if total_pixels > 0 else 0.0,
+        emissive_pixels=emissive_pixels,
+        emissive_ratio=round(emissive_pixels / opaque_pixels, 6) if opaque_pixels > 0 else 0.0,
+        orphan_pixels=orphan_pixels,
+    )
+
+
 class RemovedFrameRef(BaseModel):
     """Reference to a `(state, frame)` present in baseline but absent in current."""
 
@@ -162,6 +247,7 @@ class FrameDiffEntry(BaseModel):
     baseline_height: int | None
     current_width: int
     current_height: int
+    metrics: SurfaceMetricsDelta
     anchors: list[AnchorDelta]
     hitboxes: list[HitboxDelta]
 
@@ -180,6 +266,7 @@ class AssetDiffReport(BaseModel):
     has_pixel_changes: bool
     has_metadata_changes: bool
     has_changes: bool
+    metrics: SurfaceMetricsDelta
     frames: list[FrameDiffEntry]
     removed_frames: list[RemovedFrameRef]
 
@@ -302,3 +389,49 @@ def format_metadata_deltas(
                 f"(dx={hitbox.dx:+d}, dy={hitbox.dy:+d}, dw={hitbox.dw:+d}, dh={hitbox.dh:+d})"
             )
     return lines
+
+
+def format_diff_markdown(report: AssetDiffReport) -> str:
+    """Format an `AssetDiffReport` as a concise Markdown PR regression summary."""
+    m = report.metrics
+    b = m.baseline
+    c = m.current
+    lines = [
+        f"### Pixelforge Diff: `{report.asset_id}`",
+        "",
+        (
+            f"- **Base:** `{report.base_ref}` | "
+            f"**Changed Pixels:** {report.total_changed_pixels}/{report.total_pixels} | "
+            f"**Baseline Exists:** {'yes' if report.baseline_exists else 'no'}"
+        ),
+        "",
+        "| Metric | Baseline | Current | Delta |",
+        "|---|---:|---:|---:|",
+        f"| Opaque Pixels | {b.opaque_pixels} | {c.opaque_pixels} | {m.opaque_pixel_delta:+d} |",
+        (
+            f"| Canvas Coverage | {b.coverage_ratio:.1%} | "
+            f"{c.coverage_ratio:.1%} | {m.coverage_delta:+.1%} |"
+        ),
+        (
+            f"| Emissive Pixels | {b.emissive_pixels} | "
+            f"{c.emissive_pixels} | {m.emissive_pixel_delta:+d} |"
+        ),
+        (
+            f"| Emissive Ratio | {b.emissive_ratio:.1%} | "
+            f"{c.emissive_ratio:.1%} | {m.emissive_ratio_delta:+.1%} |"
+        ),
+        f"| Orphan Pixels | {b.orphan_pixels} | {c.orphan_pixels} | {m.orphan_pixel_delta:+d} |",
+    ]
+    meta_lines: list[str] = []
+    for frame in report.frames:
+        frame_deltas = format_metadata_deltas(frame.anchors, frame.hitboxes)
+        if frame_deltas:
+            meta_lines.append(f"- `{frame.state}:f{frame.frame}`:")
+            for delta in frame_deltas:
+                meta_lines.append(f"  - {delta.strip()}")
+    if report.removed_frames:
+        for rem in report.removed_frames:
+            meta_lines.append(f"- Removed frame `{rem.state}:f{rem.frame}`")
+    if meta_lines:
+        lines.extend(["", "#### Metadata & Frame Deltas", "", *meta_lines])
+    return "\n".join(lines) + "\n"

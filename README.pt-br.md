@@ -85,7 +85,7 @@ uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissi
 uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Gerar comparação lado a lado + diff de pixels em magenta contra uma ref Git
-uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente
 uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--format llm|json|human] [--json] [--human] [--root .]
@@ -96,8 +96,8 @@ uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32
 # Compor props filhos sobre âncoras declaradas de uma cena pai e validar limites/oclusão
 uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--format llm|json|human] [--json] [--human] [--root .]
 
-# Pontuar assets alterados via crítico multimodal interno hydra-llm-router (OpenAI v1, modelo virtual 'fast')
-uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+# Pontuar assets e cenas alterados via crítico multimodal interno hydra-llm-router (OpenAI v1, modelo virtual 'fast')
+uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Inspecionar grupos de tokens de StylePack, assinaturas de prefabs, âncoras/estados de assets e montagens de cenas
 uv run pixelforge inspect {style|prefabs|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]

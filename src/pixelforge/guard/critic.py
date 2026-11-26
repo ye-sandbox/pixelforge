@@ -10,11 +10,12 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 import httpx2
 from pydantic import BaseModel, Field, ValidationError
 
+from pixelforge.core.types import AssetSpec
 from pixelforge.export.bundle import LoadedAsset
 
 _ALLOWED_VIRTUAL_MODEL: Final[str] = "fast"
@@ -114,9 +115,10 @@ class _OpenAIErrorEnvelope(BaseModel):
 
 
 class CriticVerdict(BaseModel):
-    """Structured per-asset visual regression score and findings."""
+    """Structured per-asset or per-scene visual regression score and findings."""
 
     asset_id: str
+    kind: Literal["asset", "scene"] = "asset"
     score: int = Field(ge=0, le=100)
     passed: bool
     summary: str
@@ -126,7 +128,7 @@ class CriticVerdict(BaseModel):
 
 
 class CriticBatchReport(BaseModel):
-    """Aggregated batch scoring report across one or more assets."""
+    """Aggregated batch scoring report across one or more assets or scenes."""
 
     verdicts: list[CriticVerdict]
     passed: bool
@@ -136,12 +138,25 @@ class CriticBatchReport(BaseModel):
 
 @dataclass(frozen=True)
 class CriticAssetInput:
-    """Rendered visual artifacts submitted to the critic for one asset."""
+    """Rendered visual artifacts submitted to the critic for one asset or scene."""
 
-    asset: LoadedAsset
-    contact_sheet_png: bytes
+    asset: LoadedAsset | None = None
+    contact_sheet_png: bytes = b""
     diff_png: bytes | None = None
     diff_changed_pixels: int | None = None
+    spec: AssetSpec | None = None
+    kind: Literal["asset", "scene"] = "asset"
+    scene_context: tuple[str, ...] = ()
+
+    @property
+    def target_spec(self) -> AssetSpec:
+        """Return the resolved `AssetSpec` for either an asset or a composed scene."""
+        if self.spec is not None:
+            return self.spec
+        if self.asset is not None:
+            return self.asset.SPEC
+        msg = "CriticAssetInput requires either `asset` or `spec`"
+        raise ValueError(msg)
 
 
 def _encode_png_data_url(png_bytes: bytes) -> str:
@@ -155,14 +170,16 @@ def build_critic_payload(
     model: str = _ALLOWED_VIRTUAL_MODEL,
 ) -> dict[str, Any]:
     """Build an OpenAI v1 `/v1/chat/completions` multimodal request payload."""
-    spec = item.asset.SPEC
+    spec = item.target_spec
     context_lines = [
+        f"Kind: {item.kind}",
         f"Asset ID: {spec.id}",
         f"Style ID: {spec.style_id}",
         f"Dimensions: {spec.width}x{spec.height}",
         f"Perspective: {spec.perspective}",
         f"States: {', '.join(spec.states)} | Frames: {spec.frames} | FPS: {spec.fps}",
     ]
+    context_lines.extend(item.scene_context)
     if item.diff_changed_pixels is not None:
         context_lines.append(f"Changed pixels vs baseline: {item.diff_changed_pixels}")
 
@@ -204,6 +221,7 @@ def parse_critic_response(
     asset_id: str,
     model: str,
     threshold: int,
+    kind: Literal["asset", "scene"] = "asset",
 ) -> CriticVerdict:
     """Parse an OpenAI v1 chat completion response into a `CriticVerdict`."""
     try:
@@ -227,6 +245,7 @@ def parse_critic_response(
 
     return CriticVerdict(
         asset_id=asset_id,
+        kind=kind,
         score=validated.score,
         passed=validated.score >= threshold,
         summary=validated.summary.strip(),
@@ -278,6 +297,7 @@ def score_asset_via_hydra(
             transport=transport,
         )
     )
+    spec = item.target_spec
     try:
         response = active_client.post("/chat/completions", json=payload, headers=headers)
         response.raise_for_status()
@@ -286,18 +306,14 @@ def score_asset_via_hydra(
         retry_after = exc.response.headers.get("Retry-After")
         suffix = f" (Retry-After: {retry_after}s)" if retry_after else ""
         msg = (
-            f"hydra-llm-router returned {exc.response.status_code} "
-            f"for {item.asset.SPEC.id}: {detail}{suffix}"
+            f"hydra-llm-router returned {exc.response.status_code} for {spec.id}: {detail}{suffix}"
         )
         raise CriticError(msg) from exc
     except httpx2.TimeoutException as exc:
-        msg = (
-            f"hydra-llm-router request timed out after {config.timeout_seconds}s "
-            f"for {item.asset.SPEC.id}"
-        )
+        msg = f"hydra-llm-router request timed out after {config.timeout_seconds}s for {spec.id}"
         raise CriticError(msg) from exc
     except httpx2.TransportError as exc:
-        msg = f"hydra-llm-router transport error for {item.asset.SPEC.id}: {exc}"
+        msg = f"hydra-llm-router transport error for {spec.id}: {exc}"
         raise CriticError(msg) from exc
     finally:
         if owns_client:
@@ -306,14 +322,15 @@ def score_asset_via_hydra(
     try:
         raw_json: object = response.json()
     except ValueError as exc:
-        msg = f"Non-JSON response from hydra-llm-router for {item.asset.SPEC.id}: {exc}"
+        msg = f"Non-JSON response from hydra-llm-router for {spec.id}: {exc}"
         raise CriticError(msg) from exc
 
     return parse_critic_response(
         raw_json,
-        asset_id=item.asset.SPEC.id,
+        asset_id=spec.id,
         model=config.model,
         threshold=config.threshold,
+        kind=item.kind,
     )
 
 
@@ -375,3 +392,50 @@ def discover_changed_paths_from_git(root: Path, *, base_ref: str) -> set[Path]:
         if rel:
             changed.add((root / rel).resolve())
     return changed
+
+
+def format_critic_markdown(
+    report: CriticBatchReport,
+    *,
+    base_ref: str | None = None,
+) -> str:
+    """Format a `CriticBatchReport` as a Markdown PR regression summary."""
+    status = "PASS" if report.passed else "FAIL"
+    lines = ["## Pixelforge Visual Critic Summary", ""]
+    meta_parts = [
+        f"**Status:** {status}",
+        f"**Average Score:** {report.average_score}/100",
+        f"**Threshold:** {report.threshold}",
+    ]
+    if base_ref is not None:
+        meta_parts.append(f"**Base:** `{base_ref}`")
+    lines.append(" | ".join(meta_parts))
+    lines.append("")
+
+    if not report.verdicts:
+        lines.append("No changed assets, styles, or scenes detected; visual critic skipped.")
+        return "\n".join(lines) + "\n"
+
+    lines.extend(
+        [
+            "| Target | Kind | Score | Status | Summary |",
+            "|---|---|---:|---|---|",
+        ]
+    )
+    for verdict in report.verdicts:
+        v_status = "PASS" if verdict.passed else "FAIL"
+        summary_cell = verdict.summary.replace("|", "\\|").replace("\n", " ")
+        lines.append(
+            f"| `{verdict.asset_id}` | {verdict.kind} | {verdict.score}/100 | "
+            f"{v_status} | {summary_cell} |"
+        )
+
+    findings_lines = [
+        f"- **`{verdict.asset_id}`**: {finding}"
+        for verdict in report.verdicts
+        for finding in verdict.findings
+    ]
+    if findings_lines:
+        lines.extend(["", "### Findings", "", *findings_lines])
+
+    return "\n".join(lines) + "\n"

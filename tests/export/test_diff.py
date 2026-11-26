@@ -7,8 +7,13 @@ import numpy as np
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import AnchorPoint, HitboxRect, PaletteColor, StylePack
 from pixelforge.export.diff import (
+    AssetDiffReport,
+    FrameDiffEntry,
+    compute_surface_metrics,
     diff_anchors,
     diff_hitboxes,
+    diff_surface_metrics,
+    format_diff_markdown,
     format_metadata_deltas,
     generate_pixel_diff,
     generate_surface_diff,
@@ -154,3 +159,74 @@ def test_diff_anchors_and_hitboxes_detects_kind_and_dir_changes() -> None:
 
     lines = format_metadata_deltas(anchor_deltas, hitbox_deltas)
     assert any("anchor 'port_0': changed" in ln and "'sfp'" in ln for ln in lines)
+
+
+def test_compute_surface_metrics_and_markdown_summary() -> None:
+    style = StylePack(
+        id="diff-style",
+        perspective="side",
+        lighting_angle="top",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="OUTLINE", hex="#101218", flags=("outline",)),
+            PaletteColor(index=1, name="FILL", hex="#8090a0"),
+            PaletteColor(index=2, name="GLOW", hex="#38bdf8", flags=("emissive",)),
+        ),
+    )
+    base = IndexedSurface(4, 4)
+    base.rect(0, 0, 2, 2, 1)  # 4 opaque, 0 emissive, 0 orphans
+
+    curr = IndexedSurface(4, 4)
+    curr.rect(0, 0, 2, 2, 1)
+    curr.put(1, 1, 2)  # 1 emissive inside block
+    curr.put(3, 3, 2)  # 1 orphan emissive pixel
+
+    base_m = compute_surface_metrics(base, style)
+    curr_m = compute_surface_metrics(curr, style)
+    delta = diff_surface_metrics(base_m, curr_m)
+
+    assert base_m.opaque_pixels == 4
+    assert base_m.emissive_pixels == 0
+    assert base_m.orphan_pixels == 0
+    assert curr_m.opaque_pixels == 5
+    assert curr_m.emissive_pixels == 2
+    assert curr_m.orphan_pixels == 1
+    assert delta.opaque_pixel_delta == 1
+    assert delta.emissive_pixel_delta == 2
+    assert delta.orphan_pixel_delta == 1
+    assert delta.coverage_delta > 0
+
+    report = AssetDiffReport(
+        asset_id="test_prop",
+        base_ref="HEAD",
+        baseline_exists=True,
+        total_changed_pixels=2,
+        total_pixels=16,
+        has_pixel_changes=True,
+        has_metadata_changes=False,
+        has_changes=True,
+        metrics=delta,
+        frames=[
+            FrameDiffEntry(
+                state="idle",
+                frame=0,
+                diff_png="diff.png",
+                changed_pixels=2,
+                total_pixels=16,
+                changed_ratio=0.125,
+                baseline_width=4,
+                baseline_height=4,
+                current_width=4,
+                current_height=4,
+                metrics=delta,
+                anchors=[],
+                hitboxes=[],
+            )
+        ],
+        removed_frames=[],
+    )
+    md = format_diff_markdown(report)
+    assert "### Pixelforge Diff: `test_prop`" in md
+    assert "| Opaque Pixels | 4 | 5 | +1 |" in md
+    assert "| Emissive Pixels | 0 | 2 | +2 |" in md
+    assert "| Orphan Pixels | 0 | 1 | +1 |" in md

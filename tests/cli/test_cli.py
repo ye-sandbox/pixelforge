@@ -234,11 +234,39 @@ def test_cli_diff_json_and_metadata_deltas(
         baseline_src.replace('id="example_crate"', 'id="new_prop"'),
         encoding="utf-8",
     )
-    assert main(["diff", "new_prop", "--base", "HEAD", "--json", "--root", str(tmp_path)]) == 0
+    summary_md = tmp_path / ".pixelforge" / "diff-summary.md"
+    assert (
+        main(
+            [
+                "diff",
+                "new_prop",
+                "--base",
+                "HEAD",
+                "--json",
+                "--summary-md",
+                str(summary_md),
+                "--root",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
     new_payload = json.loads(capsys.readouterr().out)
     assert new_payload["baseline_exists"] is False
     assert new_payload["has_pixel_changes"] is True
     assert new_payload["frames"][0]["baseline_width"] is None
+    assert new_payload["metrics"]["current"]["opaque_pixels"] > 0
+    assert new_payload["metrics"]["opaque_pixel_delta"] > 0
+    assert "coverage_delta" in new_payload["metrics"]
+    assert "emissive_pixel_delta" in new_payload["metrics"]
+    assert "orphan_pixel_delta" in new_payload["metrics"]
+    assert summary_md.is_file()
+    md_text = summary_md.read_text(encoding="utf-8")
+    assert "### Pixelforge Diff: `new_prop`" in md_text
+    assert "| Opaque Pixels |" in md_text
+    assert "| Canvas Coverage |" in md_text
+    assert "| Emissive Pixels |" in md_text
+    assert "| Orphan Pixels |" in md_text
 
 
 def test_cli_watch_bounded_cycles(tmp_path: Path) -> None:

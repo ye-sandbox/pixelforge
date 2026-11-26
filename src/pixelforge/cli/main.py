@@ -124,6 +124,7 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
+    summary_md = _resolve_dir(root, Path(args.summary_md)) if args.summary_md else None
     return diff_asset(
         root,
         asset_id=str(args.asset_id),
@@ -131,6 +132,7 @@ def _cmd_diff(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         out_dir=_resolve_dir(root, settings.diffs_dir, args.out),
         scale=int(args.scale),
         variant=args.variant,
+        summary_md=summary_md,
         output_format=output_format,
         out=_out,
         err=_err,
@@ -247,6 +249,7 @@ def _cmd_critic(args: argparse.Namespace) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
+    summary_md = _resolve_dir(root, Path(args.summary_md)) if args.summary_md else None
     hydra = HydraSettings()
     return critic_workflow(
         root,
@@ -258,6 +261,7 @@ def _cmd_critic(args: argparse.Namespace) -> int:
         model=hydra.model_fast,
         timeout_seconds=hydra.timeout_seconds,
         threshold=int(args.threshold),
+        summary_md=summary_md,
         output_format=output_format,
         out=_out,
         err=_err,
@@ -391,6 +395,11 @@ def build_parser() -> argparse.ArgumentParser:
     diff_p.add_argument("--out", default=None, help="Output directory for diff PNGs")
     diff_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     diff_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    diff_p.add_argument(
+        "--summary-md",
+        default=None,
+        help="Optional output path for a Markdown PR regression summary",
+    )
     add_format_arguments(diff_p)
     diff_p.add_argument("--root", default=None, help="Project root directory")
 
@@ -485,13 +494,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     critic_p = sub.add_parser(
         "critic",
-        help="Score assets via internal hydra-llm-router multimodal critic (OpenAI v1)",
+        help="Score assets and scenes via internal hydra-llm-router multimodal critic (OpenAI v1)",
     )
-    critic_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
+    critic_p.add_argument(
+        "asset_id",
+        nargs="?",
+        default=None,
+        help="Optional asset or scene ID filter",
+    )
     critic_p.add_argument(
         "--base",
         default=None,
-        help="Git ref baseline; when set, scores only changed assets/styles with diff context",
+        help="Git ref baseline; scores changed assets/styles/scenes with diff context",
     )
     critic_p.add_argument(
         "--threshold",
@@ -500,6 +514,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum passing visual score 0-100 (default: 70)",
     )
     critic_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    critic_p.add_argument(
+        "--summary-md",
+        default=None,
+        help="Optional output path for a Markdown PR regression summary",
+    )
     add_format_arguments(critic_p)
     critic_p.add_argument("--root", default=None, help="Project root directory")
 

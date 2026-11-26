@@ -183,6 +183,19 @@ def load_style_from_git(
     return _extract_style(module, f"{ref}:{style_path.as_posix()}")
 
 
+def load_scene_from_git(
+    repo_root: Path,
+    scene_path: Path,
+    ref: str = "HEAD",
+) -> LoadedScene | None:
+    """Load a `.scene.py` module from a historical git revision."""
+    source = read_git_file(repo_root, scene_path, ref=ref)
+    if source is None:
+        return None
+    module = _exec_module_from_source(source, f"{ref}:{scene_path.as_posix()}")
+    return _extract_scene(module, f"{ref}:{scene_path.as_posix()}")
+
+
 def load_all_styles(styles_dir: Path) -> dict[str, StylePack]:
     """Discover and load all `*.style.py` packs indexed by `StylePack.id`."""
     styles: dict[str, StylePack] = {}
