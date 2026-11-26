@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pixelforge import SceneMountSpec, SceneSpec
+from pixelforge import SceneMountSpec, ScenePortalSpec, SceneSpec
 
 SCENE = SceneSpec(
     id="multiroom_homelab_scene",
@@ -11,6 +11,15 @@ SCENE = SceneSpec(
     depth_sort="iso_y",
     strict_bounds=True,
     strict_perspective=True,
+    portals=(
+        ScenePortalSpec(
+            id="to_bedroom_desk",
+            target_scene_id="homelab_desk_scene",
+            anchor="portal_bedroom",
+            target_portal_id="to_multiroom_homelab",
+            bidirectional=True,
+        ),
+    ),
     mounts=(
         # Zone 0: Bedroom props (back zone)
         SceneMountSpec(

@@ -4,15 +4,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import numpy as np
+from numpy.typing import NDArray
+
+from pixelforge.core.builder import Asset
 from pixelforge.core.plane import Point2D
-from pixelforge.core.prefabs.architecture.room import Canvas, clamp_unit
+from pixelforge.core.prefabs.architecture.room import (
+    Canvas,
+    IsoRoomGeometry,
+    WallSide,
+    clamp_unit,
+)
 from pixelforge.core.prefabs.atmosphere import (
     ClippedPane,
     PlaneRegion,
     RectRegion,
     clipped_pane,
+    window_light_spill,
 )
-from pixelforge.core.surface import IndexedSurface
+from pixelforge.core.surface import IndexedSurface, compute_dither_thresholds
 
 
 def iso_window_glass_region(p0: Point2D, p1: Point2D, p2: Point2D) -> PlaneRegion:
@@ -331,3 +341,299 @@ def window_curtains(
             curtains.line(1.0 - panel_w * 0.45, 0.06, 1.0 - panel_w * 0.45, 0.98, fold)
         if rod is not None:
             curtains.rect(-0.04, 0.0, 1.08, 0.05, fill=rod)
+
+
+def _outer_perimeter_mask(in_outer: NDArray[np.bool_]) -> NDArray[np.bool_]:
+    padded = np.pad(in_outer, 1, mode="constant", constant_values=False)
+    has_outside_neighbor = (
+        ~padded[:-2, 1:-1] | ~padded[2:, 1:-1] | ~padded[1:-1, :-2] | ~padded[1:-1, 2:]
+    )
+    return in_outer & has_outside_neighbor
+
+
+def _paint_shaped_iso_window(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    in_outer: NDArray[np.bool_],
+    in_glass: NDArray[np.bool_],
+    frame: int,
+    sky: int,
+    outline: int | None,
+    sky_alt: int | None,
+    glint: int | None,
+    scene: Callable[[ClippedPane], None] | None,
+) -> None:
+    with clipped_pane(target, (p0, p1, p2)) as frame_pane:
+        frame_pane.mask = in_outer
+        frame_pane.surface.data[in_outer & ~in_glass] = frame
+        if outline is not None:
+            frame_pane.surface.data[_outer_perimeter_mask(in_outer)] = outline
+
+    with clipped_pane(target, (p0, p1, p2)) as glass_pane:
+        glass_pane.mask = in_glass
+        if scene is not None:
+            scene(glass_pane)
+        else:
+            glass_pane.surface.data[in_glass] = sky
+            if sky_alt is not None:
+                thresholds = compute_dither_thresholds(
+                    glass_pane.ox,
+                    glass_pane.oy,
+                    glass_pane.ox + glass_pane.width,
+                    glass_pane.oy + glass_pane.height,
+                    pattern="bayer4",
+                )
+                upper_glass = in_glass & (glass_pane.v_grid < 0.52) & (thresholds < 0.4)
+                glass_pane.surface.data[upper_glass] = sky_alt
+        if glint is not None:
+            gx0, gy0 = glass_pane.project(0.24, 0.24)
+            gx1, gy1 = glass_pane.project(0.36, 0.36)
+            glass_pane.surface.line(gx0, gy0, gx1, gy1, glint)
+            sx0, sy0 = glass_pane.project(0.32, 0.22)
+            sx1, sy1 = glass_pane.project(0.40, 0.30)
+            glass_pane.surface.line(sx0, sy0, sx1, sy1, glint)
+
+
+def iso_arched_window(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    frame: int,
+    sky: int,
+    outline: int | None = None,
+    sky_alt: int | None = None,
+    mullion: int | None = None,
+    sill: int | None = None,
+    glint: int | None = None,
+    scene: Callable[[ClippedPane], None] | None = None,
+) -> None:
+    """Draw an arched isometric window onto `(p0, p1, p2)` with optional clipped vista scene."""
+    with clipped_pane(target, (p0, p1, p2)) as probe:
+        u = probe.u_grid
+        v = probe.v_grid
+        arch_v = 0.38
+        in_arch_outer = ((u - 0.5) / 0.5) ** 2 + ((v - arch_v) / arch_v) ** 2 <= 1.0
+        in_outer = probe.mask & ((v >= arch_v) | in_arch_outer)
+        in_arch_glass = ((u - 0.5) / 0.41) ** 2 + ((v - arch_v) / 0.30) ** 2 <= 1.0
+        in_rect_glass = (u >= 0.09) & (u <= 0.91) & (v >= arch_v) & (v <= 0.92)
+        in_glass = probe.mask & (in_rect_glass | ((v < arch_v) & in_arch_glass))
+        # Prevent probe commit from blitting an empty buffer.
+        probe.mask = np.zeros_like(probe.mask)
+
+    _paint_shaped_iso_window(
+        target,
+        p0,
+        p1,
+        p2,
+        in_outer=in_outer,
+        in_glass=in_glass,
+        frame=frame,
+        sky=sky,
+        outline=outline,
+        sky_alt=sky_alt,
+        glint=glint,
+        scene=scene,
+    )
+
+    if mullion is not None or sill is not None:
+        with target.plane(p0=p0, p1=p1, p2=p2) as win:
+            if mullion is not None:
+                win.rect(0.07, 0.52, 0.86, 0.06, fill=mullion)
+                win.rect(0.475, 0.08, 0.05, 0.84, fill=mullion)
+            if sill is not None:
+                win.rect(-0.04, 0.94, 1.08, 0.08, fill=sill)
+
+
+def iso_porthole_window(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    frame: int,
+    sky: int,
+    outline: int | None = None,
+    sky_alt: int | None = None,
+    rivet: int | None = None,
+    glint: int | None = None,
+    scene: Callable[[ClippedPane], None] | None = None,
+) -> None:
+    """Draw a circular porthole isometric window onto `(p0, p1, p2)` with optional vista."""
+    with clipped_pane(target, (p0, p1, p2)) as probe:
+        u = probe.u_grid
+        v = probe.v_grid
+        in_outer = probe.mask & ((((u - 0.5) / 0.5) ** 2 + ((v - 0.5) / 0.5) ** 2) <= 1.0)
+        in_glass = probe.mask & ((((u - 0.5) / 0.34) ** 2 + ((v - 0.5) / 0.34) ** 2) <= 1.0)
+        probe.mask = np.zeros_like(probe.mask)
+
+    _paint_shaped_iso_window(
+        target,
+        p0,
+        p1,
+        p2,
+        in_outer=in_outer,
+        in_glass=in_glass,
+        frame=frame,
+        sky=sky,
+        outline=outline,
+        sky_alt=sky_alt,
+        glint=glint,
+        scene=scene,
+    )
+
+    if rivet is not None:
+        with target.plane(p0=p0, p1=p1, p2=p2) as bezel:
+            for ru, rv in ((0.5, 0.08), (0.5, 0.92), (0.08, 0.5), (0.92, 0.5)):
+                bezel.dot(ru, rv, rivet)
+
+
+def iso_room_window(
+    target: Canvas,
+    room: IsoRoomGeometry,
+    wall: WallSide = "left",
+    *,
+    u0: float = 0.25,
+    u1: float = 0.65,
+    v0: float = 0.18,
+    v1: float = 0.62,
+    frame: int,
+    sky: int,
+    outline: int | None = None,
+    sky_alt: int | None = None,
+    mullion: int | None = None,
+    sill: int | None = None,
+    cols: int = 1,
+    rows: int = 2,
+    glint: int | None = None,
+    scene: Callable[[ClippedPane], None] | None = None,
+    blinds_slat: int | None = None,
+    blinds_shadow: int | None = None,
+    blinds_cord: int | None = None,
+    blinds_slats: int = 5,
+    blinds_open_ratio: float = 0.7,
+    curtain_fabric: int | None = None,
+    curtain_fold: int | None = None,
+    curtain_rod: int | None = None,
+    curtain_open_ratio: float = 0.35,
+    spill_color: int | None = None,
+    spill_secondary: int | None = None,
+    spill_depth: float = 0.35,
+    spill_near_ratio: float = 0.70,
+    spill_far_ratio: float = 0.18,
+) -> PlaneRegion:
+    """Draw a wall-mounted `iso_window` with optional blinds, curtains, and floor light spill."""
+    if wall not in ("left", "right"):
+        msg = f"Unsupported wall side: {wall!r}"
+        raise ValueError(msg)
+    p0, p1, p2 = (
+        room.left_wall_plane(u0, v0, u1, v1)
+        if wall == "left"
+        else room.right_wall_plane(u0, v0, u1, v1)
+    )
+    iso_window(
+        target,
+        p0,
+        p1,
+        p2,
+        frame=frame,
+        sky=sky,
+        outline=outline,
+        sky_alt=sky_alt,
+        mullion=mullion,
+        sill=sill,
+        cols=cols,
+        rows=rows,
+        glint=glint,
+        scene=scene,
+    )
+    if blinds_slat is not None:
+        gp0, gp1, gp2 = iso_window_glass_region(p0, p1, p2)
+        window_blinds(
+            target,
+            gp0,
+            gp1,
+            gp2,
+            slat=blinds_slat,
+            shadow=blinds_shadow,
+            cord=blinds_cord,
+            slats=blinds_slats,
+            open_ratio=blinds_open_ratio,
+        )
+    if curtain_fabric is not None:
+        window_curtains(
+            target,
+            p0,
+            p1,
+            p2,
+            fabric=curtain_fabric,
+            fold=curtain_fold,
+            rod=curtain_rod,
+            outline=outline,
+            open_ratio=curtain_open_ratio,
+        )
+    if spill_color is not None:
+        quad = room.window_spill_quad(u0, u1, wall=wall, depth=spill_depth)
+        window_light_spill(
+            target,
+            points=quad,
+            color=spill_color,
+            secondary_color=spill_secondary,
+            near_ratio=spill_near_ratio,
+            far_ratio=spill_far_ratio,
+            mask="opaque",
+        )
+    return (p0, p1, p2)
+
+
+def iso_portal_door(
+    target: Canvas,
+    room: IsoRoomGeometry,
+    wall: WallSide = "left",
+    *,
+    u0: float = 0.65,
+    u1: float = 0.85,
+    v0: float = 0.25,
+    v1: float = 1.0,
+    frame: int,
+    panel: int,
+    recess: int | None = None,
+    handle: int | None = None,
+    outline: int | None = None,
+    window: int | None = None,
+    threshold: int | None = None,
+    anchor_name: str | None = None,
+) -> tuple[int, int]:
+    """Draw an isometric doorway on `room`'s `wall` and return its `(x, y)` portal anchor."""
+    if wall not in ("left", "right"):
+        msg = f"Unsupported wall side: {wall!r}"
+        raise ValueError(msg)
+    p0, p1, p2 = (
+        room.left_wall_plane(u0, v0, u1, v1)
+        if wall == "left"
+        else room.right_wall_plane(u0, v0, u1, v1)
+    )
+    iso_door(
+        target,
+        p0,
+        p1,
+        p2,
+        frame=frame,
+        panel=panel,
+        recess=recess,
+        handle=handle,
+        outline=outline,
+        window=window,
+        threshold=threshold,
+    )
+    with target.plane(p0=p0, p1=p1, p2=p2) as door_plane:
+        ax, ay = door_plane.project(0.5, 0.92)
+    ax = max(0, min(target.surface.width - 1, ax))
+    ay = max(0, min(target.surface.height - 1, ay))
+    if anchor_name is not None and isinstance(target, Asset):
+        target.anchor(anchor_name, ax, ay)
+    return (ax, ay)

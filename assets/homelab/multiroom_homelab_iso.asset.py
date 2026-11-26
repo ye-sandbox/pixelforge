@@ -94,9 +94,8 @@ def _draw_bedroom_zone(
     p: PaletteLookup,
     room: prefabs.IsoRoomGeometry,
     bedroom_zone: prefabs.IsoRoomGeometry,
-) -> None:
+) -> tuple[int, int]:
     is_night = a.state == "night"
-    wp0, wp1, wp2 = room.left_wall_plane(0.20, 0.22, 0.56, 0.62)
 
     def _draw_vista(pane: prefabs.ClippedPane) -> None:
         if is_night:
@@ -107,11 +106,14 @@ def _draw_bedroom_zone(
         prefabs.sky_backdrop(pane, bands=(p.SOLAR_B, p.GLASS_L, p.SCREEN_L))
         prefabs.sun(pane, 0.28, 0.30, radius=3, color=p.HAIR_Y, halo=p.WHITE)
 
-    prefabs.iso_window(
+    prefabs.iso_room_window(
         a,
-        p0=wp0,
-        p1=wp1,
-        p2=wp2,
+        room,
+        "left",
+        u0=0.16,
+        u1=0.46,
+        v0=0.20,
+        v1=0.62,
         frame=p.METAL_M,
         sky=p.WINDOW_SKY,
         outline=p.INK,
@@ -121,6 +123,47 @@ def _draw_bedroom_zone(
         glint=p.GLASS_L,
         sill=p.METAL_L,
         scene=_draw_vista,
+        curtain_fabric=p.SHIRT_IND if is_night else p.SHIRT_TEAL,
+        curtain_fold=p.INK,
+        curtain_rod=p.METAL_H,
+        curtain_open_ratio=0.55,
+        spill_color=p.FLOOR_L,
+        spill_secondary=p.TILE_L if is_night else p.FLOOR_M,
+        spill_depth=0.28,
+        spill_near_ratio=0.28 if is_night else 0.58,
+        spill_far_ratio=0.04 if is_night else 0.14,
+    )
+
+    arch_p0, arch_p1, arch_p2 = room.right_wall_plane(0.10, 0.22, 0.26, 0.60)
+    prefabs.iso_arched_window(
+        a,
+        arch_p0,
+        arch_p1,
+        arch_p2,
+        frame=p.WOOD_M,
+        sky=p.WINDOW_SKY,
+        outline=p.INK,
+        mullion=p.WOOD_D,
+        sill=p.WOOD_L,
+        glint=p.GLASS_L,
+        scene=_draw_vista,
+    )
+
+    portal_pt = prefabs.iso_portal_door(
+        a,
+        room,
+        "left",
+        u0=0.74,
+        u1=0.92,
+        v0=0.26,
+        v1=1.0,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        recess=p.WOOD_D,
+        handle=p.HAIR_Y,
+        outline=p.INK,
+        window=p.WINDOW_SKY,
+        threshold=p.METAL_D,
     )
 
     rug_cx, rug_cy = bedroom_zone.floor_point(0.56, 0.56)
@@ -163,6 +206,7 @@ def _draw_bedroom_zone(
         outline=p.INK,
         anchor="center",
     )
+    return portal_pt
 
 
 def _draw_lab_zone(
@@ -172,6 +216,20 @@ def _draw_lab_zone(
     lab_zone: prefabs.IsoRoomGeometry,
 ) -> tuple[prefabs.IsoDeskSlots, tuple[int, int]]:
     is_night = a.state == "night"
+    port_p0, port_p1, port_p2 = room.right_wall_plane(0.58, 0.26, 0.70, 0.52)
+    prefabs.iso_porthole_window(
+        a,
+        port_p0,
+        port_p1,
+        port_p2,
+        frame=p.METAL_H,
+        sky=p.WINDOW_SKY if is_night else p.SOLAR_B,
+        sky_alt=p.VOID if is_night else p.GLASS_L,
+        outline=p.INK,
+        rivet=p.METAL_D,
+        glint=p.GLASS_L,
+    )
+
     bp0, bp1, bp2 = room.right_wall_plane(0.76, 0.28, 0.90, 0.56)
     prefabs.wall_panel(
         a,
@@ -258,7 +316,7 @@ def render(a: Asset) -> None:
     """Render the `multiroom_homelab_iso` two-zone room with zone & divider anchors."""
     p = a.pal
     room, bedroom_zone, lab_zone = _draw_shell_and_zones(a, p)
-    _draw_bedroom_zone(a, p, room, bedroom_zone)
+    portal_pt = _draw_bedroom_zone(a, p, room, bedroom_zone)
     slots, rack_pt = _draw_lab_zone(a, p, room, lab_zone)
 
     # Zone 0: Bedroom anchors
@@ -266,6 +324,7 @@ def render(a: Asset) -> None:
     bed_crate_pt = bedroom_zone.floor_point(0.30, 0.84)
     a.anchor("bed_plant", bed_plant_pt[0], bed_plant_pt[1])
     a.anchor("bed_crate", bed_crate_pt[0], bed_crate_pt[1])
+    a.anchor("portal_bedroom", portal_pt[0], portal_pt[1])
 
     # Zone 1: Center divider anchors along at=0.50 (ordered back-to-front by iso_y)
     div_wall_pt = room.floor_point(0.50, 0.16)

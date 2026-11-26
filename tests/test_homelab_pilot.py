@@ -212,6 +212,7 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
         "desk_pc",
         "desk_keyboard",
         "desk_mouse",
+        "portal_homelab",
     ]
 
     # Verify non-emissive painted blue/orange tokens on ThinkPad do not leak into emissive mask.
@@ -235,7 +236,7 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
     assert (
         "export type BedroomDeskIsoAnchorName = "
         '"hardware_0" | "hardware_1" | "hardware_2" | "breaker" '
-        '| "desk_pc" | "desk_keyboard" | "desk_mouse";' in dts_text
+        '| "desk_pc" | "desk_keyboard" | "desk_mouse" | "portal_homelab";' in dts_text
     )
 
     # Verify --indexed-ts export contract & RLE roundtrip

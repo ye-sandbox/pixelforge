@@ -244,6 +244,22 @@ def render(a: Asset) -> None:
     p = a.pal
     room = _draw_floor_and_walls(a, p)
     _draw_window(a, p)
+    portal_pt = prefabs.iso_portal_door(
+        a,
+        room,
+        "left",
+        u0=0.72,
+        u1=0.90,
+        v0=0.26,
+        v1=1.0,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        recess=p.WOOD_D,
+        handle=p.HAIR_Y,
+        outline=p.INK,
+        window=p.WINDOW_SKY,
+        threshold=p.METAL_D,
+    )
     slots = _draw_desk_and_slots(a, p, room)
     _draw_breaker_panel(a, p)
 
@@ -258,6 +274,7 @@ def render(a: Asset) -> None:
     a.anchor("desk_pc", pc_pt[0], pc_pt[1])
     a.anchor("desk_keyboard", kbd_pt[0], kbd_pt[1])
     a.anchor("desk_mouse", mouse_pt[0], mouse_pt[1])
+    a.anchor("portal_homelab", portal_pt[0], portal_pt[1])
 
     a.hitbox("desk", 134, 63, 104, 72)
     a.hitbox("breaker", 240, 74, 18, 35)

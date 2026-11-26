@@ -537,3 +537,28 @@ SCENE = SceneSpec(id="hall_b", parent_id="hall_base")
     err_payload = json.loads(capsys.readouterr().out)
     assert err_payload["passed"] is False
     assert any(v["rule"] == "scene-portal-target-portal" for v in err_payload["violations"])
+
+
+def test_cli_check_validates_repo_homelab_portal_world_graph(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `pixelforge check` validates the real bidirectional homelab portal graph."""
+    from pixelforge.guard.runner import load_scene_module
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    desk_scene = load_scene_module(
+        repo_root / "assets" / "homelab" / "homelab_desk_scene.scene.py"
+    ).SCENE
+    multi_scene = load_scene_module(
+        repo_root / "assets" / "homelab" / "multiroom_homelab_scene.scene.py"
+    ).SCENE
+
+    assert desk_scene.portals[0].target_scene_id == "multiroom_homelab_scene"
+    assert desk_scene.portals[0].bidirectional is True
+    assert multi_scene.portals[0].target_scene_id == "homelab_desk_scene"
+    assert multi_scene.portals[0].bidirectional is True
+
+    assert main(["check", "--format", "json", "--root", str(repo_root)]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["passed"] is True
+    assert payload["errors"] == 0

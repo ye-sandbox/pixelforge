@@ -372,3 +372,116 @@ def test_floor_zones_thresholds_partitions_pillars_and_molding(
     )
     prefabs.iso_floor_zone(first_check, fgeom, 0.0, 0.0, 0.5, 0.5, fill=fp.WOOD_M, alt=fp.WOOD_D)
     assert np.array_equal(second.root_surface.data, first_check.root_surface.data)
+
+
+def test_iso_portal_door_and_window_prefabs(make_asset: Callable[..., Asset]) -> None:
+    """Verify `iso_portal_door`, `iso_room_window`, arched, and porthole window prefabs."""
+    asset = make_asset(200, 140)
+    p = asset.pal
+    room = prefabs.iso_room_shell(
+        asset,
+        100,
+        100,
+        72,
+        36,
+        48,
+        floor=p.FLOOR,
+        left_wall=p.WALL_L,
+        right_wall=p.WALL_R,
+        outline=p.INK,
+    )
+
+    door_pt = prefabs.iso_portal_door(
+        asset,
+        room,
+        "left",
+        u0=0.70,
+        u1=0.90,
+        v0=0.25,
+        v1=1.0,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        recess=p.WOOD_D,
+        handle=p.SUN,
+        outline=p.INK,
+        window=p.SKY,
+        threshold=p.METAL_D,
+        anchor_name="portal_left",
+    )
+    assert asset.root_surface.get(*door_pt) != 255
+    assert any(a.name == "portal_left" and (a.x, a.y) == door_pt for a in asset.anchors)
+
+    right_door_pt = prefabs.iso_portal_door(
+        asset,
+        room,
+        "right",
+        u0=0.72,
+        u1=0.90,
+        v0=0.25,
+        v1=1.0,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        outline=p.INK,
+    )
+    assert asset.root_surface.get(*right_door_pt) != 255
+
+    win_plane = prefabs.iso_room_window(
+        asset,
+        room,
+        "left",
+        u0=0.18,
+        u1=0.52,
+        v0=0.18,
+        v1=0.62,
+        frame=p.METAL_M,
+        sky=p.SKY,
+        outline=p.INK,
+        mullion=p.METAL_D,
+        sill=p.METAL_H,
+        glint=p.CLOUD,
+        blinds_slat=p.CLOUD,
+        blinds_shadow=p.METAL_D,
+        curtain_fabric=p.WALL_R,
+        curtain_rod=p.METAL_H,
+        spill_color=p.CLOUD,
+        spill_secondary=p.FLOOR_D,
+    )
+    assert len(win_plane) == 3
+
+    arch_p0, arch_p1, arch_p2 = room.right_wall_plane(0.12, 0.20, 0.34, 0.62)
+    prefabs.iso_arched_window(
+        asset,
+        arch_p0,
+        arch_p1,
+        arch_p2,
+        frame=p.WOOD_M,
+        sky=p.SKY,
+        sky_alt=p.CLOUD,
+        outline=p.INK,
+        mullion=p.WOOD_D,
+        sill=p.WOOD_L,
+        glint=p.CLOUD,
+    )
+
+    port_p0, port_p1, port_p2 = room.right_wall_plane(0.42, 0.22, 0.62, 0.56)
+    prefabs.iso_porthole_window(
+        asset,
+        port_p0,
+        port_p1,
+        port_p2,
+        frame=p.METAL_H,
+        sky=p.SKY,
+        sky_alt=p.CLOUD,
+        outline=p.INK,
+        rivet=p.SUN,
+        glint=p.CLOUD,
+    )
+
+    assert np.any(asset.root_surface.data == p.SKY)
+    assert np.any(asset.root_surface.data == p.SUN)
+    assert np.any(asset.root_surface.data == p.CLOUD)
+
+    with pytest.raises(ValueError, match="Unsupported wall side"):
+        prefabs.iso_portal_door(asset, room, "front", frame=p.WOOD_D, panel=p.WOOD_M)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Unsupported wall side"):
+        prefabs.iso_room_window(asset, room, "front", frame=p.METAL_M, sky=p.SKY)  # type: ignore[arg-type]

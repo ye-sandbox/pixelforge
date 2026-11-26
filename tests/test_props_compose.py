@@ -290,3 +290,6 @@ def test_multiroom_homelab_scene_zone_ordered_depth_sorting() -> None:
     # Divider zone (z_index=1) is ordered back-to-front by iso_y
     div_ids = [p.prop_id for p in day_res.placements if p.z_index == 1]
     assert div_ids == ["partition_wall_iso", "pillar_iso", "glass_partition_iso"]
+    assert len(scene_mod.SCENE.portals) == 1
+    assert scene_mod.SCENE.portals[0].target_scene_id == "homelab_desk_scene"
+    assert scene_mod.SCENE.portals[0].bidirectional is True
