@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pixelforge.export.bundle import LoadedAsset
+from pixelforge.export.bundle import LoadedAsset, export_asset_bundle
 from pixelforge.export.scene import (
     SceneCompositionSpec,
     SceneMountSpec,
@@ -157,3 +157,17 @@ def test_props_compose_onto_bedroom_desk_iso_with_zero_clipping() -> None:
     assert all(p.perspective_match for p in res_b.placements)
     assert all(p.occluded_pixels == 0 for p in res_b.placements)
     assert res_b.warnings == ()
+
+
+def test_network_switch_iso_exposes_individual_port_anchors() -> None:
+    """Verify `network_switch_iso` emits `port_0..port_4` with `kind` and `dir`."""
+    style = load_style_module(ROOT_DIR / "styles" / "homelab_16bit.style.py")
+    switch_mod = load_asset_module(PROPS_DIR / "network_switch_iso.asset.py")
+    bundle = export_asset_bundle(switch_mod, style)
+
+    ports = [a for a in bundle.manifest.anchors if a.name.startswith("port_")]
+    assert [p.name for p in ports] == [f"port_{idx}" for idx in range(5)]
+    assert all(p.kind == "rj45" for p in ports)
+    assert all(p.dir == (-1, 1) for p in ports)
+    # Ports are ordered left-to-right across the front isometric face
+    assert [p.x for p in ports] == sorted(p.x for p in ports)

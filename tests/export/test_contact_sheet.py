@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import io
+
 import numpy as np
+from PIL import Image
 
 from pixelforge.core.builder import Asset
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import AssetSpec, PaletteColor, StylePack
+from pixelforge.export._font import measure_text
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.contact_sheet import (
     ContactSheetOptions,
@@ -191,3 +195,88 @@ def test_contact_sheet_non_emissive_style_omits_emissive_column() -> None:
     # Non-emissive style omits the extra emissive column and column-header row
     assert flat_res.width < emit_res.width
     assert flat_res.height < emit_res.height
+
+
+def test_contact_sheet_static_png_for_single_frame_asset() -> None:
+    style = _style()
+    spec = AssetSpec(
+        id="static_box",
+        style_id="sheet-style",
+        width=16,
+        height=16,
+        perspective="iso-2:1",
+        states=("idle",),
+        frames=1,
+        fps=6,
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(2, 2, 12, 12, a.pal.CHASSIS_MID_GREY)
+
+    res = generate_contact_sheet(LoadedAsset(SPEC=spec, render=render), style)
+    with Image.open(io.BytesIO(res.png)) as img:
+        assert getattr(img, "is_animated", False) is False
+        assert getattr(img, "n_frames", 1) == 1
+
+
+def test_contact_sheet_apng_for_multiframe_asset() -> None:
+    style = _style()
+    spec = AssetSpec(
+        id="blinker_box",
+        style_id="sheet-style",
+        width=16,
+        height=16,
+        perspective="iso-2:1",
+        states=("idle", "fault"),
+        frames=3,
+        fps=5,
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(2, 2, 12, 12, a.pal.CHASSIS_MID_GREY)
+        # Move an emissive pixel across x=4, 5, 6 in frame 0, 1, 2
+        a.put(4 + a.frame, 8, a.pal.STATUS_CYAN_GLOW)
+
+    asset = LoadedAsset(SPEC=spec, render=render)
+    res_a = generate_contact_sheet(asset, style, ContactSheetOptions(zoom=4))
+    res_b = generate_contact_sheet(asset, style, ContactSheetOptions(zoom=4))
+    assert res_a.png == res_b.png
+
+    # Layout coordinates for zoom=4, 16x16
+    zoom_x = 16 + 28
+    zoom_y = 44 + 16 + 14
+    right_x = zoom_x + (16 * 4) + 24
+    preview_1x_y = (44 + 16) + 10
+
+    with Image.open(io.BytesIO(res_a.png)) as apng:
+        assert getattr(apng, "is_animated", False) is True
+        assert getattr(apng, "n_frames", 1) == 3
+        assert apng.info.get("loop") == 0
+
+        for frame_idx in range(3):
+            apng.seek(frame_idx)
+            assert apng.info.get("duration") == 200  # round(1000 / 5 fps)
+            rgba = np.asarray(apng.convert("RGBA"))
+            assert_binary_alpha(rgba)
+            if frame_idx == 0:
+                assert np.array_equal(rgba, res_a.rgba)
+
+            # Check zoomed pixel at (4 + frame_idx, 8) -> center of 4x4 block
+            zx = zoom_x + (4 + frame_idx) * 4 + 2
+            zy = zoom_y + 8 * 4 + 2
+            assert tuple(int(c) for c in rgba[zy, zx, :3]) == (0x39, 0xC5, 0xCF)
+
+            # Check 1x dark preview pixel at (4 + frame_idx, 8)
+            px = right_x + (4 + frame_idx)
+            py = preview_1x_y + 8
+            assert tuple(int(c) for c in rgba[py, px, :3]) == (0x39, 0xC5, 0xCF)
+
+            # Check `anim` column in state matrix animates non-primary state ("fault") too
+            state_label_w = max(measure_text("idle")[0], measure_text("fault")[0]) + 10
+            matrix_y = (44 + 16) + 16 + 24
+            fault_row_y = matrix_y + 20 + (16 * 2 + 6)
+            emit_step = max(16 * 2, measure_text("emissive")[0]) + 6
+            anim_x = right_x + state_label_w + 3 * (16 * 2 + 6) + emit_step
+            ax = anim_x + (4 + frame_idx) * 2 + 1
+            ay = fault_row_y + 8 * 2 + 1
+            assert tuple(int(c) for c in rgba[ay, ax, :3]) == (0x39, 0xC5, 0xCF)

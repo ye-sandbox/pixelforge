@@ -116,7 +116,7 @@ class AnchorDelta(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    status: Literal["added", "removed", "moved"]
+    status: Literal["added", "removed", "moved", "changed"]
     before: AnchorPoint | None = None
     after: AnchorPoint | None = None
     dx: int | None = None
@@ -210,6 +210,17 @@ def diff_anchors(
                     dy=c.y - b.y,
                 )
             )
+        elif b is not None and c is not None and (b.kind, b.dir) != (c.kind, c.dir):
+            deltas.append(
+                AnchorDelta(
+                    name=name,
+                    status="changed",
+                    before=b,
+                    after=c,
+                    dx=0,
+                    dy=0,
+                )
+            )
     return deltas
 
 
@@ -228,7 +239,11 @@ def diff_hitboxes(
             deltas.append(HitboxDelta(name=name, status="added", after=c))
         elif b is not None and c is None:
             deltas.append(HitboxDelta(name=name, status="removed", before=b))
-        elif b is not None and c is not None and (b.x, b.y, b.w, b.h) != (c.x, c.y, c.w, c.h):
+        elif (
+            b is not None
+            and c is not None
+            and (b.x, b.y, b.w, b.h, b.kind) != (c.x, c.y, c.w, c.h, c.kind)
+        ):
             deltas.append(
                 HitboxDelta(
                     name=name,
@@ -261,6 +276,12 @@ def format_metadata_deltas(
             lines.append(
                 f"  anchor {anchor.name!r}: moved ({anchor.before.x}, {anchor.before.y}) -> "
                 f"({anchor.after.x}, {anchor.after.y}) (dx={anchor.dx:+d}, dy={anchor.dy:+d})"
+            )
+        elif anchor.status == "changed" and anchor.before is not None and anchor.after is not None:
+            lines.append(
+                f"  anchor {anchor.name!r}: changed "
+                f"(kind={anchor.before.kind!r}, dir={anchor.before.dir!r}) -> "
+                f"(kind={anchor.after.kind!r}, dir={anchor.after.dir!r})"
             )
     for hitbox in hitboxes:
         if hitbox.status == "added" and hitbox.after is not None:

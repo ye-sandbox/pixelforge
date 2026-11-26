@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from types import TracebackType
-from typing import Literal, Self
+from typing import Literal, Protocol, Self
 
 from pixelforge.core.surface import (
     DitherMask,
@@ -18,6 +17,20 @@ Point2D = tuple[int | float, int | float]
 GridMode = Literal["cells", "lines"]
 
 
+class AnchorEmitter(Protocol):
+    """Callback protocol for registering a projected `AnchorPoint`."""
+
+    def __call__(
+        self,
+        name: str,
+        x: int,
+        y: int,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint: ...
+
+
 class Plane:
     """Affine `(u, v)` coordinate plane bound to an `IndexedSurface` and anchor emitter."""
 
@@ -25,7 +38,7 @@ class Plane:
     _p0: tuple[float, float]
     _u_vec: tuple[float, float]
     _v_vec: tuple[float, float]
-    _emit_anchor: Callable[[str, int, int], AnchorPoint]
+    _emit_anchor: AnchorEmitter
 
     def __init__(
         self,
@@ -33,7 +46,7 @@ class Plane:
         p0: Point2D,
         p1: Point2D,
         p2: Point2D,
-        emit_anchor: Callable[[str, int, int], AnchorPoint],
+        emit_anchor: AnchorEmitter,
     ) -> None:
         self._surface = surface
         self._p0 = (float(p0[0]), float(p0[1]))
@@ -292,7 +305,15 @@ class Plane:
         if color_a is not None:
             region[active & ~select_b] = color_a
 
-    def anchor(self, name: str, u: float, v: float) -> AnchorPoint:
+    def anchor(
+        self,
+        name: str,
+        u: float,
+        v: float,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
         """Register an `AnchorPoint` projected from normalized `(u, v)` coordinates."""
         px, py = self.project(u, v)
-        return self._emit_anchor(name, px, py)
+        return self._emit_anchor(name, px, py, kind=kind, dir=dir)

@@ -65,7 +65,15 @@ class _DrawingMixin:
     def _next_rng(self) -> float:
         raise NotImplementedError
 
-    def _emit_anchor(self, name: str, x: int | float, y: int | float) -> AnchorPoint:
+    def _emit_anchor(
+        self,
+        name: str,
+        x: int | float,
+        y: int | float,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
         raise NotImplementedError
 
     def _emit_hitbox(
@@ -75,6 +83,8 @@ class _DrawingMixin:
         y: int | float,
         w: int | float,
         h: int | float,
+        *,
+        kind: str | None = None,
     ) -> HitboxRect:
         raise NotImplementedError
 
@@ -375,9 +385,17 @@ class _DrawingMixin:
         for src_idx, dst_idx in resolved_pairs:
             surf.data[snapshot == src_idx] = dst_idx
 
-    def anchor(self, name: str, x: int | float, y: int | float) -> AnchorPoint:
+    def anchor(
+        self,
+        name: str,
+        x: int | float,
+        y: int | float,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
         """Register a named `AnchorPoint` automatically shifted by active layer offsets."""
-        return self._emit_anchor(name, x, y)
+        return self._emit_anchor(name, x, y, kind=kind, dir=dir)
 
     def anchor_slots(
         self,
@@ -385,10 +403,12 @@ class _DrawingMixin:
         points: Sequence[Point2D],
         *,
         start: int = 0,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
     ) -> tuple[AnchorPoint, ...]:
         """Register sequential scene slot anchors (e.g. `hw_slot_0..N`)."""
         return tuple(
-            self._emit_anchor(f"{prefix}{start + idx}", pt[0], pt[1])
+            self._emit_anchor(f"{prefix}{start + idx}", pt[0], pt[1], kind=kind, dir=dir)
             for idx, pt in enumerate(points)
         )
 
@@ -399,9 +419,11 @@ class _DrawingMixin:
         y: int | float,
         w: int | float,
         h: int | float,
+        *,
+        kind: str | None = None,
     ) -> HitboxRect:
         """Register a named `HitboxRect` automatically shifted by active layer offsets."""
-        return self._emit_hitbox(name, x, y, w, h)
+        return self._emit_hitbox(name, x, y, w, h, kind=kind)
 
     def anchor_hitbox(
         self,
@@ -412,9 +434,11 @@ class _DrawingMixin:
         h: int | float,
         *,
         anchor_at: AnchorAlign = "bottom-center",
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
     ) -> tuple[AnchorPoint, HitboxRect]:
         """Register a coupled `HitboxRect` and `AnchorPoint` from one geometry block."""
-        hb = self._emit_hitbox(name, x, y, w, h)
+        hb = self._emit_hitbox(name, x, y, w, h, kind=kind)
         ix = round(x)
         iy = round(y)
         iw = round(w)
@@ -428,7 +452,7 @@ class _DrawingMixin:
         else:
             msg = f"Unsupported anchor_at alignment: {anchor_at!r}"
             raise ValueError(msg)
-        pt = self._emit_anchor(name, ax, ay)
+        pt = self._emit_anchor(name, ax, ay, kind=kind, dir=dir)
         return (pt, hb)
 
 
@@ -440,9 +464,12 @@ class Layer(_DrawingMixin):
     _surface: IndexedSurface
     _rng: Callable[[], float]
     _resolve_color: Callable[[str | int], int]
-    _emit_anchor_cb: Callable[[Layer, str, int | float, int | float], AnchorPoint]
+    _emit_anchor_cb: Callable[
+        [Layer, str, int | float, int | float, str | None, tuple[int, int] | None],
+        AnchorPoint,
+    ]
     _emit_hitbox_cb: Callable[
-        [Layer, str, int | float, int | float, int | float, int | float],
+        [Layer, str, int | float, int | float, int | float, int | float, str | None],
         HitboxRect,
     ]
     _on_enter: Callable[[Layer], None]
@@ -456,9 +483,12 @@ class Layer(_DrawingMixin):
         *,
         rng: Callable[[], float],
         resolve_color: Callable[[str | int], int],
-        emit_anchor: Callable[[Layer, str, int | float, int | float], AnchorPoint],
+        emit_anchor: Callable[
+            [Layer, str, int | float, int | float, str | None, tuple[int, int] | None],
+            AnchorPoint,
+        ],
         emit_hitbox: Callable[
-            [Layer, str, int | float, int | float, int | float, int | float],
+            [Layer, str, int | float, int | float, int | float, int | float, str | None],
             HitboxRect,
         ],
         on_enter: Callable[[Layer], None],
@@ -484,8 +514,16 @@ class Layer(_DrawingMixin):
     def _resolve_pal_index(self, token_or_idx: str | int) -> int:
         return self._resolve_color(token_or_idx)
 
-    def _emit_anchor(self, name: str, x: int | float, y: int | float) -> AnchorPoint:
-        return self._emit_anchor_cb(self, name, x, y)
+    def _emit_anchor(
+        self,
+        name: str,
+        x: int | float,
+        y: int | float,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
+        return self._emit_anchor_cb(self, name, x, y, kind, dir)
 
     def _emit_hitbox(
         self,
@@ -494,8 +532,10 @@ class Layer(_DrawingMixin):
         y: int | float,
         w: int | float,
         h: int | float,
+        *,
+        kind: str | None = None,
     ) -> HitboxRect:
-        return self._emit_hitbox_cb(self, name, x, y, w, h)
+        return self._emit_hitbox_cb(self, name, x, y, w, h, kind)
 
     def __enter__(self) -> Self:
         self._on_enter(self)
@@ -696,9 +736,11 @@ class Asset(_DrawingMixin):
         name: str,
         x: int | float,
         y: int | float,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
     ) -> AnchorPoint:
         ox, oy = self._offset_through(layer_obj)
-        return self._record_global_anchor(name, round(x) + ox, round(y) + oy)
+        return self._record_global_anchor(name, round(x) + ox, round(y) + oy, kind=kind, dir=dir)
 
     def _emit_hitbox_for_layer(
         self,
@@ -708,9 +750,17 @@ class Asset(_DrawingMixin):
         y: int | float,
         w: int | float,
         h: int | float,
+        kind: str | None = None,
     ) -> HitboxRect:
         ox, oy = self._offset_through(layer_obj)
-        return self._record_global_hitbox(name, round(x) + ox, round(y) + oy, round(w), round(h))
+        return self._record_global_hitbox(
+            name,
+            round(x) + ox,
+            round(y) + oy,
+            round(w),
+            round(h),
+            kind=kind,
+        )
 
     def _exit_layer_callback(self, layer_obj: Layer, apply_effects: bool) -> None:
         self._exit_layer(layer_obj, apply_effects=apply_effects)
@@ -764,19 +814,44 @@ class Asset(_DrawingMixin):
             raise ValueError(msg)
         return idx
 
-    def _record_global_anchor(self, name: str, gx: int, gy: int) -> AnchorPoint:
-        pt = AnchorPoint(name=name, x=gx, y=gy)
+    def _record_global_anchor(
+        self,
+        name: str,
+        gx: int,
+        gy: int,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
+        pt = AnchorPoint(name=name, x=gx, y=gy, kind=kind, dir=dir)
         self._anchors.append(pt)
         return pt
 
-    def _record_global_hitbox(self, name: str, gx: int, gy: int, gw: int, gh: int) -> HitboxRect:
-        hb = HitboxRect(name=name, x=gx, y=gy, w=gw, h=gh)
+    def _record_global_hitbox(
+        self,
+        name: str,
+        gx: int,
+        gy: int,
+        gw: int,
+        gh: int,
+        *,
+        kind: str | None = None,
+    ) -> HitboxRect:
+        hb = HitboxRect(name=name, x=gx, y=gy, w=gw, h=gh, kind=kind)
         self._hitboxes.append(hb)
         return hb
 
-    def _emit_anchor(self, name: str, x: int | float, y: int | float) -> AnchorPoint:
+    def _emit_anchor(
+        self,
+        name: str,
+        x: int | float,
+        y: int | float,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
         ox, oy = self._current_offset()
-        return self._record_global_anchor(name, round(x) + ox, round(y) + oy)
+        return self._record_global_anchor(name, round(x) + ox, round(y) + oy, kind=kind, dir=dir)
 
     def _emit_hitbox(
         self,
@@ -785,9 +860,18 @@ class Asset(_DrawingMixin):
         y: int | float,
         w: int | float,
         h: int | float,
+        *,
+        kind: str | None = None,
     ) -> HitboxRect:
         ox, oy = self._current_offset()
-        return self._record_global_hitbox(name, round(x) + ox, round(y) + oy, round(w), round(h))
+        return self._record_global_hitbox(
+            name,
+            round(x) + ox,
+            round(y) + oy,
+            round(w),
+            round(h),
+            kind=kind,
+        )
 
 
 def _apply_sel_out(surf: IndexedSurface, spec: SelOutSpec) -> None:

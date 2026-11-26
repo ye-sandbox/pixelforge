@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializationInfo,
+    model_serializer,
+    model_validator,
+)
 
 # INVARIANT: Index 255 is permanently reserved as binary transparent alpha (0);
 # indices 0..254 map strictly to active StylePack colors.
@@ -100,6 +107,17 @@ class AnchorPoint(BaseModel):
     name: str = Field(min_length=1)
     x: int
     y: int
+    kind: str | None = Field(default=None, min_length=1)
+    dir: tuple[int, int] | None = None
+
+    @model_serializer
+    def _serialize(self, info: SerializationInfo) -> dict[str, object]:
+        data: dict[str, object] = {"name": self.name, "x": self.x, "y": self.y}
+        if self.kind is not None:
+            data["kind"] = self.kind
+        if self.dir is not None:
+            data["dir"] = list(self.dir) if info.mode == "json" else self.dir
+        return data
 
 
 class HitboxRect(BaseModel):
@@ -112,6 +130,20 @@ class HitboxRect(BaseModel):
     y: int
     w: int = Field(gt=0)
     h: int = Field(gt=0)
+    kind: str | None = Field(default=None, min_length=1)
+
+    @model_serializer
+    def _serialize(self) -> dict[str, object]:
+        data: dict[str, object] = {
+            "name": self.name,
+            "x": self.x,
+            "y": self.y,
+            "w": self.w,
+            "h": self.h,
+        }
+        if self.kind is not None:
+            data["kind"] = self.kind
+        return data
 
 
 class AssetSpec(BaseModel):

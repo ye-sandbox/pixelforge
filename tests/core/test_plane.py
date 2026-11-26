@@ -14,8 +14,15 @@ def test_plane_projection_rect_bevel_and_anchors() -> None:
     surf = IndexedSurface(40, 40)
     recorded: list[AnchorPoint] = []
 
-    def emit(name: str, x: int, y: int) -> AnchorPoint:
-        pt = AnchorPoint(name=name, x=x, y=y)
+    def emit(
+        name: str,
+        x: int,
+        y: int,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
+        pt = AnchorPoint(name=name, x=x, y=y, kind=kind, dir=dir)
         recorded.append(pt)
         return pt
 
@@ -24,6 +31,7 @@ def test_plane_projection_rect_bevel_and_anchors() -> None:
         p.rect(0.25, 0.25, 0.5, 0.5, fill=4)
         p.dot(0.5, 0.5, 7, anchor="center")
         p.anchor("top_left", 0.0, 0.0)
+        p.anchor("port_0", 0.5, 1.0, kind="rj45", dir=(0, 1))
 
     # Top/left rim gets bevel highlight (8), bottom/right gets bevel shadow (9)
     assert surf.get(15, 5) == 8
@@ -36,6 +44,7 @@ def test_plane_projection_rect_bevel_and_anchors() -> None:
     assert recorded == [
         AnchorPoint(name="center", x=20, y=15),
         AnchorPoint(name="top_left", x=10, y=5),
+        AnchorPoint(name="port_0", x=20, y=25, kind="rj45", dir=(0, 1)),
     ]
 
 
@@ -44,8 +53,15 @@ def test_plane_angled_extrude_y_grid_line_quad_and_dither() -> None:
     surf = IndexedSurface(64, 64)
     recorded: list[AnchorPoint] = []
 
-    def emit(name: str, x: int, y: int) -> AnchorPoint:
-        pt = AnchorPoint(name=name, x=x, y=y)
+    def emit(
+        name: str,
+        x: int,
+        y: int,
+        *,
+        kind: str | None = None,
+        dir: tuple[int, int] | None = None,
+    ) -> AnchorPoint:
+        pt = AnchorPoint(name=name, x=x, y=y, kind=kind, dir=dir)
         recorded.append(pt)
         return pt
 

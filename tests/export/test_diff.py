@@ -135,3 +135,22 @@ def test_diff_anchors_and_hitboxes_detects_all_delta_kinds() -> None:
     assert any("hitbox 'body': changed (2, 2, 10x10) -> (2, 3, 12x8)" in ln for ln in lines)
     assert any("hitbox 'hurt': added (0, 0, 8x8)" in ln for ln in lines)
     assert any("hitbox 'legacy': removed (1, 1, 4x4)" in ln for ln in lines)
+
+
+def test_diff_anchors_and_hitboxes_detects_kind_and_dir_changes() -> None:
+    base_anchors = (AnchorPoint(name="port_0", x=6, y=11, kind="rj45", dir=(-1, 1)),)
+    curr_anchors = (AnchorPoint(name="port_0", x=6, y=11, kind="sfp", dir=(1, 1)),)
+    anchor_deltas = diff_anchors(base_anchors, curr_anchors)
+    assert [(d.name, d.status, d.dx, d.dy) for d in anchor_deltas] == [
+        ("port_0", "changed", 0, 0),
+    ]
+
+    base_hitboxes = (HitboxRect(name="body", x=2, y=2, w=10, h=10, kind="solid"),)
+    curr_hitboxes = (HitboxRect(name="body", x=2, y=2, w=10, h=10, kind="trigger"),)
+    hitbox_deltas = diff_hitboxes(base_hitboxes, curr_hitboxes)
+    assert [(d.name, d.status, d.dx, d.dy, d.dw, d.dh) for d in hitbox_deltas] == [
+        ("body", "changed", 0, 0, 0, 0),
+    ]
+
+    lines = format_metadata_deltas(anchor_deltas, hitbox_deltas)
+    assert any("anchor 'port_0': changed" in ln and "'sfp'" in ln for ln in lines)

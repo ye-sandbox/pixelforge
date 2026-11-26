@@ -224,6 +224,51 @@ def test_multi_anchor_scene_and_coupled_hitboxes() -> None:
     assert names == ["hw_slot_0", "hw_slot_1", "hw_slot_2", "window", "solar", "breaker", "desk"]
 
 
+def test_anchor_and_hitbox_metadata_kind_and_dir() -> None:
+    """Verify `kind` and `dir` propagate through Asset, Layer, anchor_slots, and anchor_hitbox."""
+    style = _make_test_style()
+    spec = AssetSpec(
+        id="switch_meta",
+        style_id="test-homelab",
+        width=32,
+        height=32,
+        perspective="iso-2:1",
+    )
+
+    with Asset(spec, style) as a:
+        a.anchor("uplink", 4, 8, kind="sfp", dir=(1, -1))
+        a.anchor_slots("port_", [(6, 10), (10, 12)], kind="rj45", dir=(-1, 1))
+        a.hitbox("chassis", 2, 2, 20, 12, kind="solid")
+        pt, hb = a.anchor_hitbox(
+            "psu",
+            20,
+            4,
+            6,
+            8,
+            anchor_at="center",
+            kind="power",
+            dir=(0, 1),
+        )
+        with a.layer("daughter", offset=(2, 3)) as layer:
+            layer.anchor("aux", 1, 1, kind="gpio", dir=(0, -1))
+            layer.hitbox("aux_box", 0, 0, 4, 4, kind="pin")
+
+    assert pt == AnchorPoint(name="psu", x=23, y=8, kind="power", dir=(0, 1))
+    assert hb == HitboxRect(name="psu", x=20, y=4, w=6, h=8, kind="power")
+    assert a.anchors == (
+        AnchorPoint(name="uplink", x=4, y=8, kind="sfp", dir=(1, -1)),
+        AnchorPoint(name="port_0", x=6, y=10, kind="rj45", dir=(-1, 1)),
+        AnchorPoint(name="port_1", x=10, y=12, kind="rj45", dir=(-1, 1)),
+        AnchorPoint(name="psu", x=23, y=8, kind="power", dir=(0, 1)),
+        AnchorPoint(name="aux", x=3, y=4, kind="gpio", dir=(0, -1)),
+    )
+    assert a.hitboxes == (
+        HitboxRect(name="chassis", x=2, y=2, w=20, h=12, kind="solid"),
+        HitboxRect(name="psu", x=20, y=4, w=6, h=8, kind="power"),
+        HitboxRect(name="aux_box", x=2, y=3, w=4, h=4, kind="pin"),
+    )
+
+
 def test_builder_validation_errors() -> None:
     """Verify fail-loud errors on invalid states, frames, variants, and layer names."""
     style = _make_test_style()

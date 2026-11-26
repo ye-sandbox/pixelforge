@@ -56,6 +56,8 @@ def test_generate_svelte_manifest_dts_contains_strict_unions() -> None:
     assert "readonly sheetEmissive: string;" in dts
     assert "readonly lut: string;" in dts
     assert "PixelForgeAssetState<K extends PixelForgeAssetId>" in dts
+    assert "readonly kind?: string;" in dts
+    assert "readonly dir?: readonly [number, number];" in dts
     assert ": any" not in dts
 
 

@@ -88,6 +88,8 @@ def test_export_indexed_ts_emits_palette_sprites_and_manifest(tmp_path: Path) ->
     # Verify manifest.generated.ts
     assert '"rack_node"' in result.manifest_ts
     assert "export const INDEXED_MANIFEST" in result.manifest_ts
+    assert '"kind": null' not in result.manifest_ts
+    assert '"dir": null' not in result.manifest_ts
 
     paths = write_indexed_ts_bundle(result, tmp_path / "indexed")
     assert all(p.exists() for p in paths)

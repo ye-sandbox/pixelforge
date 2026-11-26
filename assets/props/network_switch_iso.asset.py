@@ -46,6 +46,7 @@ def _draw_ports(a: Asset, p: PaletteLookup) -> None:
             else:
                 led = p.LED_A if idx == 0 else p.LED_GD
             front.dot(u + 0.04, 0.24, led)
+            front.anchor(f"port_{idx}", u + 0.05, 0.60, kind="rj45", dir=(-1, 1))
         front.anchor("ports", 0.5, 0.5)
 
 

@@ -58,6 +58,21 @@ def test_constants_and_valid_contracts() -> None:
     assert AnchorPoint(name="screen", x=32, y=16).x == 32
     assert HitboxRect(name="body", x=4, y=3, w=55, h=58).h == 58
 
+    port = AnchorPoint(name="port_0", x=6, y=11, kind="rj45", dir=(-1, 1))
+    assert port.kind == "rj45"
+    assert port.dir == (-1, 1)
+    assert AnchorPoint(name="plain", x=1, y=2).kind is None
+    assert AnchorPoint(name="plain", x=1, y=2).dir is None
+
+    port_hb = HitboxRect(name="port_0", x=5, y=10, w=2, h=2, kind="rj45")
+    assert port_hb.kind == "rj45"
+    assert HitboxRect(name="plain", x=0, y=0, w=2, h=2).kind is None
+
+    with pytest.raises(ValidationError):
+        AnchorPoint(name="bad_kind", x=0, y=0, kind="")
+    with pytest.raises(ValidationError):
+        HitboxRect(name="bad_kind", x=0, y=0, w=2, h=2, kind="")
+
 
 def test_transparent_index_cannot_be_allocated_in_palette() -> None:
     """Reject palette entries using reserved TRANSPARENT_INDEX (255)."""

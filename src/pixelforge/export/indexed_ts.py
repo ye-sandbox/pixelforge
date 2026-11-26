@@ -245,12 +245,16 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
             "states": list(bundle.manifest.states),
             "frames": bundle.manifest.frames,
             "fps": bundle.manifest.fps,
-            "anchors": [a.model_dump() for a in bundle.manifest.anchors],
-            "hitboxes": [h.model_dump() for h in bundle.manifest.hitboxes],
+            "anchors": [
+                a.model_dump(exclude_none=True, mode="json") for a in bundle.manifest.anchors
+            ],
+            "hitboxes": [
+                h.model_dump(exclude_none=True, mode="json") for h in bundle.manifest.hitboxes
+            ],
             **(
                 {
                     "frameMetadata": {
-                        st: [entry.model_dump() for entry in entries]
+                        st: [entry.model_dump(exclude_none=True, mode="json") for entry in entries]
                         for st, entries in bundle.manifest.frameMetadata.items()
                     }
                 }
