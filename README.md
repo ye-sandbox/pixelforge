@@ -128,6 +128,9 @@ uv run pixelforge probe <asset_id> [--region x,y,w,h] [--state <name>] [--frame 
 
 # Scaffold zero-reference typed assets, scenes, or styles (with automatic palette stub sync)
 uv run pixelforge new {asset|scene|style} <name> [--kind iso-prop|front-prop|character|tile-blob47|9slice|font] [--parent <asset_id>] [--from-preset <preset_id>] [--style <id>] [--out PATH] [--force] [--format llm|json|human] [--root .]
+
+# Validate toolchain (uv/ruff/pyright), palette stubs, duplicate IDs, git scratch hygiene, and critic config
+uv run pixelforge doctor [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Svelte 5 Integration

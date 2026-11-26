@@ -11,6 +11,7 @@ from pixelforge import __version__
 from pixelforge.cli.compose_cmd import compose_scene_workflow, parse_mount_arg
 from pixelforge.cli.critic_cmd import critic_workflow
 from pixelforge.cli.diff_cmd import diff_asset
+from pixelforge.cli.doctor_cmd import doctor_workflow
 from pixelforge.cli.inspect_cmd import (
     inspect_api_workflow,
     inspect_assets_workflow,
@@ -882,6 +883,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_format_arguments(new_style_p)
     new_style_p.add_argument("--root", default=None, help="Project root directory")
 
+    doctor_p = sub.add_parser(
+        "doctor",
+        help="Validate toolchain, palette stubs, IDs, git scratch hygiene, and critic config",
+    )
+    add_format_arguments(doctor_p)
+    doctor_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -915,6 +923,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_inspect(args)
     if args.command == "probe":
         return _cmd_probe(args)
+    if args.command == "doctor":
+        output_format = _resolve_format_or_err(args)
+        if output_format is None:
+            return 2
+        return doctor_workflow(root, output_format=output_format, out=_out)
     if args.command == "new":
         new_parser: argparse.ArgumentParser = getattr(args, "_new_parser", parser)
         return _cmd_new(args, settings, new_parser)
