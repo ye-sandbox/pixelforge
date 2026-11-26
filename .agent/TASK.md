@@ -16,6 +16,8 @@ _None currently active (all Track F items completed; awaiting release or new roa
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[39.1]` Multi-Room Portal Prefab, Real Scene World Graph & Window Prefabs (`08bdbc7`)
+
 - `[38.3]` Multi-Genre Preset Showcase & Guard Verification (`304fc34`)
 - `[38.2]` Semantic Palette Aliases & `UniversalPalette` Protocol (`0d03ff8`)
 - `[38.1]` Dynamic `default_style` Resolution & Built-In StylePack Presets (`pixelforge init --style`) (`0c4d5e7`)
