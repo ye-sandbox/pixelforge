@@ -61,6 +61,7 @@ def test_export_indexed_ts_emits_palette_sprites_and_manifest(tmp_path: Path) ->
         states=("idle", "active"),
         frames=2,
         fps=4,
+        frame_events={"active": {1: ("beep", "spark")}},
     )
 
     def render(a: Asset) -> None:
@@ -88,6 +89,9 @@ def test_export_indexed_ts_emits_palette_sprites_and_manifest(tmp_path: Path) ->
     # Verify manifest.generated.ts
     assert '"rack_node"' in result.manifest_ts
     assert "export const INDEXED_MANIFEST" in result.manifest_ts
+    assert '"frameMetadata": {' in result.manifest_ts
+    assert '"beep"' in result.manifest_ts
+    assert '"spark"' in result.manifest_ts
     assert '"kind": null' not in result.manifest_ts
     assert '"dir": null' not in result.manifest_ts
 

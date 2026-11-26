@@ -131,3 +131,43 @@ def test_uniform_metadata_omits_frame_metadata_and_writes_disk(tmp_path: Path) -
     parsed = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert "static_box" in parsed
     assert "frameMetadata" not in parsed["static_box"]
+
+
+def test_frame_events_emit_frame_metadata_and_affect_digest(tmp_path: Path) -> None:
+    style = _make_style()
+    spec = AssetSpec(
+        id="spark_bot",
+        style_id="homelab-test",
+        width=6,
+        height=6,
+        perspective="front-2.5d",
+        states=("idle", "work"),
+        frames=2,
+        fps=4,
+        frame_events={"work": {0: ("beep",)}},
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(0, 0, 6, 6, a.pal.CHASSIS)
+        a.anchor("center", 3, 3)
+        if a.state == "work" and a.frame == 1:
+            a.event("spark")
+            a.event("spark")  # duplicate in same frame should deduplicate
+
+    bundle = export_asset_bundle(LoadedAsset(SPEC=spec, render=render), style)
+    assert bundle.manifest.frameMetadata is not None
+    assert bundle.manifest.frameMetadata["idle"][0].events is None
+    assert bundle.manifest.frameMetadata["work"][0].events == ("beep",)
+    assert bundle.manifest.frameMetadata["work"][1].events == ("spark",)
+
+    # Digest must differ when frame_events changes
+    spec_no_events = spec.model_copy(update={"frame_events": {}})
+    bundle_no_spec_ev = export_asset_bundle(LoadedAsset(SPEC=spec_no_events, render=render), style)
+    assert bundle.manifest.sha256 != bundle_no_spec_ev.manifest.sha256
+
+    manifest_path = write_export_bundle(bundle, tmp_path / "dist")
+    parsed = json.loads(manifest_path.read_text(encoding="utf-8"))
+    work_frames = parsed["spark_bot"]["frameMetadata"]["work"]
+    assert work_frames[0]["events"] == ["beep"]
+    assert work_frames[1]["events"] == ["spark"]
+    assert "events" not in parsed["spark_bot"]["frameMetadata"]["idle"][0]

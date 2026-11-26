@@ -134,3 +134,53 @@ def test_style_pack_rejects_duplicates_and_bad_references() -> None:
             palette=(PaletteColor(index=0, name="A", hex="#000000"),),
             variants={"alt": {"NOPE": "#123456"}},
         )
+
+
+def test_asset_spec_frame_events_validation() -> None:
+    spec = AssetSpec(
+        id="bot",
+        style_id="test",
+        width=8,
+        height=8,
+        perspective="front-2.5d",
+        states=("walk", "idle"),
+        frames=3,
+        frame_events={"walk": {0: ("footstep",), 2: ("footstep", "beep")}},
+    )
+    assert spec.frame_events["walk"][2] == ("footstep", "beep")
+
+    with pytest.raises(ValidationError, match="unknown state"):
+        AssetSpec(
+            id="bot",
+            style_id="test",
+            width=8,
+            height=8,
+            perspective="front-2.5d",
+            states=("walk",),
+            frames=2,
+            frame_events={"run": {0: ("footstep",)}},
+        )
+
+    with pytest.raises(ValidationError, match="out of range"):
+        AssetSpec(
+            id="bot",
+            style_id="test",
+            width=8,
+            height=8,
+            perspective="front-2.5d",
+            states=("walk",),
+            frames=2,
+            frame_events={"walk": {2: ("footstep",)}},
+        )
+
+    with pytest.raises(ValidationError, match="empty event tag"):
+        AssetSpec(
+            id="bot",
+            style_id="test",
+            width=8,
+            height=8,
+            perspective="front-2.5d",
+            states=("walk",),
+            frames=2,
+            frame_events={"walk": {0: ("   ",)}},
+        )

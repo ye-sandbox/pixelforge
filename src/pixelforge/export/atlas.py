@@ -174,8 +174,14 @@ def build_aseprite_atlas(
         frame_tags.append({"name": state, "from": from_idx, "to": to_idx, "direction": "forward"})
 
         for frame in range(spec.frames):
+            flat_idx = from_idx + frame
             frame_key = f"{spec.id}_{state}_{frame}"
-            frames[frame_key] = {
+            item = by_key.get((state, frame))
+            spec_events = spec.frame_events.get(state, {}).get(frame, ())
+            item_events = getattr(item, "events", ()) if item is not None else ()
+            frame_events = tuple(dict.fromkeys((*spec_events, *item_events)))
+
+            frame_entry: dict[str, object] = {
                 "frame": {
                     "x": frame * frame_w,
                     "y": state_idx * frame_h,
@@ -188,6 +194,18 @@ def build_aseprite_atlas(
                 "sourceSize": {"w": frame_w, "h": frame_h},
                 "duration": duration_ms,
             }
+            if frame_events:
+                frame_entry["events"] = list(frame_events)
+                for ev in frame_events:
+                    frame_tags.append(
+                        {
+                            "name": f"event:{ev}",
+                            "from": flat_idx,
+                            "to": flat_idx,
+                            "direction": "forward",
+                        }
+                    )
+            frames[frame_key] = frame_entry
 
     slices = _build_aseprite_slices(spec, by_key, scale)
     meta: dict[str, object] = {

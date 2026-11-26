@@ -75,6 +75,7 @@ def test_manifest_dts_typechecks_under_strict_tsc(tmp_path: Path) -> None:
         states=("healthy", "faulty"),
         frames=2,
         fps=4,
+        frame_events={"faulty": {1: ("beep", "spark")}},
     )
 
     def render(a: Asset) -> None:
@@ -82,6 +83,8 @@ def test_manifest_dts_typechecks_under_strict_tsc(tmp_path: Path) -> None:
         a.put(4, 4, a.pal.CYAN_GLOW)
         a.anchor("screen", 7 + a.frame, 6)
         a.hitbox("chassis", 2, 2, 10, 10)
+        if a.state == "healthy" and a.frame == 0:
+            a.event("footstep")
 
     bundle = export_asset_bundle(
         LoadedAsset(SPEC=spec, render=render),
@@ -97,6 +100,7 @@ def test_manifest_dts_typechecks_under_strict_tsc(tmp_path: Path) -> None:
             [
                 "import type {",
                 "  PixelForgeAssetAnchor,",
+                "  PixelForgeAssetEvent,",
                 "  PixelForgeAssetHitbox,",
                 "  PixelForgeAssetId,",
                 "  PixelForgeAssetState,",
@@ -108,6 +112,7 @@ def test_manifest_dts_typechecks_under_strict_tsc(tmp_path: Path) -> None:
                 'const state: PixelForgeAssetState<"thinkpad_r51_iso"> = "healthy";',
                 'const anchor: PixelForgeAssetAnchor<"thinkpad_r51_iso"> = "screen";',
                 'const hitbox: PixelForgeAssetHitbox<"thinkpad_r51_iso"> = "chassis";',
+                'const ev: PixelForgeAssetEvent<"thinkpad_r51_iso"> = "beep";',
                 "",
                 "export function inspectManifest(",
                 "  manifest: PixelForgeManifest,",
@@ -116,6 +121,7 @@ def test_manifest_dts_typechecks_under_strict_tsc(tmp_path: Path) -> None:
                 "  void state;",
                 "  void anchor;",
                 "  void hitbox;",
+                "  void ev;",
                 "  return entry;",
                 "}",
                 "",

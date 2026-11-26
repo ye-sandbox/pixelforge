@@ -644,6 +644,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
     _layer_stack: list[_LayerFrame]
     _anchors: list[AnchorPoint]
     _hitboxes: list[HitboxRect]
+    _events: list[str]
     _layer_spans: list[LayerSemanticSpan]
 
     def __init__(
@@ -684,6 +685,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         self._layer_stack = []
         self._anchors = []
         self._hitboxes = []
+        self._events = []
         self._layer_spans = []
 
     def __enter__(self) -> Self:
@@ -759,6 +761,20 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
     def hitboxes(self) -> tuple[HitboxRect, ...]:
         """Snapshot of recorded global hitboxes."""
         return tuple(self._hitboxes)
+
+    @property
+    def events(self) -> tuple[str, ...]:
+        """Snapshot of recorded per-frame event tags."""
+        return tuple(self._events)
+
+    def event(self, name: str) -> str:
+        """Emit a deterministic per-(state, frame) event tag (e.g. `footstep`, `spark`)."""
+        if not name or not name.strip():
+            msg = f"Event tag for asset {self.spec.id!r} must be a non-empty string"
+            raise ValueError(msg)
+        if name not in self._events:
+            self._events.append(name)
+        return name
 
     @property
     def layer_spans(self) -> tuple[LayerSemanticSpan, ...]:

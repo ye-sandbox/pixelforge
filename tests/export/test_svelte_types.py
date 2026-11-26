@@ -33,12 +33,15 @@ def test_generate_svelte_manifest_dts_contains_strict_unions() -> None:
         states=("healthy", "faulty"),
         frames=2,
         fps=4,
+        frame_events={"faulty": {1: ("beep", "spark")}},
     )
 
     def render(a: Asset) -> None:
         a.rect(2, 2, 10, 10, a.pal.BODY)
         a.anchor("screen", 7 + a.frame, 6)
         a.hitbox("chassis", 2, 2, 10, 10)
+        if a.state == "healthy" and a.frame == 0:
+            a.event("footstep")
 
     bundle = export_asset_bundle(
         LoadedAsset(SPEC=spec, render=render),
@@ -51,7 +54,10 @@ def test_generate_svelte_manifest_dts_contains_strict_unions() -> None:
     assert 'export type ThinkpadR51IsoState = "healthy" | "faulty";' in dts
     assert 'export type ThinkpadR51IsoAnchorName = "screen";' in dts
     assert 'export type ThinkpadR51IsoHitboxName = "chassis";' in dts
+    assert 'export type ThinkpadR51IsoEventName = "footstep" | "beep" | "spark";' in dts
     assert "readonly frameMetadata?:" in dts
+    assert "readonly events?: readonly TEvent[];" in dts
+    assert "PixelForgeAssetEvent<K extends PixelForgeAssetId>" in dts
     assert "readonly semantics: PixelForgeGameplaySemantics;" in dts
     assert "export interface PixelForgeGameplaySemantics {" in dts
     assert "readonly sheet: string;" in dts

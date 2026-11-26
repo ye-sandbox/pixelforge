@@ -326,6 +326,7 @@ class AssetSpec(BaseModel):
     nine_slice: NineSliceMargins | None = None
     tilemap: TilemapSpec | None = None
     font: BitmapFontSpec | None = None
+    frame_events: dict[str, dict[int, tuple[str, ...]]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_states(self) -> AssetSpec:
@@ -380,4 +381,25 @@ class AssetSpec(BaseModel):
                         f"exceeds canvas ({self.width}x{self.height})"
                     )
                     raise ValueError(msg)
+        for ev_state, frame_map in self.frame_events.items():
+            if ev_state not in seen:
+                msg = (
+                    f"AssetSpec {self.id!r} frame_events references unknown state {ev_state!r} "
+                    f"(expected one of {self.states})"
+                )
+                raise ValueError(msg)
+            for ev_frame, tags in frame_map.items():
+                if ev_frame < 0 or ev_frame >= self.frames:
+                    msg = (
+                        f"AssetSpec {self.id!r} frame_events[{ev_state!r}] frame {ev_frame} "
+                        f"out of range [0..{self.frames - 1}]"
+                    )
+                    raise ValueError(msg)
+                for tag in tags:
+                    if not tag or not tag.strip():
+                        msg = (
+                            f"AssetSpec {self.id!r} frame_events[{ev_state!r}][{ev_frame}] "
+                            "contains an empty event tag"
+                        )
+                        raise ValueError(msg)
         return self

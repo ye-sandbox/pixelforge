@@ -84,19 +84,21 @@ class RenderedFrame:
     surface: IndexedSurface
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
+    events: tuple[str, ...] = ()
     layer_spans: tuple[LayerSemanticSpan, ...] = ()
     normal_map: NDArray[np.float32] | None = None
     height_map: NDArray[np.float32] | None = None
 
 
 class FrameMetadataEntry(BaseModel):
-    """Per-frame anchors and hitboxes recorded when coordinates vary across states/frames."""
+    """Per-frame anchors, hitboxes, and event tags recorded across states/frames."""
 
     model_config = ConfigDict(frozen=True)
 
     frame: int
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
+    events: tuple[str, ...] | None = None
 
 
 class ExportedAssetFiles(BaseModel):
@@ -192,6 +194,8 @@ def render_asset_frames(
                 track_maps=track_maps,
             )
             asset.render(builder)
+            spec_events = spec.frame_events.get(state, {}).get(frame, ())
+            merged_events = tuple(dict.fromkeys((*spec_events, *builder.events)))
             results.append(
                 RenderedFrame(
                     state=state,
@@ -199,6 +203,7 @@ def render_asset_frames(
                     surface=builder.root_surface,
                     anchors=builder.anchors,
                     hitboxes=builder.hitboxes,
+                    events=merged_events,
                     layer_spans=builder.layer_spans,
                     normal_map=builder.normal_map,
                     height_map=builder.height_map,
@@ -230,6 +235,11 @@ def _has_emissive_colors(style: StylePack) -> bool:
     return any("emissive" in entry.flags for entry in style.palette)
 
 
+def _resolve_frame_events(spec: AssetSpec, item: RenderedFrame) -> tuple[str, ...]:
+    spec_events = spec.frame_events.get(item.state, {}).get(item.frame, ())
+    return tuple(dict.fromkeys((*spec_events, *item.events)))
+
+
 def _build_frame_metadata(
     spec: AssetSpec,
     rendered_frames: Sequence[RenderedFrame],
@@ -240,16 +250,19 @@ def _build_frame_metadata(
         item.anchors != baseline_anchors or item.hitboxes != baseline_hitboxes
         for item in rendered_frames
     )
-    if not varies:
+    has_events = any(bool(_resolve_frame_events(spec, item)) for item in rendered_frames)
+    if not varies and not has_events:
         return None
 
     by_state: dict[str, list[FrameMetadataEntry]] = {state: [] for state in spec.states}
     for item in rendered_frames:
+        frame_events = _resolve_frame_events(spec, item)
         by_state[item.state].append(
             FrameMetadataEntry(
                 frame=item.frame,
                 anchors=item.anchors,
                 hitboxes=item.hitboxes,
+                events=frame_events if frame_events else None,
             )
         )
     return {state: tuple(entries) for state, entries in by_state.items()}

@@ -188,3 +188,38 @@ def test_atlas_rejects_invalid_scale() -> None:
         build_aseprite_atlas(asset.SPEC, rendered, scale=0)
     with pytest.raises(ValueError, match="scale must be >= 1"):
         build_texturepacker_atlas(asset.SPEC, rendered, scale=0)
+
+
+def test_aseprite_atlas_emits_deterministic_frame_event_tags() -> None:
+    style = _make_style()
+    spec = AssetSpec(
+        id="spark_unit",
+        style_id="atlas-test",
+        width=8,
+        height=6,
+        perspective="iso-2:1",
+        states=("idle", "faulty"),
+        frames=2,
+        fps=4,
+        frame_events={"faulty": {1: ("spark", "beep")}},
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(1, 1, 6, 4, a.pal.BODY)
+        if a.state == "idle" and a.frame == 0:
+            a.event("footstep")
+
+    rendered = render_asset_frames(LoadedAsset(SPEC=spec, render=render), style)
+    doc = cast(dict[str, Any], build_aseprite_atlas(spec, rendered, scale=1))
+
+    assert doc["frames"]["spark_unit_idle_0"]["events"] == ["footstep"]
+    assert "events" not in doc["frames"]["spark_unit_idle_1"]
+    assert doc["frames"]["spark_unit_faulty_1"]["events"] == ["spark", "beep"]
+
+    assert doc["meta"]["frameTags"] == [
+        {"name": "idle", "from": 0, "to": 1, "direction": "forward"},
+        {"name": "event:footstep", "from": 0, "to": 0, "direction": "forward"},
+        {"name": "faulty", "from": 2, "to": 3, "direction": "forward"},
+        {"name": "event:spark", "from": 3, "to": 3, "direction": "forward"},
+        {"name": "event:beep", "from": 3, "to": 3, "direction": "forward"},
+    ]

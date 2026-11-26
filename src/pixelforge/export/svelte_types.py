@@ -53,16 +53,28 @@ def _collect_hitbox_names(entry: ExportedAssetManifestEntry) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _collect_event_names(entry: ExportedAssetManifestEntry) -> list[str]:
+    names: list[str] = []
+    if entry.frameMetadata:
+        for frame_list in entry.frameMetadata.values():
+            for frame_meta in frame_list:
+                if frame_meta.events:
+                    names.extend(frame_meta.events)
+    return list(dict.fromkeys(names))
+
+
 def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -> list[str]:
     state_union = _ts_union(entry.states)
     anchor_union = _ts_union(_collect_anchor_names(entry))
     hitbox_union = _ts_union(_collect_hitbox_names(entry))
+    event_union = _ts_union(_collect_event_names(entry))
 
     state_field_lines = [f"    readonly {_ts_literal(state)}: string;" for state in entry.states]
     lines: list[str] = [
         f"export type {type_name}State = {state_union};",
         f"export type {type_name}AnchorName = {anchor_union};",
         f"export type {type_name}HitboxName = {hitbox_union};",
+        f"export type {type_name}EventName = {event_union};",
         "",
         f"export interface {type_name}ManifestEntry {{",
         f"  readonly id: {_ts_literal(entry.id)};",
@@ -120,7 +132,7 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
         lines.append(
             f"  readonly frameMetadata?: Readonly<Record<{type_name}State, "
             f"readonly PixelForgeFrameMetadata<{type_name}AnchorName, "
-            f"{type_name}HitboxName>[]>>;"
+            f"{type_name}HitboxName, {type_name}EventName>[]>>;"
         )
     lines.extend(
         [
@@ -239,10 +251,12 @@ def generate_svelte_manifest_dts(
         "export interface PixelForgeFrameMetadata<",
         "  TAnchor extends string = string,",
         "  THitbox extends string = string,",
+        "  TEvent extends string = string,",
         "> {",
         "  readonly frame: number;",
         "  readonly anchors: readonly PixelForgeAnchor<TAnchor>[];",
         "  readonly hitboxes: readonly PixelForgeHitbox<THitbox>[];",
+        "  readonly events?: readonly TEvent[];",
         "}",
         "",
     ]
@@ -284,6 +298,15 @@ def generate_svelte_manifest_dts(
             "",
             "export type PixelForgeAssetHitbox<K extends PixelForgeAssetId> =",
             "  PixelForgeManifestMap[K]['hitboxes'][number]['name'];",
+            "",
+            "export type PixelForgeAssetEvent<K extends PixelForgeAssetId> =",
+            "  PixelForgeManifestMap[K] extends {",
+            "    readonly frameMetadata?: Readonly<",
+            "      Record<string, readonly { readonly events?: readonly (infer E)[] }[]>",
+            "    >;",
+            "  }",
+            "    ? E",
+            "    : never;",
             "",
         ]
     )
