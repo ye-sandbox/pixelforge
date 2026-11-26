@@ -8,7 +8,9 @@
 
 ## Active Task
 
-_None currently queued (all active cycle tasks completed)._
+### `[22.1]` Modular Partition Props & Multi-Room `compose_scene` Showcase
+- [ ] Modular partition prop assets in `assets/props/` (`partition_wall_iso.asset.py`, `glass_partition_iso.asset.py`, `pillar_iso.asset.py`) with `mount_bottom` anchors for `z_index` + `iso_y` depth sorting in `*.scene.py`.
+- [ ] Multi-room homelab/bedroom `.asset.py` + `.scene.py` example combining split floor zones, glass/half-wall divider, and zone-ordered `z_index` + `iso_y` mounts, validated via `pytest`, `pixelforge check`, and `.contact.png` inspection.
 
 ---
 
@@ -45,12 +47,17 @@ _None currently queued (all active cycle tasks completed)._
 | `[18.1]` | Local Lighting, Cast Shadows & Internal Atmospheric Prefabs (`point_light_spill`, `cast_shadow`, `floor_reflection`, `dust_motes`, `rising_steam`, `weather_lightning`, `window_condensation`, `screen_telemetry`, `horizon_silhouette` modes) | `fcb7b4e` | 2026-11-25 |
 | `[19.1]` | Room Fill & Architectural Prefab Expansion (`iso_door`, `front_door`, `iso_raised_floor`, `iso_rug`, `iso_cable_tray`, `window_blinds`, `window_curtains`, `iso_chair`, `iso_wall_shelf`, `iso_bed`, `iso_workbench`, `iso_drawer_unit`, `wall_ac_unit`, `wall_whiteboard`, `power_strip`, `wall_outlet`, `iso_cable_catenary`) | `4fc633f` | 2026-11-25 |
 | `[20.1]` | Declarative & Animated Multi-Frame Scene Composition (`compose_scene` v2: `*.scene.py`, `render`/`watch`/`check`/`manifest`/`--indexed-ts`, `iso_y` depth sorting, `frame % prop.frames` sync, `--animate` GIF) | `ae230b0` | 2026-11-25 |
+| `[21.1]` | Multi-Zone Floor & Interior Partition Prefabs (`IsoRoomGeometry.subroom`, `partition_plane`, `floor_plane`, `iso_floor_zone`, `iso_floor_threshold`, `iso_partition_wall`, `iso_glass_partition`, `iso_pillar`, `wall_molding`) | `dc3d014` | 2026-11-26 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-_All queued roadmap items promoted to Active Task._
+1. **`[23.1]` Living & Workstation Furniture Prefab Expansion (`prefabs.furniture`)**
+   - `iso_l_desk` (corner L-shaped desk returning `IsoDeskSlots`), `iso_nightstand` / `iso_side_table`, `iso_sofa` / `iso_armchair`, `iso_coffee_table`, `iso_wardrobe` / `iso_locker`, and `iso_mini_fridge` / `iso_filing_cabinet`.
+2. **`[24.1]` Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`)**
+   - `prefabs.details`: `wall_light_switch` / `wall_thermostat`, `wall_clock`, `wall_corkboard`, `wall_pegboard`, `wall_neon_sign` / `led_strip` (`emissive` tokens), and `wall_sconce`.
+   - `assets/props/`: shelf/desk props (`books_stack_iso`, `desk_speaker_iso`, `headphones_stand_iso`, `router_iso`, `soda_can_iso`) and floor/corner props (`tall_plant_iso`, `floor_lamp_iso`, `trash_bin_iso`, `ups_battery_iso`, `air_purifier_iso`) with `mount_bottom` anchors and guard/unit tests.
 
 ---
 
