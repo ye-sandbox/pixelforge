@@ -8,11 +8,10 @@
 
 ## Active Task
 
-### `[29.1]` Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob)
+### `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification
 
-- [ ] Add a vectorized autotile generator for walls, floors, cables, and terrain bitmasks.
-- [ ] Add tile-metadata atlas export compatible with Godot, Tiled, Phaser, and Svelte.
-- [ ] Add sample autotile asset(s) and hermetic unit/export tests.
+- [ ] Author a second non-homelab `StylePack` (e.g., `topdown_rpg` or `cyber_hud_32`) with sample assets.
+- [ ] Add tests proving `core/` and `prefabs/` have zero `homelab-16bit` coupling.
 
 ---
 
@@ -20,6 +19,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[29.1]` Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob) (`719b8ab`)
 - `[28.1]` UI Pixel Art Primitives & 9-Slice Export (`nine_slice`) (`a4ba768`)
 - `[27.1]` Modular Characters, Avatars & Part-Based Animation Kits (`a943cd9`)
 - `[26.3]` Typed StylePack Palette Stubs & Emissive-Bleed Diagnostics (`ac6b1d1`)
@@ -30,9 +30,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ---
 
 ## Backlog (Upcoming, in priority order)
-
-### Track B — New Pixel Art Domains
-- `[30.1]` **Second Reference `StylePack` & Style-Agnosticism Verification:** Author a second non-homelab `StylePack` (e.g., `topdown_rpg` or `cyber_hud_32`) with sample assets and tests proving `core/` and `prefabs/` have zero `homelab-16bit` coupling.
 
 ### Track C — Deterministic Spatial Guards & Visual Critic Loop
 - `[31.1]` **Deterministic Scene Ergonomics Guards in `pixelforge check`:** Extend `pixelforge check` with deterministic `*.scene.py` validation (occlusion thresholds, anchor-within-parent-bbox checks, duplicate mount detection, and strict bounds/perspective audits).
