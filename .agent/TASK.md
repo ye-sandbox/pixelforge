@@ -8,7 +8,7 @@
 
 ## Active Task
 
-_None currently active (all Track F items completed; awaiting release or new roadmap items)._
+_None currently active (awaiting next roadmap item)._
 
 ---
 
@@ -16,6 +16,7 @@ _None currently active (all Track F items completed; awaiting release or new roa
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[40.1]` Spatial Ergonomics Guards & Snapped Furniture Sets (`e2e6ff4`)
 - `[39.1]` Multi-Room Portal Prefab, Real Scene World Graph & Window Prefabs (`08bdbc7`)
 
 - `[38.3]` Multi-Genre Preset Showcase & Guard Verification (`304fc34`)
