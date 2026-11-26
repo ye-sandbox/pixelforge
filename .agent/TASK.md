@@ -8,9 +8,7 @@
 
 ## Active Task
 
-### `[24.1]` Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`)
-- [ ] `prefabs.details`: `wall_light_switch` / `wall_thermostat`, `wall_clock`, `wall_corkboard`, `wall_pegboard`, `wall_neon_sign` / `led_strip` (`emissive` tokens), and `wall_sconce`.
-- [ ] `assets/props/`: shelf/desk props (`books_stack_iso`, `desk_speaker_iso`, `headphones_stand_iso`, `router_iso`, `soda_can_iso`) and floor/corner props (`tall_plant_iso`, `floor_lamp_iso`, `trash_bin_iso`, `ups_battery_iso`, `air_purifier_iso`) with `mount_bottom` anchors and guard/unit tests.
+_None currently queued._
 
 ---
 
@@ -50,6 +48,7 @@
 | `[21.1]` | Multi-Zone Floor & Interior Partition Prefabs (`IsoRoomGeometry.subroom`, `partition_plane`, `floor_plane`, `iso_floor_zone`, `iso_floor_threshold`, `iso_partition_wall`, `iso_glass_partition`, `iso_pillar`, `wall_molding`) | `dc3d014` | 2026-11-26 |
 | `[22.1]` | Modular Partition Props & Multi-Room `compose_scene` Showcase (`partition_wall_iso`, `glass_partition_iso`, `pillar_iso`, `multiroom_homelab_iso`, `multiroom_homelab_scene`) | `dbdef25` | 2026-11-26 |
 | `[23.1]` | Living & Workstation Furniture Prefab Expansion (`iso_l_desk`, `iso_nightstand`, `iso_side_table`, `iso_sofa`, `iso_armchair`, `iso_coffee_table`, `iso_wardrobe`, `iso_locker`, `iso_mini_fridge`, `iso_filing_cabinet`) | `efc6c8a` | 2026-11-26 |
+| `[24.1]` | Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`) | `8beec76` | 2026-11-26 |
 
 ---
 
