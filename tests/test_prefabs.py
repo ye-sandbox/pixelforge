@@ -1412,3 +1412,108 @@ def test_living_and_workstation_furniture_prefabs() -> None:
     assert np.any(first.root_surface.data == first.pal.LED)
     valid_indices = {c.index for c in first.style.palette} | {TRANSPARENT_INDEX}
     assert set(np.unique(first.root_surface.data).tolist()).issubset(valid_indices)
+
+
+def test_wall_decor_and_emissive_detail_prefabs() -> None:
+    """Verify [24.1] wall decor and emissive detail prefabs render deterministically."""
+
+    def _render_wall_details(asset: Asset) -> None:
+        p = asset.pal
+        prefabs.wall_light_switch(
+            asset,
+            (8, 12),
+            (14, 15),
+            (8, 22),
+            plate=p.CLOUD,
+            toggle=p.METAL_M,
+            outline=p.INK,
+            led=p.LED,
+            double=True,
+        )
+        prefabs.wall_thermostat(
+            asset,
+            (18, 14),
+            (26, 18),
+            (18, 24),
+            body=p.METAL_H,
+            screen=p.SKY,
+            readout=p.LED,
+            dial=p.METAL_D,
+            outline=p.INK,
+        )
+        prefabs.wall_clock(
+            asset,
+            (32, 10),
+            (44, 16),
+            (32, 24),
+            frame=p.METAL_D,
+            face=p.CLOUD,
+            hands=p.INK,
+            accent=p.SUN,
+            outline=p.INK,
+        )
+        prefabs.wall_corkboard(
+            asset,
+            (50, 12),
+            (74, 24),
+            (50, 32),
+            frame=p.WOOD_M,
+            cork=p.WOOD_L,
+            note=p.CLOUD,
+            note_alt=p.SUN,
+            pin=p.LED,
+            outline=p.INK,
+        )
+        prefabs.wall_pegboard(
+            asset,
+            (80, 14),
+            (104, 26),
+            (80, 34),
+            board=p.METAL_M,
+            hole=p.INK,
+            frame=p.METAL_D,
+            hook=p.METAL_H,
+            accent=p.SUN,
+            outline=p.INK,
+        )
+        prefabs.wall_neon_sign(
+            asset,
+            (14, 42),
+            (38, 54),
+            (14, 54),
+            glow=p.LED,
+            backing=p.FLOOR_D,
+            accent=p.SUN,
+            outline=p.INK,
+        )
+        prefabs.led_strip(
+            asset,
+            (46, 54),
+            (78, 70),
+            color=p.LED,
+            backing=p.INK,
+            accent=p.SUN,
+            segments=4,
+        )
+        prefabs.wall_sconce(
+            asset,
+            (86, 48),
+            (96, 53),
+            (86, 62),
+            bracket=p.METAL_D,
+            shade=p.METAL_H,
+            bulb=p.SUN,
+            glow=p.SUN,
+            outline=p.INK,
+        )
+
+    first = _make_asset(120, 84)
+    second = _make_asset(120, 84)
+    _render_wall_details(first)
+    _render_wall_details(second)
+
+    assert np.array_equal(first.root_surface.data, second.root_surface.data)
+    assert np.any(first.root_surface.data == first.pal.LED)
+    assert np.any(first.root_surface.data == first.pal.SUN)
+    valid_indices = {c.index for c in first.style.palette} | {TRANSPARENT_INDEX}
+    assert set(np.unique(first.root_surface.data).tolist()).issubset(valid_indices)

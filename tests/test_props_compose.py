@@ -17,9 +17,14 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 PROPS_DIR = ROOT_DIR / "assets" / "props"
 
 EXPECTED_PROP_IDS = (
+    "air_purifier_iso",
+    "books_stack_iso",
     "coffee_mug_iso",
     "desk_lamp_iso",
+    "desk_speaker_iso",
+    "floor_lamp_iso",
     "glass_partition_iso",
+    "headphones_stand_iso",
     "keyboard_iso",
     "monitor_iso",
     "mouse_iso",
@@ -28,7 +33,12 @@ EXPECTED_PROP_IDS = (
     "pc_tower_iso",
     "pillar_iso",
     "potted_plant_iso",
+    "router_iso",
+    "soda_can_iso",
     "storage_crate_iso",
+    "tall_plant_iso",
+    "trash_bin_iso",
+    "ups_battery_iso",
 )
 
 
