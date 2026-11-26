@@ -1,6 +1,6 @@
 [project]
 name = "pixelforge"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deterministic Python compositional indexed pixel art compiler, guard suite, and Svelte 5 manifest exporter"
 readme = "README.md"
 license = "Apache-2.0"

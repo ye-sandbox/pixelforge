@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pixelforge.export.scene import SceneMountSpec, SceneSpec
+from pixelforge import SceneMountSpec, SceneSpec
 
 SCENE = SceneSpec(
     id="multiroom_homelab_scene",

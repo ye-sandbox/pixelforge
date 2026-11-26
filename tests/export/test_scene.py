@@ -131,6 +131,37 @@ def test_compose_scene_rejects_missing_anchors_and_style_mismatch() -> None:
     with pytest.raises(SceneCompositionError, match="Anchor 'nope' not found on asset 'prop_a'"):
         compose_scene(parent, {"prop_a": prop_a}, style, missing_prop_anchor)
 
+
+def test_compose_scene_missing_anchor_fuzzy_suggestions() -> None:
+    """Verify missing parent and prop anchor errors suggest close matches."""
+    style = _test_style()
+    parent = _parent_asset()
+    prop_a = _prop_asset("prop_a")
+
+    with pytest.raises(SceneCompositionError, match="did you mean 'slot_a'") as parent_exc:
+        compose_scene(
+            parent,
+            {"prop_a": prop_a},
+            style,
+            SceneCompositionSpec(
+                parent_id="room",
+                mounts=(SceneMountSpec(prop_id="prop_a", anchor="slto_a", prop_anchor="foot"),),
+            ),
+        )
+    assert "Anchor 'slto_a' not found on asset 'room'" in str(parent_exc.value)
+
+    with pytest.raises(SceneCompositionError, match="did you mean 'foot'") as prop_exc:
+        compose_scene(
+            parent,
+            {"prop_a": prop_a},
+            style,
+            SceneCompositionSpec(
+                parent_id="room",
+                mounts=(SceneMountSpec(prop_id="prop_a", anchor="slot_a", prop_anchor="fooot"),),
+            ),
+        )
+    assert "Anchor 'fooot' not found on asset 'prop_a'" in str(prop_exc.value)
+
     wrong_style_prop = _prop_asset("prop_b", style_id="other-style")
     with pytest.raises(SceneCompositionError, match="cannot compose onto"):
         compose_scene(

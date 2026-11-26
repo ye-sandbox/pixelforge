@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -207,8 +208,11 @@ def _resolve_anchor_point(
     for anchor in anchors:
         if anchor.name == name:
             return anchor
-    available = ", ".join(a.name for a in anchors) or "(none)"
-    msg = f"Anchor {name!r} not found on asset {owner_id!r} (available: {available})"
+    anchor_names = [a.name for a in anchors]
+    available = ", ".join(anchor_names) or "(none)"
+    matches = difflib.get_close_matches(name, anchor_names, n=3, cutoff=0.6)
+    suggestion = f"; did you mean {', '.join(repr(m) for m in matches)}" if matches else ""
+    msg = f"Anchor {name!r} not found on asset {owner_id!r} (available: {available}{suggestion})"
     raise SceneCompositionError(msg)
 
 

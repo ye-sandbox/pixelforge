@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+import difflib
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,6 +13,14 @@ from pixelforge.core.types import TRANSPARENT_INDEX, PaletteColor, StylePack
 
 class PaletteLookupError(KeyError, AttributeError):
     """Raised when an asset requests an undefined palette token or variant."""
+
+
+def _format_close_matches(name: str, candidates: Iterable[str]) -> str:
+    matches = difflib.get_close_matches(name, candidates, n=3, cutoff=0.6)
+    if not matches:
+        return ""
+    joined = ", ".join(repr(match) for match in matches)
+    return f"; did you mean {joined}?"
 
 
 class PaletteLookup:
@@ -28,7 +37,8 @@ class PaletteLookup:
             resolved = {}
             for token in tokens:
                 if token not in by_name:
-                    msg = f"Missing palette token: {token!r} (style: {style.id!r})"
+                    suggestion = _format_close_matches(token, by_name.keys())
+                    msg = f"Missing palette token: {token!r} (style: {style.id!r}){suggestion}"
                     raise PaletteLookupError(msg)
                 resolved[token] = by_name[token]
 
@@ -48,14 +58,16 @@ class PaletteLookup:
         try:
             return self._indices[name]
         except KeyError as exc:
-            msg = f"Missing palette token: {name!r} (style: {self._style_id!r})"
+            suggestion = _format_close_matches(name, self._indices.keys())
+            msg = f"Missing palette token: {name!r} (style: {self._style_id!r}){suggestion}"
             raise PaletteLookupError(msg) from exc
 
     def __getitem__(self, name: str) -> int:
         try:
             return self._indices[name]
         except KeyError as exc:
-            msg = f"Missing palette token: {name!r} (style: {self._style_id!r})"
+            suggestion = _format_close_matches(name, self._indices.keys())
+            msg = f"Missing palette token: {name!r} (style: {self._style_id!r}){suggestion}"
             raise PaletteLookupError(msg) from exc
 
     def __contains__(self, name: object) -> bool:
@@ -79,7 +91,8 @@ class PaletteLookup:
         resolved = dict(self._indices)
         for src_token, dst_value in overrides.items():
             if src_token not in resolved:
-                msg = f"Unknown source token {src_token!r} for palette override"
+                suggestion = _format_close_matches(src_token, resolved.keys())
+                msg = f"Unknown source token {src_token!r} for palette override{suggestion}"
                 raise KeyError(msg)
             if isinstance(dst_value, str):
                 resolved[src_token] = self[dst_value]
@@ -139,7 +152,8 @@ def resolve_variant_colors(
         return style.palette
 
     if variant not in style.variants:
-        msg = f"Unknown variant {variant!r} for style {style.id!r}"
+        suggestion = _format_close_matches(variant, style.variants.keys())
+        msg = f"Unknown variant {variant!r} for style {style.id!r}{suggestion}"
         raise PaletteLookupError(msg)
 
     overrides = style.variants[variant]

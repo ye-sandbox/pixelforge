@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
-from pixelforge import __version__
+from pixelforge._version import __version__
 from pixelforge.core.types import AnchorPoint, AssetSpec, HitboxRect
 
 AtlasFormat = Literal["aseprite", "texturepacker", "all"]

@@ -1,5 +1,6 @@
 """pixelforge v2 — Deterministic Python compositional indexed pixel art compiler."""
 
+from pixelforge._version import __version__
 from pixelforge.core import (
     MAX_PALETTE_INDEX,
     TRANSPARENT_INDEX,
@@ -23,6 +24,7 @@ from pixelforge.core import (
     prefabs,
     xorshift32,
 )
+from pixelforge.export import SceneMountSpec, SceneSpec
 
 __all__ = [
     "MAX_PALETTE_INDEX",
@@ -38,6 +40,8 @@ __all__ = [
     "PaletteLookup",
     "PaletteLookupError",
     "Plane",
+    "SceneMountSpec",
+    "SceneSpec",
     "StylePack",
     "__version__",
     "hashf",
@@ -48,5 +52,3 @@ __all__ = [
     "prefabs",
     "xorshift32",
 ]
-
-__version__ = "0.2.0"

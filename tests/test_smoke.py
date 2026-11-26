@@ -14,7 +14,16 @@ from pixelforge.cli.main import main
 
 def test_package_version() -> None:
     """Verify the package version string is exposed."""
-    assert pixelforge.__version__ == "0.2.0"
+    assert pixelforge.__version__ == "0.3.0"
+
+
+def test_top_level_scene_reexports() -> None:
+    """Verify SceneSpec and SceneMountSpec are re-exported at top-level pixelforge."""
+    from pixelforge.export.scene import SceneMountSpec as ExportSceneMountSpec
+    from pixelforge.export.scene import SceneSpec as ExportSceneSpec
+
+    assert pixelforge.SceneSpec is ExportSceneSpec
+    assert pixelforge.SceneMountSpec is ExportSceneMountSpec
 
 
 def test_core_dependencies_importable() -> None:

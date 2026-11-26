@@ -103,3 +103,24 @@ def test_variant_resolution_and_binary_alpha_rgba_lut() -> None:
 
     with pytest.raises(PaletteLookupError, match="Unknown variant"):
         build_rgba_lut(style, variant="nonexistent")
+
+
+def test_palette_lookup_fuzzy_suggestions() -> None:
+    """Verify typo errors include close-match token and variant suggestions."""
+    style = _make_style()
+    pal = PaletteLookup(style)
+
+    with pytest.raises(PaletteLookupError, match="did you mean 'CYAN_GLOW'"):
+        _ = pal.CYAN_GLW
+
+    with pytest.raises(PaletteLookupError, match="did you mean 'SLATE_MID'"):
+        _ = pal["SLATE_MD"]
+
+    with pytest.raises(PaletteLookupError, match="did you mean 'OUTLINE'"):
+        PaletteLookup(style, tokens=("OUTLIN",))
+
+    with pytest.raises(KeyError, match="did you mean 'CYAN_GLOW'"):
+        pal.with_overrides({"CYAN_GLW": "CYAN_REFL"})
+
+    with pytest.raises(PaletteLookupError, match="did you mean 'overload'"):
+        build_rgba_lut(style, variant="overlod")
