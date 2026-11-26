@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[27.1]` Modular Characters, Avatars & Part-Based Animation Kits
+### `[28.1]` UI Pixel Art Primitives & 9-Slice Export (`nine_slice`)
 
-- [ ] Build compositional character/avatar primitives (`head`, `torso`, `legs`, `hair`, `accessory`).
-- [ ] Implement deterministic animation cycles (`idle`, `walk`, `typing`, `alert`).
-- [ ] Add `PaletteLookup.with_overrides` skin/hair/outfit variants with showcase assets and tests.
+- [ ] Add `nine_slice` margin metadata to `AssetSpec`, `manifest.json`, and `manifest.d.ts`.
+- [ ] Build reusable UI pixel primitives (buttons, panels, progress bars, badges, `16x16` icons) sharing active `StylePack` tokens.
+- [ ] Add showcase UI asset(s) and hermetic unit/export tests.
 
 ---
 
@@ -20,6 +20,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[27.1]` Modular Characters, Avatars & Part-Based Animation Kits (`a943cd9`)
 - `[26.3]` Typed StylePack Palette Stubs & Emissive-Bleed Diagnostics (`ac6b1d1`)
 - `[26.2]` Agent Introspection CLI (`pixelforge inspect`) & Modular Skill (`4a49910`)
 - `[26.1]` LLM-First CLI Output by Default (`--format llm|json|human`) (`6cd0ce7`)
@@ -30,7 +31,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track B — New Pixel Art Domains
-- `[28.1]` **UI Pixel Art Primitives & 9-Slice Export (`nine_slice`):** Add 9-slice margin metadata to `AssetSpec`, `manifest.json`, and `manifest.d.ts` alongside reusable UI pixel primitives (buttons, panels, progress bars, badges, `16x16` icons) sharing active `StylePack` tokens.
 - `[29.1]` **Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob):** Add a vectorized autotile generator for walls, floors, cables, and terrain bitmasks with tile-metadata atlas export compatible with Godot, Tiled, Phaser, and Svelte.
 - `[30.1]` **Second Reference `StylePack` & Style-Agnosticism Verification:** Author a second non-homelab `StylePack` (e.g., `topdown_rpg` or `cyber_hud_32`) with sample assets and tests proving `core/` and `prefabs/` have zero `homelab-16bit` coupling.
 
