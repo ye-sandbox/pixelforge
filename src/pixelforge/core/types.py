@@ -21,6 +21,7 @@ MAX_PALETTE_INDEX: Final[int] = 254
 PerspectiveMode = Literal["front-2.5d", "iso-2:1", "top-down", "side"]
 LightingAngle = Literal["top-left", "top-right", "top"]
 AutotileMode = Literal["cardinal16", "blob47"]
+BitmapFontPreset = Literal["4x6", "5x7"]
 LayerRole = Literal["visual", "collision", "walkable", "occlusion", "interact"]
 PaletteFlag = Literal[
     "outline",
@@ -256,6 +257,58 @@ class TilemapSpec(BaseModel):
         return self
 
 
+class BitmapGlyphMetrics(BaseModel):
+    """Per-glyph atlas coordinates and spacing metrics for a compiled bitmap font."""
+
+    model_config = ConfigDict(frozen=True)
+
+    char: str = Field(min_length=1, max_length=1)
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    x_advance: int = Field(gt=0)
+    x_offset: int = 0
+    y_offset: int = 0
+
+
+class BitmapFontSpec(BaseModel):
+    """Deterministic bitmap font atlas layout and glyph spacing contract."""
+
+    model_config = ConfigDict(frozen=True)
+
+    preset: BitmapFontPreset = "4x6"
+    glyph_width: int = Field(gt=0)
+    glyph_height: int = Field(gt=0)
+    line_height: int = Field(gt=0)
+    letter_spacing: int = Field(default=1, ge=0)
+    space_advance: int = Field(gt=0)
+    columns: int = Field(gt=0)
+    rows: int = Field(gt=0)
+    margin: int = Field(default=0, ge=0)
+    spacing: int = Field(default=0, ge=0)
+    charset: str = Field(min_length=1)
+    glyphs: tuple[BitmapGlyphMetrics, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_font(self) -> BitmapFontSpec:
+        capacity = self.columns * self.rows
+        if len(self.glyphs) > capacity:
+            msg = f"BitmapFontSpec glyphs ({len(self.glyphs)}) exceed grid capacity ({capacity})"
+            raise ValueError(msg)
+        if len(set(self.charset)) != len(self.charset):
+            msg = "BitmapFontSpec charset contains duplicate characters"
+            raise ValueError(msg)
+        glyph_chars = "".join(g.char for g in self.glyphs)
+        if len(set(glyph_chars)) != len(self.glyphs):
+            msg = "BitmapFontSpec glyphs contains duplicate characters"
+            raise ValueError(msg)
+        if glyph_chars != self.charset:
+            msg = "BitmapFontSpec glyphs must match charset order 1:1"
+            raise ValueError(msg)
+        return self
+
+
 class AssetSpec(BaseModel):
     """Static metadata specification declared by each `.asset.py` module."""
 
@@ -272,6 +325,7 @@ class AssetSpec(BaseModel):
     seed: int = 0
     nine_slice: NineSliceMargins | None = None
     tilemap: TilemapSpec | None = None
+    font: BitmapFontSpec | None = None
 
     @model_validator(mode="after")
     def _validate_states(self) -> AssetSpec:
@@ -308,4 +362,22 @@ class AssetSpec(BaseModel):
                     f"exceed canvas ({self.width}x{self.height})"
                 )
                 raise ValueError(msg)
+        if self.font is not None:
+            f = self.font
+            req_w = 2 * f.margin + f.columns * f.glyph_width + (f.columns - 1) * f.spacing
+            req_h = 2 * f.margin + f.rows * f.glyph_height + (f.rows - 1) * f.spacing
+            if req_w > self.width or req_h > self.height:
+                msg = (
+                    f"AssetSpec {self.id!r} font atlas dimensions ({req_w}x{req_h}) "
+                    f"exceed canvas ({self.width}x{self.height})"
+                )
+                raise ValueError(msg)
+            for glyph in f.glyphs:
+                if glyph.x + glyph.width > self.width or glyph.y + glyph.height > self.height:
+                    msg = (
+                        f"AssetSpec {self.id!r} font glyph {glyph.char!r} "
+                        f"({glyph.x},{glyph.y},{glyph.width}x{glyph.height}) "
+                        f"exceeds canvas ({self.width}x{self.height})"
+                    )
+                    raise ValueError(msg)
         return self

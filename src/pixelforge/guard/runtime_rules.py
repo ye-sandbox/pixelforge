@@ -182,21 +182,23 @@ def _check_frame_invariants(
 
     violations.extend(_check_anchors_and_hitboxes(frame_a, spec.width, spec.height, file_path))
 
-    orphans = find_orphan_pixel_coords(frame_a)
-    if orphans:
-        sample = ", ".join(f"({x},{y})" for x, y in orphans[:6])
-        suffix = "..." if len(orphans) > 6 else ""
-        severity: GuardSeverity = "error" if strict_orphans else "warning"
-        violations.append(
-            GuardViolation(
-                file=file_path,
-                line=1,
-                col=0,
-                rule="orphan-pixels",
-                detail=f"{len(orphans)} isolated 1x1 pixel(s) at {sample}{suffix} in {label}",
-                severity=severity,
+    if spec.font is None:
+        # INVARIANT: Bitmap font atlases inherently contain isolated 1x1 dots (`.`, `i`, `:`, `!`).
+        orphans = find_orphan_pixel_coords(frame_a)
+        if orphans:
+            sample = ", ".join(f"({x},{y})" for x, y in orphans[:6])
+            suffix = "..." if len(orphans) > 6 else ""
+            severity: GuardSeverity = "error" if strict_orphans else "warning"
+            violations.append(
+                GuardViolation(
+                    file=file_path,
+                    line=1,
+                    col=0,
+                    rule="orphan-pixels",
+                    detail=f"{len(orphans)} isolated 1x1 pixel(s) at {sample}{suffix} in {label}",
+                    severity=severity,
+                )
             )
-        )
 
     violations.extend(_check_advisory_diagnostics(frame_a, style, file_path=file_path, label=label))
     return violations

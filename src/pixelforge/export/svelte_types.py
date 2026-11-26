@@ -112,6 +112,8 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
         lines.append("  readonly nineSlice: PixelForgeNineSlice;")
     if entry.tilemap is not None:
         lines.append("  readonly tilemap: PixelForgeTilemap;")
+    if entry.font is not None:
+        lines.append("  readonly font: PixelForgeBitmapFont;")
     if entry.semantics is not None:
         lines.append("  readonly semantics: PixelForgeGameplaySemantics;")
     if entry.frameMetadata is not None:
@@ -176,6 +178,32 @@ def generate_svelte_manifest_dts(
         "  readonly terrain_name: string;",
         "  readonly margin: number;",
         "  readonly spacing: number;",
+        "}",
+        "",
+        "export interface PixelForgeBitmapGlyph {",
+        "  readonly char: string;",
+        "  readonly x: number;",
+        "  readonly y: number;",
+        "  readonly width: number;",
+        "  readonly height: number;",
+        "  readonly x_advance: number;",
+        "  readonly x_offset: number;",
+        "  readonly y_offset: number;",
+        "}",
+        "",
+        "export interface PixelForgeBitmapFont {",
+        "  readonly preset: '4x6' | '5x7';",
+        "  readonly glyph_width: number;",
+        "  readonly glyph_height: number;",
+        "  readonly line_height: number;",
+        "  readonly letter_spacing: number;",
+        "  readonly space_advance: number;",
+        "  readonly columns: number;",
+        "  readonly rows: number;",
+        "  readonly margin: number;",
+        "  readonly spacing: number;",
+        "  readonly charset: string;",
+        "  readonly glyphs: readonly PixelForgeBitmapGlyph[];",
         "}",
         "",
         "export interface PixelForgePoint {",

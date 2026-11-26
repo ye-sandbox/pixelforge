@@ -281,6 +281,11 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
                 else {}
             ),
             **(
+                {"font": bundle.manifest.font.model_dump(mode="json")}
+                if bundle.manifest.font is not None
+                else {}
+            ),
+            **(
                 {"semantics": bundle.manifest.semantics.model_dump(mode="json")}
                 if bundle.manifest.semantics is not None
                 else {}

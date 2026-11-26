@@ -11,6 +11,7 @@ from typing import Literal, Self, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from pixelforge.core.font import draw_indexed_text
 from pixelforge.core.iso import IsoAnchor, iso_box, iso_tile
 from pixelforge.core.palette import PaletteLookup
 from pixelforge.core.plane import Plane, Point2D
@@ -26,6 +27,7 @@ from pixelforge.core.types import (
     TRANSPARENT_INDEX,
     AnchorPoint,
     AssetSpec,
+    BitmapFontPreset,
     HitboxRect,
     LayerRole,
     StylePack,
@@ -314,6 +316,33 @@ class _DrawingMixin:
     ) -> None:
         """Recolor top/bottom exposed opaque edge pixels for bevels and rims."""
         self.surface.edge_mask(top_color, bottom_color)
+
+    def text(
+        self,
+        text: str,
+        x: int | float,
+        y: int | float,
+        color: int,
+        *,
+        font: BitmapFontPreset = "4x6",
+        scale: int = 1,
+        shadow: int | None = None,
+        letter_spacing: int | None = None,
+        line_height: int | None = None,
+    ) -> None:
+        """Render crisp 1x bitmap text onto the active surface using palette indices."""
+        draw_indexed_text(
+            self.surface,
+            text,
+            round(x),
+            round(y),
+            color,
+            font=font,
+            scale=scale,
+            shadow=shadow,
+            letter_spacing=letter_spacing,
+            line_height=line_height,
+        )
 
     def iso_tile(
         self,

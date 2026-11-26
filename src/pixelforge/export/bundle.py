@@ -21,6 +21,7 @@ from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import (
     AnchorPoint,
     AssetSpec,
+    BitmapFontSpec,
     GameplaySemantics,
     HitboxRect,
     NineSliceMargins,
@@ -133,6 +134,7 @@ class ExportedAssetManifestEntry(BaseModel):
     hitboxes: tuple[HitboxRect, ...]
     nineSlice: NineSliceMargins | None = None
     tilemap: TilemapSpec | None = None
+    font: BitmapFontSpec | None = None
     frameMetadata: dict[str, tuple[FrameMetadataEntry, ...]] | None = None
     semantics: GameplaySemantics | None = None
     sha256: str
@@ -275,6 +277,7 @@ def _compute_bundle_digest(
         "hitboxes": [h.model_dump() for h in hitboxes],
         **({"nineSlice": spec.nine_slice.model_dump()} if spec.nine_slice is not None else {}),
         **({"tilemap": spec.tilemap.model_dump()} if spec.tilemap is not None else {}),
+        **({"font": spec.font.model_dump()} if spec.font is not None else {}),
         **({"semantics": semantics.model_dump()} if semantics is not None else {}),
         "frameMetadata": (
             {
@@ -661,6 +664,7 @@ def export_rendered_frames_bundle(
         hitboxes=baseline.hitboxes,
         nineSlice=spec.nine_slice,
         tilemap=spec.tilemap,
+        font=spec.font,
         frameMetadata=frame_metadata,
         semantics=resolved_semantics,
         sha256=sha256,

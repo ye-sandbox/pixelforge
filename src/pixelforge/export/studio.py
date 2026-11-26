@@ -40,6 +40,9 @@ def _manifest_to_asset_spec(manifest: ExportedAssetManifestEntry) -> AssetSpec:
         states=manifest.states,
         frames=manifest.frames,
         fps=manifest.fps,
+        nine_slice=manifest.nineSlice,
+        tilemap=manifest.tilemap,
+        font=manifest.font,
     )
 
 

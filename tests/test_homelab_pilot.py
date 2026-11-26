@@ -51,6 +51,7 @@ EXPECTED_THINKPAD_IDS = (
 )
 EXPECTED_UI_IDS = (
     "hud_button_9slice",
+    "hud_font_4x6",
     "hud_icons_16",
     "hud_panel_9slice",
 )
