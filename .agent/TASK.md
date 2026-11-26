@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[31.2]` Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode
+### `[32.1]` Lightweight Local Preview Studio (`pixelforge watch --serve`)
 
-- [ ] Extend `pixelforge critic` to score composed `*.scene.py` outputs.
-- [ ] Enrich `pixelforge diff` output with pixel/emissive/orphan/canvas-coverage deltas.
-- [ ] Support Markdown PR regression summaries in CI, with unit and CLI tests.
+- [ ] Add an optional zero-dependency local preview server (or generated self-contained HTML studio) fed by `watch`.
+- [ ] Support inspecting spritesheets, toggling `day`/`night` variants, previewing simulated emissive bloom, and inspecting anchors/mounts interactively.
+- [ ] Add unit and CLI tests for the preview studio server/output.
 
 ---
 
@@ -20,6 +20,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[31.2]` Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode (`1eb9ef4`)
 - `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check` (`be22749`)
 - `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification (`a4f1f9f`)
 - `[29.1]` Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob) (`719b8ab`)
@@ -38,7 +39,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 _All Track C items promoted or completed._
 
 ### Track D — Consumption Experience & Distribution
-- `[32.1]` **Lightweight Local Preview Studio (`pixelforge watch --serve`):** Add an optional zero-dependency local preview server (or generated self-contained HTML studio) fed by `watch` to inspect spritesheets, toggle `day`/`night` variants, preview simulated emissive bloom, and inspect anchors/mounts interactively.
 - `[32.2]` **External Repository Consumption & Packaging Ergonomics:** Verify and document installing/running `pixelforge` as a standalone tool (`uv tool` / git dependency) against external consumer repositories via `--root` with hermetic end-to-end tests.
 
 ### Refactoring
