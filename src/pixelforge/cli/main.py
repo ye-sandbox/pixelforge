@@ -8,16 +8,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from pixelforge import __version__
+from pixelforge.cli.compose_cmd import compose_scene_workflow, parse_mount_arg
+from pixelforge.cli.critic_cmd import critic_workflow
+from pixelforge.cli.diff_cmd import diff_asset
+from pixelforge.cli.render_cmd import render_once
 from pixelforge.cli.scaffold import scaffold_project
 from pixelforge.cli.settings import HydraSettings, PixelforgeSettings
-from pixelforge.cli.workflow import (
-    compose_scene_workflow,
-    critic_workflow,
-    diff_asset,
-    parse_mount_arg,
-    render_once,
-    watch_loop,
-)
+from pixelforge.cli.watch_cmd import watch_loop
 from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
 from pixelforge.guard.runner import load_all_styles, run_checks
 

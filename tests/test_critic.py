@@ -230,7 +230,7 @@ def test_cli_critic_skips_cleanly_when_no_git_changes(
         return set()
 
     monkeypatch.setattr(
-        "pixelforge.cli.workflow.discover_changed_paths_from_git",
+        "pixelforge.cli.critic_cmd.discover_changed_paths_from_git",
         _no_changes,
     )
     code = main(["critic", "--root", str(tmp_path), "--base", "HEAD"])
