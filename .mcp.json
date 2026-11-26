@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pixelforge": {
+      "command": "uv",
+      "args": [
+        "run",
+        "pixelforge",
+        "mcp",
+        "--root",
+        "."
+      ]
+    }
+  }
+}
