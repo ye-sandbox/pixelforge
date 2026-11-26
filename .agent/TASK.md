@@ -8,9 +8,9 @@
 
 ## Active Task
 
-### `[35.1]` First-Class Bitmap Fonts & Pixel Text Atlas
+### `[36.1]` Typed Frame Events & Audio Cues (`frameMetadata.events`)
 
-- [ ] Expose deterministic bitmap/pixel font compilation (evolving `_font.py`) into glyph sprite atlases, spacing metrics, and `manifest.d.ts` definitions for crisp 1× HUDs, terminals, and dialogue boxes.
+- [ ] Extend `AssetSpec`, `manifest.d.ts`, `--indexed-ts`, and Aseprite atlas exports with deterministic per-`(state, frame)` event tags (e.g., `footstep`, `spark`, `beep`) so external runtimes and audio compilers sync deterministically to animations.
 
 ---
 
@@ -18,6 +18,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[35.1]` First-Class Bitmap Fonts & Pixel Text Atlas (`14747b9`)
 - `[34.1]` Derived Lighting & Surface Maps (`_normal.png` & `_height.png`) (`b8659fc`)
 - `[33.1]` Derived Gameplay Semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot` & `interact_zones`) (`98fc73c`)
 - `[32.2]` External Repository Consumption & Packaging Ergonomics (`6c7b4ba`)
@@ -44,7 +45,6 @@ _All Track C items promoted or completed._
 _All Track D items promoted or completed._
 
 ### Track E — Gameplay Semantics, Derived Maps & AI Ergonomics
-- `[36.1]` **Typed Frame Events & Audio Cues (`frameMetadata.events`):** Extend `AssetSpec`, `manifest.d.ts`, `--indexed-ts`, and Aseprite atlas exports with deterministic per-`(state, frame)` event tags (e.g., `footstep`, `spark`, `beep`) so external runtimes and audio compilers sync deterministically to animations.
 - `[37.1]` **AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph):** Generate initial `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeletons via `pixelforge analyze-ref --scaffold`, and extend `*.scene.py` + `scene_rules.py` to validate multi-scene portal/transition graphs.
 
 ### Refactoring
