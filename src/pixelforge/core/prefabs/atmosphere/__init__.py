@@ -1,0 +1,71 @@
+"""Deterministic atmospheric, celestial, weather, and window-light prefabs."""
+
+from pixelforge.core.prefabs.atmosphere._pane import (
+    Canvas,
+    ClippedPane,
+    HorizonMode,
+    PaneRegion,
+    PlaneRegion,
+    RectRegion,
+    SkyPreset,
+    TargetCanvas,
+    TelemetryMode,
+    clipped_pane,
+)
+from pixelforge.core.prefabs.atmosphere.lighting import (
+    light_beam,
+    point_light_spill,
+    screen_telemetry,
+    window_light_spill,
+)
+from pixelforge.core.prefabs.atmosphere.sky import (
+    CycleStep,
+    clouds,
+    day_night_cycle,
+    eval_day_night_cycle,
+    horizon_silhouette,
+    moon,
+    sky_backdrop,
+    starfield,
+    sun,
+)
+from pixelforge.core.prefabs.atmosphere.weather import (
+    dust_motes,
+    rising_steam,
+    weather_lightning,
+    weather_rain,
+    weather_snow,
+    window_condensation,
+)
+
+__all__ = [
+    "Canvas",
+    "ClippedPane",
+    "CycleStep",
+    "HorizonMode",
+    "PaneRegion",
+    "PlaneRegion",
+    "RectRegion",
+    "SkyPreset",
+    "TargetCanvas",
+    "TelemetryMode",
+    "clipped_pane",
+    "clouds",
+    "day_night_cycle",
+    "dust_motes",
+    "eval_day_night_cycle",
+    "horizon_silhouette",
+    "light_beam",
+    "moon",
+    "point_light_spill",
+    "rising_steam",
+    "screen_telemetry",
+    "sky_backdrop",
+    "starfield",
+    "sun",
+    "weather_lightning",
+    "weather_rain",
+    "weather_snow",
+    "window_condensation",
+    "window_light_spill",
+]
