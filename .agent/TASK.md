@@ -8,10 +8,10 @@
 
 ## Active Task
 
-### `[90.3]` Decompose `guard/runner.py:run_checks` & `export/scene.py:compose_scene`
+### `[90.4]` Subdivide Oversized Prefab Modules & `tests/test_prefabs.py`
 
-- [ ] Extract single-purpose helpers from `src/pixelforge/guard/runner.py:run_checks` so all functions stay within <= 50–80 LOC while preserving public signatures and guard test parity.
-- [ ] Extract single-purpose helpers from `src/pixelforge/export/scene.py:compose_scene` and `generate_scene_sheet` so all functions stay within <= 50–80 LOC while preserving public signatures and scene test parity.
+- [ ] Split `src/pixelforge/core/prefabs/furniture.py`, `atmosphere.py`, and `architecture.py` into focused sub-modules while preserving `pixelforge.core.prefabs` re-exports and breaking >100 LOC drawing helpers (`_draw_upholstered_seat`, `horizon_silhouette`, `iso_chair`, `iso_rack`, `iso_partition_wall`, `iso_l_desk`).
+- [ ] Split `tests/test_prefabs.py` into focused test modules matching the prefab sub-module boundaries.
 - [ ] Verify all checks pass (`uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest`).
 
 ---
@@ -54,12 +54,13 @@
 | `[23.1]` | Living & Workstation Furniture Prefab Expansion (`iso_l_desk`, `iso_nightstand`, `iso_side_table`, `iso_sofa`, `iso_armchair`, `iso_coffee_table`, `iso_wardrobe`, `iso_locker`, `iso_mini_fridge`, `iso_filing_cabinet`) | `efc6c8a` | 2026-11-26 |
 | `[24.1]` | Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`) | `8beec76` | 2026-11-26 |
 | `[90.2]` | Modularize `src/pixelforge/cli/workflow.py` by Subcommand Domain (`render_cmd`, `diff_cmd`, `watch_cmd`, `compose_cmd`, `critic_cmd`, facade `workflow.py`) | `f6a4bcd` | 2026-11-26 |
+| `[90.3]` | Decompose `guard/runner.py:run_checks` & `export/scene.py` (`compose_scene`, `generate_scene_sheet`) | `3a82e2c` | 2026-11-26 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- **`[90.4]` Subdivide Oversized Prefab Modules & `tests/test_prefabs.py`:** Split `core/prefabs/furniture.py` (1,503 LOC), `atmosphere.py` (1,395 LOC), `architecture.py` (1,359 LOC), and `tests/test_prefabs.py` (1,519 LOC) into focused sub-modules (preserving `pixelforge.core.prefabs` re-exports and breaking >100 LOC drawing helpers such as `_draw_upholstered_seat`, `horizon_silhouette`, `iso_chair`, `iso_rack`, `iso_partition_wall`, `iso_l_desk`).
+_None currently queued (all items promoted to the active cycle above)._
 
 ---
 
