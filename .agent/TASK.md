@@ -8,10 +8,10 @@
 
 ## Active Task
 
-### `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification
+### `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check`
 
-- [ ] Author a second non-homelab `StylePack` (e.g., `topdown_rpg` or `cyber_hud_32`) with sample assets.
-- [ ] Add tests proving `core/` and `prefabs/` have zero `homelab-16bit` coupling.
+- [ ] Extend `pixelforge check` with deterministic `*.scene.py` validation (occlusion thresholds, anchor-within-parent-bbox checks, duplicate mount detection, and strict bounds/perspective audits).
+- [ ] Add unit and CLI tests covering valid scenes and each deterministic scene guard violation.
 
 ---
 
@@ -19,6 +19,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification (`a4f1f9f`)
 - `[29.1]` Tilemaps & Deterministic Autotiling (16-Tile / 47-Tile Blob) (`719b8ab`)
 - `[28.1]` UI Pixel Art Primitives & 9-Slice Export (`nine_slice`) (`a4ba768`)
 - `[27.1]` Modular Characters, Avatars & Part-Based Animation Kits (`a943cd9`)
@@ -32,7 +33,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track C — Deterministic Spatial Guards & Visual Critic Loop
-- `[31.1]` **Deterministic Scene Ergonomics Guards in `pixelforge check`:** Extend `pixelforge check` with deterministic `*.scene.py` validation (occlusion thresholds, anchor-within-parent-bbox checks, duplicate mount detection, and strict bounds/perspective audits).
 - `[31.2]` **Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode:** Extend `pixelforge critic` to score composed `*.scene.py` outputs, enrich `pixelforge diff` output with pixel/emissive/orphan/canvas-coverage deltas, and support Markdown PR regression summaries in CI.
 
 ### Track D — Consumption Experience & Distribution
