@@ -8,11 +8,10 @@
 
 ## Active Task
 
-### `[32.1]` Lightweight Local Preview Studio (`pixelforge watch --serve`)
+### `[32.2]` External Repository Consumption & Packaging Ergonomics
 
-- [ ] Add an optional zero-dependency local preview server (or generated self-contained HTML studio) fed by `watch`.
-- [ ] Support inspecting spritesheets, toggling `day`/`night` variants, previewing simulated emissive bloom, and inspecting anchors/mounts interactively.
-- [ ] Add unit and CLI tests for the preview studio server/output.
+- [ ] Verify and document installing/running `pixelforge` as a standalone tool (`uv tool` / git dependency) against external consumer repositories via `--root`.
+- [ ] Add hermetic end-to-end tests covering standalone CLI invocation against an external repository layout.
 
 ---
 
@@ -20,6 +19,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[32.1]` Lightweight Local Preview Studio (`pixelforge watch --serve`) (`86578ce`)
 - `[31.2]` Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode (`1eb9ef4`)
 - `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check` (`be22749`)
 - `[30.1]` Second Reference `StylePack` & Style-Agnosticism Verification (`a4f1f9f`)
@@ -39,7 +39,14 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 _All Track C items promoted or completed._
 
 ### Track D — Consumption Experience & Distribution
-- `[32.2]` **External Repository Consumption & Packaging Ergonomics:** Verify and document installing/running `pixelforge` as a standalone tool (`uv tool` / git dependency) against external consumer repositories via `--root` with hermetic end-to-end tests.
+_All Track D items promoted or completed._
+
+### Track E — Gameplay Semantics, Derived Maps & AI Ergonomics
+- `[33.1]` **Derived Gameplay Semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot` & `interact_zones`):** Derive collision masks, walkable grids, occlusion zones, and interaction triggers directly from `Asset`/`Layer`/`SceneSpec`/`Tilemap` geometry, exporting typed contracts to `manifest.json`, `manifest.d.ts`, `--indexed-ts`, and Tiled/Godot.
+- `[34.1]` **Derived Lighting & Surface Maps (`_normal.png` & `_height.png`):** Generate optional 2D normal and height masks from `Plane`/`iso_box` face orientations and layer depth (`--normals` / `--height`) for dynamic WebGL2/engine lighting without breaking indexed pixel aesthetics.
+- `[35.1]` **First-Class Bitmap Fonts & Pixel Text Atlas:** Expose deterministic bitmap/pixel font compilation (evolving `_font.py`) into glyph sprite atlases, spacing metrics, and `manifest.d.ts` definitions for crisp 1× HUDs, terminals, and dialogue boxes.
+- `[36.1]` **Typed Frame Events & Audio Cues (`frameMetadata.events`):** Extend `AssetSpec`, `manifest.d.ts`, `--indexed-ts`, and Aseprite atlas exports with deterministic per-`(state, frame)` event tags (e.g., `footstep`, `spark`, `beep`) so external runtimes and audio compilers sync deterministically to animations.
+- `[37.1]` **AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph):** Generate initial `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeletons via `pixelforge analyze-ref --scaffold`, and extend `*.scene.py` + `scene_rules.py` to validate multi-scene portal/transition graphs.
 
 ### Refactoring
 - `[90.5]` **Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`):** Split `export/scene.py` (models, composition engine, scene contact sheet) and `core/prefabs/details.py` (wall decor vs. shadows/cables), and streamline `core/builder.py` and `cli/watch_cmd.py` preserving public exports.
