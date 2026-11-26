@@ -252,6 +252,11 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
                 h.model_dump(exclude_none=True, mode="json") for h in bundle.manifest.hitboxes
             ],
             **(
+                {"nineSlice": bundle.manifest.nineSlice.model_dump(mode="json")}
+                if bundle.manifest.nineSlice is not None
+                else {}
+            ),
+            **(
                 {
                     "frameMetadata": {
                         st: [entry.model_dump(exclude_none=True, mode="json") for entry in entries]

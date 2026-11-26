@@ -123,6 +123,17 @@ from pixelforge.core.prefabs.furniture import (
     iso_wardrobe,
     iso_workbench,
 )
+from pixelforge.core.prefabs.ui import (
+    UiBadgeTone,
+    UiButtonState,
+    UiIconKind,
+    UiPalette,
+    ui_badge,
+    ui_button,
+    ui_icon_16,
+    ui_panel,
+    ui_progress_bar,
+)
 
 __all__ = [
     "AccessoryKind",
@@ -153,6 +164,10 @@ __all__ = [
     "TargetCanvas",
     "TelemetryMode",
     "TorsoAnchors",
+    "UiBadgeTone",
+    "UiButtonState",
+    "UiIconKind",
+    "UiPalette",
     "WallMoldingStyle",
     "WallSide",
     "avatar_accessory",
@@ -217,6 +232,11 @@ __all__ = [
     "sky_backdrop",
     "starfield",
     "sun",
+    "ui_badge",
+    "ui_button",
+    "ui_icon_16",
+    "ui_panel",
+    "ui_progress_bar",
     "wall_ac_unit",
     "wall_clock",
     "wall_corkboard",

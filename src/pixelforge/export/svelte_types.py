@@ -98,6 +98,8 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
             f"  readonly hitboxes: readonly PixelForgeHitbox<{type_name}HitboxName>[];",
         ]
     )
+    if entry.nineSlice is not None:
+        lines.append("  readonly nineSlice: PixelForgeNineSlice;")
     if entry.frameMetadata is not None:
         lines.append(
             f"  readonly frameMetadata?: Readonly<Record<{type_name}State, "
@@ -141,6 +143,13 @@ def generate_svelte_manifest_dts(
         "  readonly w: number;",
         "  readonly h: number;",
         "  readonly kind?: string;",
+        "}",
+        "",
+        "export interface PixelForgeNineSlice {",
+        "  readonly left: number;",
+        "  readonly right: number;",
+        "  readonly top: number;",
+        "  readonly bottom: number;",
         "}",
         "",
         "export interface PixelForgeFrameMetadata<",

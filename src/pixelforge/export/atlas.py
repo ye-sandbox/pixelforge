@@ -94,6 +94,34 @@ def _build_aseprite_slices(
                 "keys": keys,
             }
         )
+    if spec.nine_slice is not None:
+        ns = spec.nine_slice
+        center_w = spec.width - ns.left - ns.right
+        center_h = spec.height - ns.top - ns.bottom
+        if center_w > 0 and center_h > 0:
+            slices.append(
+                {
+                    "name": "nine_slice",
+                    "color": "#00ff00ff",
+                    "keys": [
+                        {
+                            "frame": 0,
+                            "bounds": {
+                                "x": 0,
+                                "y": 0,
+                                "w": spec.width * scale,
+                                "h": spec.height * scale,
+                            },
+                            "center": {
+                                "x": ns.left * scale,
+                                "y": ns.top * scale,
+                                "w": center_w * scale,
+                                "h": center_h * scale,
+                            },
+                        }
+                    ],
+                }
+            )
     return slices
 
 

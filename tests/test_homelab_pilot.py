@@ -49,6 +49,11 @@ EXPECTED_THINKPAD_IDS = (
     "thinkpad_r51_iso",
     "thinkpad_trackpoint_detail",
 )
+EXPECTED_UI_IDS = (
+    "hud_button_9slice",
+    "hud_icons_16",
+    "hud_panel_9slice",
+)
 EXPECTED_PROPS_IDS = (
     "air_purifier_iso",
     "books_stack_iso",
@@ -135,6 +140,7 @@ def test_pilot_pack_passes_all_guards_strict_orphans() -> None:
         + len(EXPECTED_THINKPAD_IDS)
         + len(EXPECTED_PROPS_IDS)
         + len(EXPECTED_CHARACTER_IDS)
+        + len(EXPECTED_UI_IDS)
         + len(EXPECTED_SCENE_IDS)
     )
 
@@ -155,6 +161,7 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
                 *EXPECTED_THINKPAD_IDS,
                 *EXPECTED_PROPS_IDS,
                 *EXPECTED_CHARACTER_IDS,
+                *EXPECTED_UI_IDS,
             )
         )
     )

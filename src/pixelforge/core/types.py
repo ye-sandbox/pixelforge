@@ -146,6 +146,17 @@ class HitboxRect(BaseModel):
         return data
 
 
+class NineSliceMargins(BaseModel):
+    """9-slice stretchable border margins in 1x source pixels."""
+
+    model_config = ConfigDict(frozen=True)
+
+    left: int = Field(ge=0)
+    right: int = Field(ge=0)
+    top: int = Field(ge=0)
+    bottom: int = Field(ge=0)
+
+
 class AssetSpec(BaseModel):
     """Static metadata specification declared by each `.asset.py` module."""
 
@@ -160,6 +171,7 @@ class AssetSpec(BaseModel):
     frames: int = Field(default=1, ge=1)
     fps: int = Field(default=6, ge=1)
     seed: int = 0
+    nine_slice: NineSliceMargins | None = None
 
     @model_validator(mode="after")
     def _validate_states(self) -> AssetSpec:
@@ -172,4 +184,18 @@ class AssetSpec(BaseModel):
                 msg = f"AssetSpec {self.id!r} contains duplicate state {state!r}"
                 raise ValueError(msg)
             seen.add(state)
+        if self.nine_slice is not None:
+            if self.nine_slice.left + self.nine_slice.right > self.width:
+                msg = (
+                    f"AssetSpec {self.id!r} nine_slice horizontal margins "
+                    f"({self.nine_slice.left} + {self.nine_slice.right}) exceed width {self.width}"
+                )
+                raise ValueError(msg)
+            if self.nine_slice.top + self.nine_slice.bottom > self.height:
+                msg = (
+                    f"AssetSpec {self.id!r} nine_slice vertical margins "
+                    f"({self.nine_slice.top} + {self.nine_slice.bottom}) "
+                    f"exceed height {self.height}"
+                )
+                raise ValueError(msg)
         return self

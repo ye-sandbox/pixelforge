@@ -15,7 +15,13 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from pixelforge.core.builder import Asset
 from pixelforge.core.surface import IndexedSurface
-from pixelforge.core.types import AnchorPoint, AssetSpec, HitboxRect, StylePack
+from pixelforge.core.types import (
+    AnchorPoint,
+    AssetSpec,
+    HitboxRect,
+    NineSliceMargins,
+    StylePack,
+)
 from pixelforge.export.atlas import (
     AtlasFormat,
     build_aseprite_atlas,
@@ -104,6 +110,7 @@ class ExportedAssetManifestEntry(BaseModel):
     files: ExportedAssetFiles
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
+    nineSlice: NineSliceMargins | None = None
     frameMetadata: dict[str, tuple[FrameMetadataEntry, ...]] | None = None
     sha256: str
 
@@ -234,6 +241,7 @@ def _compute_bundle_digest(
         "fps": spec.fps,
         "anchors": [a.model_dump() for a in anchors],
         "hitboxes": [h.model_dump() for h in hitboxes],
+        **({"nineSlice": spec.nine_slice.model_dump()} if spec.nine_slice is not None else {}),
         "frameMetadata": (
             {
                 state: [entry.model_dump() for entry in entries]
@@ -472,6 +480,7 @@ def export_rendered_frames_bundle(
         files=export_files,
         anchors=baseline.anchors,
         hitboxes=baseline.hitboxes,
+        nineSlice=spec.nine_slice,
         frameMetadata=frame_metadata,
         sha256=sha256,
     )
