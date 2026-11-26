@@ -8,10 +8,7 @@
 
 ## Active Task
 
-### `[46.1]` Native Stdio MCP Server (`pixelforge mcp`)
-- [ ] Consultative dependency decision (`mcp` SDK vs zero-dep JSON-RPC 2.0 stdio transport)
-- [ ] Add stdio MCP server exposing `inspect_*`, `check_asset`, `probe_canvas`, `render_contact_sheet`, `compose_dry_run`, and `diff_asset` (returning contact-sheet/diff PNGs directly as MCP image content blocks)
-- [ ] Add unit and protocol tests in `tests/cli/`
+_None — all roadmap tasks completed._
 
 ---
 
@@ -19,6 +16,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[46.1]` Native Stdio MCP Server (`pixelforge mcp`) (`3fb1ab4`)
 - `[45.1]` Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill (`e7be5d2`)
 
 - `[44.1]` Batch Pack Contact Sheet (`pixelforge render --pack-sheet`) (`e06b7fb`)
