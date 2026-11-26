@@ -8,16 +8,18 @@
 
 ## Active Task
 
-### `[45.1]` Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill
-- [ ] Add `pixelforge doctor` (`--format llm|json|human`) validating toolchain (`uv`, `ruff`, `pyright`), stale/missing `*_palette.py` stubs, duplicate IDs, tracked `.pixelforge/` scratch files, and `critic` router config
-- [ ] Add hermetic `.agent/skills/blind-critic/SKILL.md` for unbiased read-only subagent review
-- [ ] Add unit and CLI tests in `tests/cli/`
+### `[46.1]` Native Stdio MCP Server (`pixelforge mcp`)
+- [ ] Consultative dependency decision (`mcp` SDK vs zero-dep JSON-RPC 2.0 stdio transport)
+- [ ] Add stdio MCP server exposing `inspect_*`, `check_asset`, `probe_canvas`, `render_contact_sheet`, `compose_dry_run`, and `diff_asset` (returning contact-sheet/diff PNGs directly as MCP image content blocks)
+- [ ] Add unit and protocol tests in `tests/cli/`
 
 ---
 
 ## Completed Tasks Log
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
+
+- `[45.1]` Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill (`e7be5d2`)
 
 - `[44.1]` Batch Pack Contact Sheet (`pixelforge render --pack-sheet`) (`e06b7fb`)
 - `[43.1]` Zero-Reference Asset, Scene & Style Scaffolders (`pixelforge new`) (`ecfc95c`)
@@ -55,7 +57,7 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track G — Agent QoL & Developer Ergonomics
-- `[46.1]` **Native Stdio MCP Server (`pixelforge mcp`):** Consultative dependency decision (`mcp` SDK vs zero-dep JSON-RPC 2.0 stdio transport) + stdio MCP server exposing `inspect_*`, `check_asset`, `probe_canvas`, `render_contact_sheet`, `compose_dry_run`, and `diff_asset` (returning contact-sheet/diff PNGs directly as MCP image content blocks).
+_All Track G items promoted or completed._
 
 ### Track F — Generic Multi-Game Palette & Preset System
 _All Track F items promoted or completed._
