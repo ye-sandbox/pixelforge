@@ -16,6 +16,11 @@ from pixelforge.guard.types import GuardSeverity, GuardViolation
 ADVISORY_EMISSIVE_BLEED_RATIO: Final[float] = 0.25
 ADVISORY_MIN_COVERAGE_RATIO: Final[float] = 0.05
 ADVISORY_MAX_COVERAGE_RATIO: Final[float] = 0.95
+FURNITURE_OVERLAP_WARN_RATIO: Final[float] = 0.25
+
+
+def _is_container_hitbox(name: str) -> bool:
+    return name == "room" or name.endswith("_zone") or name.startswith("door_")
 
 
 def find_orphan_pixel_coords(frame: RenderedFrame) -> list[tuple[int, int]]:
@@ -181,6 +186,7 @@ def _check_frame_invariants(
         )
 
     violations.extend(_check_anchors_and_hitboxes(frame_a, spec.width, spec.height, file_path))
+    violations.extend(_check_spatial_ergonomics(frame_a, file_path))
 
     if spec.font is None:
         # INVARIANT: Bitmap font atlases inherently contain isolated 1x1 dots (`.`, `i`, `:`, `!`).
@@ -201,6 +207,62 @@ def _check_frame_invariants(
             )
 
     violations.extend(_check_advisory_diagnostics(frame_a, style, file_path=file_path, label=label))
+    return violations
+
+
+def _check_spatial_ergonomics(frame: RenderedFrame, file_path: str) -> list[GuardViolation]:
+    """Emit advisory warnings for doorway obstructions and abnormal furniture overlap."""
+    violations: list[GuardViolation] = []
+    label = f"({frame.state!r}, frame={frame.frame})"
+    clearances = [hb for hb in frame.hitboxes if hb.name.startswith("door_clearance_")]
+    furniture = [hb for hb in frame.hitboxes if not _is_container_hitbox(hb.name)]
+
+    for clr in clearances:
+        for hb in furniture:
+            ix0 = max(clr.x, hb.x)
+            iy0 = max(clr.y, hb.y)
+            ix1 = min(clr.x + clr.w, hb.x + hb.w)
+            iy1 = min(clr.y + clr.h, hb.y + hb.h)
+            if ix1 > ix0 and iy1 > iy0:
+                violations.append(
+                    GuardViolation(
+                        file=file_path,
+                        line=1,
+                        col=0,
+                        rule="door-obstruction",
+                        detail=(
+                            f"Furniture hitbox {hb.name!r} overlaps doorway clearance "
+                            f"{clr.name!r} in {label}"
+                        ),
+                        severity="warning",
+                    )
+                )
+
+    for idx, hb_a in enumerate(furniture):
+        for hb_b in furniture[idx + 1 :]:
+            ix0 = max(hb_a.x, hb_b.x)
+            iy0 = max(hb_a.y, hb_b.y)
+            ix1 = min(hb_a.x + hb_a.w, hb_b.x + hb_b.w)
+            iy1 = min(hb_a.y + hb_a.h, hb_b.y + hb_b.h)
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+            inter_area = (ix1 - ix0) * (iy1 - iy0)
+            min_area = min(hb_a.w * hb_a.h, hb_b.w * hb_b.h)
+            if min_area > 0 and (inter_area / min_area) >= FURNITURE_OVERLAP_WARN_RATIO:
+                violations.append(
+                    GuardViolation(
+                        file=file_path,
+                        line=1,
+                        col=0,
+                        rule="furniture-overlap",
+                        detail=(
+                            f"Furniture hitboxes {hb_a.name!r} and {hb_b.name!r} overlap by "
+                            f"{(inter_area / min_area) * 100:.1f}% in {label}"
+                        ),
+                        severity="warning",
+                    )
+                )
+
     return violations
 
 

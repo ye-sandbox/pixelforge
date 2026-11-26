@@ -225,7 +225,7 @@ def _draw_lab_zone(
         margin=1,
         corner_margin=4,
     )
-    slots = prefabs.iso_desk(
+    slots = prefabs.iso_desk_set(
         a,
         desk_x,
         desk_y,
@@ -243,29 +243,23 @@ def _draw_lab_zone(
         highlight=p.WOOD_L,
         mat_color=p.METAL_D,
         mat_w=36,
+        chair_u=0.45,
+        chair_pull_out=10,
+        chair_seat_w=11,
+        chair_seat_d=11,
+        chair_seat_h=3,
+        chair_back_h=9,
+        chair_leg_h=5,
+        chair_top=p.METAL_L,
+        chair_left=p.METAL_M,
+        chair_right=p.METAL_D,
+        chair_back=p.METAL_M,
+        chair_leg=p.INK,
+        chair_facing="ne",
+        shadow_color=p.VOID,
     )
 
-    chair_x, chair_y = lab_zone.floor_point(0.42, 0.44)
-    prefabs.contact_shadow(a, chair_x, chair_y + 8, 8, 4, color=p.VOID, dither_ratio=0.5)
-    prefabs.iso_chair(
-        a,
-        chair_x,
-        chair_y,
-        seat_w=11,
-        seat_d=11,
-        seat_h=3,
-        back_h=9,
-        leg_h=5,
-        top=p.METAL_L,
-        left=p.METAL_M,
-        right=p.METAL_D,
-        back=p.METAL_M,
-        leg=p.INK,
-        outline=p.INK,
-        facing="ne",
-    )
-
-    rack_x, rack_y = lab_zone.floor_point(0.84, 0.24)
+    rack_x, rack_y = lab_zone.floor_point(0.82, 0.56)
     prefabs.contact_shadow(a, rack_x, rack_y + 7, 11, 5, color=p.VOID, dither_ratio=0.5)
     prefabs.iso_rack(
         a,
@@ -280,6 +274,7 @@ def _draw_lab_zone(
         outline=p.INK,
         anchor="center",
     )
+    a.hitbox("rack", rack_x - 16, rack_y - 8, 32, 22)
     return slots, (rack_x, rack_y - 2)
 
 
@@ -291,7 +286,7 @@ def render(a: Asset) -> None:
     slots, rack_pt = _draw_lab_zone(a, p, room, lab_zone)
 
     # Zone 0: Bedroom anchors
-    bed_plant_pt = bedroom_zone.floor_point(0.22, 0.42)
+    bed_plant_pt = bedroom_zone.floor_point(0.18, 0.56)
     bed_crate_pt = bedroom_zone.floor_point(0.72, 0.90)
     a.anchor("bed_plant", bed_plant_pt[0], bed_plant_pt[1])
     a.anchor("bed_crate", bed_crate_pt[0], bed_crate_pt[1])
@@ -318,6 +313,8 @@ def render(a: Asset) -> None:
     a.anchor("desk_mouse", mouse_pt[0], mouse_pt[1])
     a.anchor("rack_switch", rack_pt[0], rack_pt[1])
 
+    a.hitbox("bed", 79, 110, 58, 45)
+    a.hitbox("desk", 219, 101, 94, 65)
     a.hitbox("bedroom_zone", 52, 76, 128, 120)
     a.hitbox("lab_zone", 180, 76, 128, 120)
     a.hitbox("room", 52, 12, 256, 200)

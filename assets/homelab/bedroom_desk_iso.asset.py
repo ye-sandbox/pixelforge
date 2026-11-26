@@ -158,7 +158,7 @@ def _draw_desk_and_slots(
         margin=1,
         corner_margin=4,
     )
-    slots = prefabs.iso_desk(
+    slots = prefabs.iso_desk_set(
         a,
         desk_x,
         desk_y,
@@ -176,26 +176,20 @@ def _draw_desk_and_slots(
         highlight=p.WOOD_L,
         mat_color=p.METAL_D,
         mat_w=40,
-    )
-
-    # Ergonomic task chair tucked in front of the keyboard zone
-    prefabs.contact_shadow(a, 158, 123, 9, 4, color=p.VOID, dither_ratio=0.5)
-    prefabs.iso_chair(
-        a,
-        158,
-        113,
-        seat_w=12,
-        seat_d=12,
-        seat_h=3,
-        back_h=10,
-        leg_h=5,
-        top=p.METAL_L,
-        left=p.METAL_M,
-        right=p.METAL_D,
-        back=p.METAL_M,
-        leg=p.INK,
-        outline=p.INK,
-        facing="ne",
+        chair_u=0.45,
+        chair_pull_out=10,
+        chair_seat_w=12,
+        chair_seat_d=12,
+        chair_seat_h=3,
+        chair_back_h=10,
+        chair_leg_h=5,
+        chair_top=p.METAL_L,
+        chair_left=p.METAL_M,
+        chair_right=p.METAL_D,
+        chair_back=p.METAL_M,
+        chair_leg=p.INK,
+        chair_facing="ne",
+        shadow_color=p.VOID,
     )
 
     # Side floor rack stand beside the right end of the desk
@@ -270,5 +264,6 @@ def render(a: Asset) -> None:
     a.anchor("portal_homelab", portal_pt[0], portal_pt[1])
 
     a.hitbox("desk", 134, 63, 104, 72)
+    a.hitbox("rack", 226, 128, 32, 22)
     a.hitbox("breaker", 240, 74, 18, 35)
     a.hitbox("room", 48, 6, 224, 186)

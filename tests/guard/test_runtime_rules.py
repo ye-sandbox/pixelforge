@@ -184,3 +184,84 @@ def test_advisory_emissive_bleed_diagnostic() -> None:
 
     violations = check_asset_runtime(LoadedAsset(SPEC=_sample_spec(), render=render_bleed), style)
     assert any(v.rule == "emissive-bleed" and v.severity == "warning" for v in violations)
+
+
+def test_door_obstruction_and_furniture_overlap_guards() -> None:
+    """Emit warnings for `door-obstruction` and `furniture-overlap`, ignoring containers."""
+    style = _sample_style()
+    spec = AssetSpec(
+        id="room_test",
+        style_id="test-style",
+        perspective="iso-2:1",
+        width=64,
+        height=64,
+        states=("idle",),
+        frames=1,
+        fps=4,
+    )
+
+    def render_blocked(a: Asset) -> None:
+        a.rect(8, 8, 48, 48, 1)
+        a.hitbox("room", 0, 0, 64, 64)
+        a.hitbox("bedroom_zone", 0, 0, 32, 64)
+        a.hitbox("door_clearance_left_10", 4, 4, 16, 16, kind="door_clearance")
+        a.hitbox("desk", 12, 12, 20, 20)
+        a.hitbox("rack", 14, 14, 16, 16)
+
+    violations = check_asset_runtime(LoadedAsset(SPEC=spec, render=render_blocked), style)
+    assert any(
+        v.rule == "door-obstruction" and v.severity == "warning" and "desk" in v.detail
+        for v in violations
+    )
+    assert any(
+        v.rule == "furniture-overlap"
+        and v.severity == "warning"
+        and "desk" in v.detail
+        and "rack" in v.detail
+        for v in violations
+    )
+    assert not any("room" in v.detail or "bedroom_zone" in v.detail for v in violations)
+
+
+def test_iso_portal_door_emits_clearance_hitbox() -> None:
+    """Verify `iso_portal_door` emits `door_clearance_*` by default and respects opt-out."""
+    from pixelforge import prefabs
+
+    style = _sample_style()
+    room = prefabs.IsoRoomGeometry(64, 72, 48, 24, 32)
+
+    a_with = Asset(
+        AssetSpec(
+            id="d1",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=128,
+            height=110,
+            states=("idle",),
+        ),
+        style,
+    )
+    prefabs.iso_portal_door(a_with, room, "left", frame=0, panel=1, anchor_name="door_a")
+    assert any(hb.name == "door_clearance_door_a" for hb in a_with.hitboxes)
+
+    a_without = Asset(
+        AssetSpec(
+            id="d2",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=128,
+            height=110,
+            states=("idle",),
+        ),
+        style,
+    )
+    prefabs.iso_portal_door(
+        a_without,
+        room,
+        "left",
+        frame=0,
+        panel=1,
+        anchor_name="door_a",
+        clearance_hitbox=False,
+    )
+    assert not any(hb.name.startswith("door_clearance_") for hb in a_without.hitboxes)

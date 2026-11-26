@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pixelforge.core.iso import IsoAnchor
+from pixelforge.core.prefabs.details import contact_shadow
 from pixelforge.core.prefabs.furniture._common import (
     Canvas,
+    ChairFacing,
     IsoDeskSlots,
     project_diamond,
     resolve_box_top_origin,
 )
+from pixelforge.core.prefabs.furniture.seating import iso_chair
 
 
 def _draw_table_legs(
@@ -122,7 +125,94 @@ def iso_desk(
         p_right=p_right,
         p_left=p_left,
         p_front=p_front,
+        leg_h=ileg_h,
     )
+
+
+def iso_desk_set(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int,
+    d: int,
+    *,
+    leg_h: int = 18,
+    top_h: int = 5,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    outline: int | None = None,
+    highlight: int | None = None,
+    mat_color: int | None = None,
+    mat_w: int | None = None,
+    chair_u: float = 0.45,
+    chair_pull_out: int = 10,
+    chair_seat_w: int = 12,
+    chair_seat_d: int = 12,
+    chair_seat_h: int = 3,
+    chair_back_h: int = 10,
+    chair_leg_h: int = 5,
+    chair_top: int | None = None,
+    chair_left: int | None = None,
+    chair_right: int | None = None,
+    chair_back: int | None = None,
+    chair_leg: int | None = None,
+    chair_facing: ChairFacing = "ne",
+    shadow_color: int | None = None,
+) -> IsoDeskSlots:
+    """Draw a 2:1 isometric desk paired with a floor-snapped task chair and contact shadow."""
+    slots = iso_desk(
+        target,
+        x,
+        y,
+        w,
+        d,
+        leg_h=leg_h,
+        top_h=top_h,
+        top=top,
+        left=left,
+        right=right,
+        leg_top=leg_top,
+        leg_left=leg_left,
+        leg_right=leg_right,
+        outline=outline,
+        highlight=highlight,
+        mat_color=mat_color,
+        mat_w=mat_w,
+    )
+    cx, cy = slots.chair_point(chair_u, pull_out=chair_pull_out)
+    if shadow_color is not None:
+        shadow_y = cy + chair_seat_h + chair_leg_h + 2
+        contact_shadow(
+            target,
+            cx,
+            shadow_y,
+            max(5, chair_seat_w - 3),
+            max(3, chair_seat_d // 3),
+            color=shadow_color,
+            dither_ratio=0.5,
+        )
+    iso_chair(
+        target,
+        cx,
+        cy,
+        seat_w=chair_seat_w,
+        seat_d=chair_seat_d,
+        seat_h=chair_seat_h,
+        back_h=chair_back_h,
+        leg_h=chair_leg_h,
+        top=leg_top if chair_top is None else chair_top,
+        left=leg_left if chair_left is None else chair_left,
+        right=leg_right if chair_right is None else chair_right,
+        back=leg_top if chair_back is None else chair_back,
+        leg=(outline if outline is not None else leg_right) if chair_leg is None else chair_leg,
+        outline=outline,
+        facing=chair_facing,
+    )
+    return slots
 
 
 def iso_workbench(
@@ -324,6 +414,7 @@ def iso_l_desk(
         p_right=p_right,
         p_left=p_left,
         p_front=p_front,
+        leg_h=ileg_h,
     )
 
 

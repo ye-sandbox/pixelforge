@@ -88,6 +88,8 @@ _VIOLATION_HINTS: dict[str, str] = {
     "canvas-coverage": (
         "Adjust asset geometry/margins so opaque coverage stays balanced inside the canvas."
     ),
+    "door-obstruction": "Move furniture or mounted props out of the doorway clearance zone.",
+    "furniture-overlap": ("Separate overlapping furniture hitboxes or adjust furniture placement."),
 }
 
 

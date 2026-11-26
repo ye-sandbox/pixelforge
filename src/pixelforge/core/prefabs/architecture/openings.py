@@ -607,6 +607,7 @@ def iso_portal_door(
     window: int | None = None,
     threshold: int | None = None,
     anchor_name: str | None = None,
+    clearance_hitbox: bool = True,
 ) -> tuple[int, int]:
     """Draw an isometric doorway on `room`'s `wall` and return its `(x, y)` portal anchor."""
     if wall not in ("left", "right"):
@@ -634,6 +635,42 @@ def iso_portal_door(
         ax, ay = door_plane.project(0.5, 0.92)
     ax = max(0, min(target.surface.width - 1, ax))
     ay = max(0, min(target.surface.height - 1, ay))
-    if anchor_name is not None and isinstance(target, Asset):
-        target.anchor(anchor_name, ax, ay)
+    if isinstance(target, Asset):
+        if anchor_name is not None:
+            target.anchor(anchor_name, ax, ay)
+        if clearance_hitbox:
+            depth = 0.12
+            if wall == "left":
+                fv0 = 1.0 - clamp_unit(u1)
+                fv1 = 1.0 - clamp_unit(u0)
+                pts = (
+                    room.floor_point(0.0, fv0),
+                    room.floor_point(0.0, fv1),
+                    room.floor_point(depth, fv0),
+                    room.floor_point(depth, fv1),
+                )
+            else:
+                fu0 = clamp_unit(u0)
+                fu1 = clamp_unit(u1)
+                pts = (
+                    room.floor_point(fu0, 0.0),
+                    room.floor_point(fu1, 0.0),
+                    room.floor_point(fu0, depth),
+                    room.floor_point(fu1, depth),
+                )
+            min_x = max(0, min(px for px, _ in pts))
+            min_y = max(0, min(py for _, py in pts))
+            max_x = min(target.surface.width, max(px for px, _ in pts))
+            max_y = min(target.surface.height, max(py for _, py in pts))
+            hb_w = max(1, min(target.surface.width - min_x, max_x - min_x))
+            hb_h = max(1, min(target.surface.height - min_y, max_y - min_y))
+            hb_suffix = anchor_name if anchor_name is not None else f"{wall}_{round(u0 * 100)}"
+            target.hitbox(
+                f"door_clearance_{hb_suffix}",
+                min_x,
+                min_y,
+                hb_w,
+                hb_h,
+                kind="door_clearance",
+            )
     return (ax, ay)

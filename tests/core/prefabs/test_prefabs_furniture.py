@@ -339,3 +339,34 @@ def test_living_and_workstation_furniture_prefabs(make_asset: Callable[..., Asse
     assert np.any(first.root_surface.data == first.pal.LED)
     valid_indices = {c.index for c in first.style.palette} | {TRANSPARENT_INDEX}
     assert set(np.unique(first.root_surface.data).tolist()).issubset(valid_indices)
+
+
+def test_iso_desk_set_and_chair_point(make_asset: Callable[..., Asset]) -> None:
+    """Verify `IsoDeskSlots.chair_point()` and `iso_desk_set()` snap a chair in front of desk."""
+    asset = make_asset(width=140, height=110)
+    p = asset.pal
+
+    slots = prefabs.iso_desk_set(
+        asset,
+        74,
+        52,
+        52,
+        22,
+        leg_h=15,
+        top_h=4,
+        top=p.WOOD_L,
+        left=p.WOOD_M,
+        right=p.WOOD_D,
+        leg_top=p.METAL_M,
+        leg_left=p.METAL_D,
+        leg_right=p.INK,
+        outline=p.INK,
+        mat_color=p.METAL_D,
+        shadow_color=p.INK,
+    )
+    assert slots.leg_h == 15
+    cx, cy = slots.chair_point()
+    edge_x, edge_y = slots.top_point(0.45, 1.0)
+    assert cx < edge_x
+    assert cy > edge_y
+    assert asset.root_surface.data[cy, cx] != TRANSPARENT_INDEX

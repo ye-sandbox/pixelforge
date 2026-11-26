@@ -57,6 +57,7 @@ class IsoDeskSlots:
     p_right: tuple[int, int]
     p_left: tuple[int, int]
     p_front: tuple[int, int]
+    leg_h: int = 18
 
     def top_plane(self) -> PlaneRegion:
         """Return `(p_top, p_right, p_left)` for drawing directly on the desk surface."""
@@ -65,6 +66,27 @@ class IsoDeskSlots:
     def top_point(self, u: float = 0.5, v: float = 0.5) -> tuple[int, int]:
         """Project normalized `(u, v)` onto the tabletop (`u`: top->right, `v`: top->left)."""
         return project_diamond(self.p_top, self.p_right, self.p_left, u, v)
+
+    def chair_point(
+        self,
+        u: float = 0.45,
+        *,
+        pull_out: int = 10,
+        seat_drop: int | None = None,
+    ) -> tuple[int, int]:
+        """Project the floor-snapped seat-center `(x, y)` in front of the desk at `u`."""
+        edge_x, edge_y = self.top_point(u, 1.0)
+        vx = self.p_left[0] - self.p_top[0]
+        vy = self.p_left[1] - self.p_top[1]
+        if vx != 0:
+            scale = float(pull_out) / abs(vx)
+            step_x = round(vx * scale)
+            step_y = round(vy * scale)
+        else:
+            step_x = -int(pull_out)
+            step_y = int(pull_out) // 2
+        drop = max(4, self.leg_h - 2) if seat_drop is None else int(seat_drop)
+        return (edge_x + step_x, edge_y + step_y + drop)
 
     def slots(self, count: int = 2, *, v: float = 0.50) -> tuple[tuple[int, int], ...]:
         """Return `count` evenly spaced placement points across the desk width."""

@@ -290,6 +290,47 @@ def _check_portal_anchors(
     return violations
 
 
+def _check_door_obstructions(
+    res: SceneCompositionResult,
+    label: str,
+    file_path: str,
+    seen_keys: set[tuple[str, str]],
+) -> list[GuardViolation]:
+    clearances = [hb for hb in res.parent_hitboxes if hb.name.startswith("door_clearance_")]
+    if not clearances:
+        return []
+
+    violations: list[GuardViolation] = []
+    for placement in res.placements:
+        bbox = placement.opaque_bbox
+        if bbox is None:
+            continue
+        px, py, pw, ph = bbox
+        for clr in clearances:
+            ix0 = max(clr.x, px)
+            iy0 = max(clr.y, py)
+            ix1 = min(clr.x + clr.w, px + pw)
+            iy1 = min(clr.y + clr.h, py + ph)
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+            key = ("door-obstruction", f"{placement.prop_id}@{placement.anchor}:{clr.name}")
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            violations.append(
+                _violation(
+                    file_path,
+                    "door-obstruction",
+                    (
+                        f"Mounted prop {placement.prop_id!r} at anchor {placement.anchor!r} "
+                        f"overlaps doorway clearance {clr.name!r} in {label}"
+                    ),
+                    severity="warning",
+                )
+            )
+    return violations
+
+
 def check_scene_runtime(
     scene_spec: SceneSpec,
     parent: AssetModule,
@@ -342,6 +383,7 @@ def check_scene_runtime(
             )
         )
         label = f"({res.parent_state!r}, frame={res.parent_frame})"
+        violations.extend(_check_door_obstructions(res, label, file_path, seen_keys))
         for placement in res.placements:
             violations.extend(
                 _check_placement_ergonomics(

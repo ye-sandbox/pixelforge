@@ -562,3 +562,37 @@ def test_cli_check_validates_repo_homelab_portal_world_graph(
     payload = json.loads(capsys.readouterr().out)
     assert payload["passed"] is True
     assert payload["errors"] == 0
+
+
+def test_scene_door_obstruction_warning() -> None:
+    """Mounted prop overlapping parent's `door_clearance_*` hitbox triggers `door-obstruction`."""
+    style = _sample_style()
+    spec = AssetSpec(
+        id="parent_room",
+        style_id="test-style",
+        perspective="iso-2:1",
+        width=40,
+        height=40,
+        states=("idle",),
+        frames=1,
+        fps=4,
+    )
+
+    def render_parent(a: Asset) -> None:
+        a.rect(4, 4, 32, 32, 1)
+        a.anchor("slot_door", 14, 18)
+        a.hitbox("door_clearance_main", 8, 8, 12, 12, kind="door_clearance")
+
+    parent = LoadedAsset(SPEC=spec, render=render_parent)
+    prop = _make_prop("crate", width=8, height=8, fill_rect=(0, 0, 8, 8))
+    scene = SceneSpec(
+        id="blocked_door_scene",
+        parent_id="parent_room",
+        mounts=(SceneMountSpec(prop_id="crate", anchor="slot_door", prop_anchor="foot"),),
+    )
+
+    violations = check_scene_runtime(scene, parent, {"crate": prop}, style)
+    obstructions = [v for v in violations if v.rule == "door-obstruction"]
+    assert len(obstructions) == 1
+    assert obstructions[0].severity == "warning"
+    assert "door_clearance_main" in obstructions[0].detail

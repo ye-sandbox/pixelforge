@@ -28,6 +28,7 @@ from pixelforge.core.prefabs.furniture.storage import (
 from pixelforge.core.prefabs.furniture.workstation import (
     iso_coffee_table,
     iso_desk,
+    iso_desk_set,
     iso_l_desk,
     iso_side_table,
     iso_workbench,
@@ -45,6 +46,7 @@ __all__ = [
     "iso_chair",
     "iso_coffee_table",
     "iso_desk",
+    "iso_desk_set",
     "iso_drawer_unit",
     "iso_filing_cabinet",
     "iso_l_desk",
