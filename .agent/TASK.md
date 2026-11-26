@@ -8,13 +8,11 @@
 
 ## Active Task
 
-### `[90.2]` Modularize `src/pixelforge/cli/workflow.py` by Subcommand Domain
+### `[90.3]` Decompose `guard/runner.py:run_checks` & `export/scene.py:compose_scene`
 
-- [ ] Extract `render_once` and asset compilation helpers into `src/pixelforge/cli/render_cmd.py` (functions <= 50–80 LOC).
-- [ ] Extract `diff_asset` and git/metadata diff helpers into `src/pixelforge/cli/diff_cmd.py`.
-- [ ] Extract `watch_loop`, `_diff_watch_graph`, `_render_watch_full`, and `_render_watch_incremental` into `src/pixelforge/cli/watch_cmd.py`.
-- [ ] Extract `compose_scene_workflow` and `critic_workflow` into `src/pixelforge/cli/compose_cmd.py` and `src/pixelforge/cli/critic_cmd.py` (or `workflow.py` thin facade re-exporting public entrypoints for backward compatibility).
-- [ ] Verify `src/pixelforge/cli/main.py` and `tests/cli/test_cli.py` pass with zero regressions (`uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest`).
+- [ ] Extract single-purpose helpers from `src/pixelforge/guard/runner.py:run_checks` so all functions stay within <= 50–80 LOC while preserving public signatures and guard test parity.
+- [ ] Extract single-purpose helpers from `src/pixelforge/export/scene.py:compose_scene` and `generate_scene_sheet` so all functions stay within <= 50–80 LOC while preserving public signatures and scene test parity.
+- [ ] Verify all checks pass (`uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest`).
 
 ---
 
@@ -55,12 +53,12 @@
 | `[22.1]` | Modular Partition Props & Multi-Room `compose_scene` Showcase (`partition_wall_iso`, `glass_partition_iso`, `pillar_iso`, `multiroom_homelab_iso`, `multiroom_homelab_scene`) | `dbdef25` | 2026-11-26 |
 | `[23.1]` | Living & Workstation Furniture Prefab Expansion (`iso_l_desk`, `iso_nightstand`, `iso_side_table`, `iso_sofa`, `iso_armchair`, `iso_coffee_table`, `iso_wardrobe`, `iso_locker`, `iso_mini_fridge`, `iso_filing_cabinet`) | `efc6c8a` | 2026-11-26 |
 | `[24.1]` | Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`) | `8beec76` | 2026-11-26 |
+| `[90.2]` | Modularize `src/pixelforge/cli/workflow.py` by Subcommand Domain (`render_cmd`, `diff_cmd`, `watch_cmd`, `compose_cmd`, `critic_cmd`, facade `workflow.py`) | `f6a4bcd` | 2026-11-26 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- **`[90.3]` Decompose `guard/runner.py:run_checks` & `export/scene.py:compose_scene`:** Extract single-purpose helpers from `run_checks` (248 LOC) and `compose_scene` / `generate_scene_sheet` (213 / 133 LOC) so all functions stay within <= 50–80 LOC while preserving public signatures and guard/scene test parity.
 - **`[90.4]` Subdivide Oversized Prefab Modules & `tests/test_prefabs.py`:** Split `core/prefabs/furniture.py` (1,503 LOC), `atmosphere.py` (1,395 LOC), `architecture.py` (1,359 LOC), and `tests/test_prefabs.py` (1,519 LOC) into focused sub-modules (preserving `pixelforge.core.prefabs` re-exports and breaking >100 LOC drawing helpers such as `_draw_upholstered_seat`, `horizon_silhouette`, `iso_chair`, `iso_rack`, `iso_partition_wall`, `iso_l_desk`).
 
 ---
