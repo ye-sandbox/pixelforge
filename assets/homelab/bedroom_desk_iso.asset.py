@@ -59,11 +59,8 @@ def _draw_floor_and_walls(a: Asset, p: PaletteLookup) -> prefabs.IsoRoomGeometry
     return room
 
 
-def _draw_window(a: Asset, p: PaletteLookup) -> None:
+def _draw_window(a: Asset, p: PaletteLookup, room: prefabs.IsoRoomGeometry) -> None:
     is_night = a.state == "night"
-    win_p0 = (76, 64)
-    win_p1 = (122, 41)
-    win_p2 = (76, 98)
 
     def _draw_vista(pane: prefabs.ClippedPane) -> None:
         if is_night:
@@ -106,11 +103,14 @@ def _draw_window(a: Asset, p: PaletteLookup) -> None:
             seed=a.seed,
         )
 
-    prefabs.iso_window(
+    prefabs.iso_room_window(
         a,
-        p0=win_p0,
-        p1=win_p1,
-        p2=win_p2,
+        room,
+        "left",
+        u0=0.38,
+        u1=0.78,
+        v0=0.20,
+        v1=0.62,
         frame=p.METAL_M,
         sky=p.WINDOW_SKY,
         outline=p.INK,
@@ -120,18 +120,11 @@ def _draw_window(a: Asset, p: PaletteLookup) -> None:
         glint=p.GLASS_L,
         sill=p.METAL_L,
         scene=_draw_vista,
-    )
-
-    # Crisp isometric floor light spill using strictly non-emissive floor tokens.
-    prefabs.window_light_spill(
-        a,
-        points=((78, 122), (120, 101), (154, 118), (112, 139)),
-        color=p.FLOOR_L,
-        secondary_color=p.TILE_L if is_night else p.FLOOR_M,
-        pattern="bayer4",
-        near_ratio=0.32 if is_night else 0.72,
-        far_ratio=0.05 if is_night else 0.18,
-        mask="opaque",
+        spill_color=p.FLOOR_L,
+        spill_secondary=p.TILE_L if is_night else p.FLOOR_M,
+        spill_depth=0.34,
+        spill_near_ratio=0.32 if is_night else 0.72,
+        spill_far_ratio=0.05 if is_night else 0.18,
     )
 
 
@@ -243,13 +236,13 @@ def render(a: Asset) -> None:
     """Render the `bedroom_desk_iso` scene with hardware placement anchors."""
     p = a.pal
     room = _draw_floor_and_walls(a, p)
-    _draw_window(a, p)
+    _draw_window(a, p, room)
     portal_pt = prefabs.iso_portal_door(
         a,
         room,
         "left",
-        u0=0.72,
-        u1=0.90,
+        u0=0.08,
+        u1=0.25,
         v0=0.26,
         v1=1.0,
         frame=p.WOOD_D,
