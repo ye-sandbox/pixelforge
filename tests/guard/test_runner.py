@@ -14,6 +14,7 @@ from pixelforge.guard.runner import (
     load_all_styles,
     load_asset_from_git,
     run_checks,
+    sync_palette_stubs,
 )
 
 
@@ -83,3 +84,34 @@ def test_run_checks_missing_asset_id_returns_error(tmp_path: Path) -> None:
     assert not report.passed
     assert any(v.rule == "asset-not-found" for v in report.violations)
     assert main(["check", "nonexistent", "--root", str(tmp_path)]) == 1
+
+
+def test_run_checks_detects_stale_and_missing_palette_stubs(tmp_path: Path) -> None:
+    """Detect missing/stale `*_palette.py` stubs and refresh them via `--sync-stubs`."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    stub_path = tmp_path / "styles" / "homelab_16bit_palette.py"
+    assert stub_path.is_file()
+
+    # Stale stub triggers an error
+    stub_path.write_text("# stale\n", encoding="utf-8")
+    stale_report = run_checks(tmp_path)
+    assert not stale_report.passed
+    assert any(
+        v.rule == "palette-stub-stale" and v.severity == "error" for v in stale_report.violations
+    )
+
+    # `--sync-stubs` regenerates and passes
+    assert main(["check", "--sync-stubs", "--root", str(tmp_path)]) == 0
+    assert run_checks(tmp_path).passed
+
+    # Missing stub triggers an advisory warning (exit 0) and `sync_palette_stubs` restores it
+    stub_path.unlink()
+    missing_report = run_checks(tmp_path)
+    assert missing_report.passed
+    assert any(
+        v.rule == "palette-stub-missing" and v.severity == "warning"
+        for v in missing_report.violations
+    )
+    restored = sync_palette_stubs(tmp_path)
+    assert restored == [stub_path]
+    assert run_checks(tmp_path).passed

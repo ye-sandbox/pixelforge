@@ -14,6 +14,11 @@ from types import ModuleType
 from typing import cast
 
 from pixelforge.core.builder import Asset
+from pixelforge.core.palette_stub import (
+    generate_palette_stub,
+    palette_stub_path,
+    write_palette_stub,
+)
 from pixelforge.core.types import AssetSpec, StylePack
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.export.scene import (
@@ -266,7 +271,48 @@ def _load_and_check_styles(
         style_origins[pack.id] = style_path
         styles[pack.id] = pack
 
+        stub_path = palette_stub_path(style_path)
+        expected_stub = generate_palette_stub(pack)
+        if not stub_path.is_file():
+            violations.append(
+                GuardViolation(
+                    file=str(style_path),
+                    line=1,
+                    col=0,
+                    rule="palette-stub-missing",
+                    detail=f"Missing typed palette stub {stub_path.name} for style {pack.id!r}",
+                    severity="warning",
+                )
+            )
+        elif stub_path.read_text(encoding="utf-8") != expected_stub:
+            violations.append(
+                GuardViolation(
+                    file=str(stub_path),
+                    line=1,
+                    col=0,
+                    rule="palette-stub-stale",
+                    detail=(
+                        f"Typed palette stub {stub_path.name} is out of date for style {pack.id!r}"
+                    ),
+                    severity="error",
+                )
+            )
+
     return styles, len(style_files), violations
+
+
+def sync_palette_stubs(root: Path) -> list[Path]:
+    """Generate or refresh `*_palette.py` stubs for all valid `*.style.py` files."""
+    written: list[Path] = []
+    for style_path in discover_style_files(root / "styles"):
+        if check_ast_file(style_path, scope="style"):
+            continue
+        pack = load_style_module(style_path)
+        stub_path = palette_stub_path(style_path)
+        expected = generate_palette_stub(pack)
+        if not stub_path.is_file() or stub_path.read_text(encoding="utf-8") != expected:
+            written.append(write_palette_stub(style_path, pack))
+    return written
 
 
 def _should_report_path(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pixelforge.core.palette_stub import palette_stub_path
+
 
 def starter_style_source(style_id: str) -> str:
     """Return the starter `.style.py` module source for `style_id`."""
@@ -27,6 +29,27 @@ STYLE = StylePack(
     ),
 )
 '''
+
+
+def starter_palette_stub_source(style_id: str) -> str:
+    """Return the starter typed palette stub source for `style_id`."""
+    from pixelforge.core.palette_stub import generate_palette_stub
+    from pixelforge.core.types import PaletteColor, StylePack
+
+    pack = StylePack(
+        id=style_id,
+        perspective="iso-2:1",
+        lighting_angle="top-left",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="OUTLINE", hex="#0d1117", flags=("outline",)),
+            PaletteColor(index=1, name="CHASSIS_DARK", hex="#1f2937", flags=("surface",)),
+            PaletteColor(index=2, name="CHASSIS_MID", hex="#374151", flags=("surface",)),
+            PaletteColor(index=3, name="CHASSIS_LIGHT", hex="#6b7280", flags=("bright",)),
+            PaletteColor(index=4, name="ACCENT_CYAN", hex="#38bdf8", flags=("emissive",)),
+        ),
+    )
+    return generate_palette_stub(pack)
 
 
 def starter_asset_source(style_id: str) -> str:
@@ -86,11 +109,14 @@ def scaffold_project(root: Path, *, style_id: str, force: bool = False) -> list[
 
     created: list[Path] = []
     style_path = root / "styles" / f"{slug}.style.py"
+    stub_path = palette_stub_path(style_path)
     asset_path = root / "assets" / "example_crate.asset.py"
     env_example = root / ".env.example"
 
     if _write_if_allowed(style_path, starter_style_source(style_id), force=force):
         created.append(style_path)
+    if _write_if_allowed(stub_path, starter_palette_stub_source(style_id), force=force):
+        created.append(stub_path)
     if _write_if_allowed(asset_path, starter_asset_source(style_id), force=force):
         created.append(asset_path)
 

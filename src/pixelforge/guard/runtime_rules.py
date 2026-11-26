@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from typing import Final
 
 import numpy as np
 
@@ -11,6 +12,10 @@ from pixelforge.core.types import TRANSPARENT_INDEX, AssetSpec, StylePack
 from pixelforge.export.bundle import AssetModule, RenderedFrame, render_asset_frames
 from pixelforge.export.png import surface_to_rgba
 from pixelforge.guard.types import GuardSeverity, GuardViolation
+
+ADVISORY_EMISSIVE_BLEED_RATIO: Final[float] = 0.25
+ADVISORY_MIN_COVERAGE_RATIO: Final[float] = 0.05
+ADVISORY_MAX_COVERAGE_RATIO: Final[float] = 0.95
 
 
 def find_orphan_pixel_coords(frame: RenderedFrame) -> list[tuple[int, int]]:
@@ -192,6 +197,87 @@ def _check_frame_invariants(
                 severity=severity,
             )
         )
+
+    violations.extend(_check_advisory_diagnostics(frame_a, style, file_path=file_path, label=label))
+    return violations
+
+
+def _check_advisory_diagnostics(
+    frame: RenderedFrame,
+    style: StylePack,
+    *,
+    file_path: str,
+    label: str,
+) -> list[GuardViolation]:
+    """Emit non-fatal advisory warnings for canvas coverage and emissive bleed."""
+    violations: list[GuardViolation] = []
+    data = frame.surface.data
+    total_pixels = data.size
+    if total_pixels == 0:
+        return violations
+
+    opaque_pixels = int(np.count_nonzero(data != TRANSPARENT_INDEX))
+    if opaque_pixels == 0:
+        violations.append(
+            GuardViolation(
+                file=file_path,
+                line=1,
+                col=0,
+                rule="canvas-coverage",
+                detail=f"Empty frame (0.0% opaque pixels) in {label}",
+                severity="warning",
+            )
+        )
+        return violations
+
+    coverage_ratio = opaque_pixels / total_pixels
+    if coverage_ratio < ADVISORY_MIN_COVERAGE_RATIO:
+        violations.append(
+            GuardViolation(
+                file=file_path,
+                line=1,
+                col=0,
+                rule="canvas-coverage",
+                detail=(
+                    f"Sparse canvas coverage ({coverage_ratio * 100:.1f}% < "
+                    f"{ADVISORY_MIN_COVERAGE_RATIO * 100:.1f}%) in {label}"
+                ),
+                severity="warning",
+            )
+        )
+    elif coverage_ratio > ADVISORY_MAX_COVERAGE_RATIO:
+        violations.append(
+            GuardViolation(
+                file=file_path,
+                line=1,
+                col=0,
+                rule="canvas-coverage",
+                detail=(
+                    f"Overfilled canvas coverage ({coverage_ratio * 100:.1f}% > "
+                    f"{ADVISORY_MAX_COVERAGE_RATIO * 100:.1f}%) in {label}"
+                ),
+                severity="warning",
+            )
+        )
+
+    emissive_indices = [entry.index for entry in style.palette if "emissive" in entry.flags]
+    if emissive_indices:
+        emissive_pixels = int(np.count_nonzero(np.isin(data, emissive_indices)))
+        emissive_ratio = emissive_pixels / opaque_pixels
+        if emissive_ratio > ADVISORY_EMISSIVE_BLEED_RATIO:
+            violations.append(
+                GuardViolation(
+                    file=file_path,
+                    line=1,
+                    col=0,
+                    rule="emissive-bleed",
+                    detail=(
+                        f"High emissive ratio ({emissive_ratio * 100:.1f}% > "
+                        f"{ADVISORY_EMISSIVE_BLEED_RATIO * 100:.1f}% of opaque pixels) in {label}"
+                    ),
+                    severity="warning",
+                )
+            )
     return violations
 
 

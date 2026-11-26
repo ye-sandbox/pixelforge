@@ -29,7 +29,7 @@ from pixelforge.cli.scaffold import scaffold_project
 from pixelforge.cli.settings import HydraSettings, PixelforgeSettings
 from pixelforge.cli.watch_cmd import watch_loop
 from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
-from pixelforge.guard.runner import load_all_styles, run_checks
+from pixelforge.guard.runner import load_all_styles, run_checks, sync_palette_stubs
 
 
 def _out(line: str) -> None:
@@ -81,6 +81,8 @@ def _cmd_check(args: argparse.Namespace) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
+    if getattr(args, "sync_stubs", False):
+        sync_palette_stubs(root)
     report = run_checks(
         root,
         asset_id=args.asset_id,
@@ -374,6 +376,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict-orphans",
         action="store_true",
         help="Treat isolated 1x1 orphan pixels as errors",
+    )
+    check_p.add_argument(
+        "--sync-stubs",
+        action="store_true",
+        help="Generate or refresh typed *_palette.py stubs before running checks",
     )
     add_format_arguments(check_p)
     check_p.add_argument("--root", default=None, help="Project root directory")

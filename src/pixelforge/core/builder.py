@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Literal, Self
+from typing import Literal, Self, cast
 
 import numpy as np
 
@@ -550,7 +550,7 @@ class Layer(_DrawingMixin):
         self._on_exit(self, exc_type is None)
 
 
-class Asset(_DrawingMixin):
+class Asset[PalT = PaletteLookup](_DrawingMixin):
     """Compositional pixel art asset builder managing framebuffer, layers, planes, and metadata."""
 
     spec: AssetSpec
@@ -559,7 +559,7 @@ class Asset(_DrawingMixin):
     frame: int
     variant: str | None
     rng: Callable[[], float]
-    _pal: PaletteLookup
+    _pal: PalT
     _root_surface: IndexedSurface
     _layer_stack: list[_LayerFrame]
     _anchors: list[AnchorPoint]
@@ -596,7 +596,7 @@ class Asset(_DrawingMixin):
         base_pal = PaletteLookup(style)
         if token_overrides:
             base_pal = base_pal.with_overrides(token_overrides)
-        self._pal = base_pal
+        self._pal = cast(PalT, base_pal)
 
         self._root_surface = IndexedSurface(spec.width, spec.height)
         self._layer_stack = []
@@ -639,7 +639,7 @@ class Asset(_DrawingMixin):
         return self.spec.seed
 
     @property
-    def pal(self) -> PaletteLookup:
+    def pal(self) -> PalT:
         """Active fail-loud semantic palette lookup."""
         return self._pal
 
@@ -670,10 +670,10 @@ class Asset(_DrawingMixin):
         return hashf(x, y, (self.spec.seed + self.frame + salt) & 0xFFFFFFFF)
 
     @contextmanager
-    def palette_override(self, overrides: Mapping[str, str | int]) -> Generator[PaletteLookup]:
+    def palette_override(self, overrides: Mapping[str, str | int]) -> Generator[PalT]:
         """Temporarily remap palette token names inside a `with` scope (e.g., avatar swaps)."""
         prev_pal = self._pal
-        self._pal = prev_pal.with_overrides(overrides)
+        self._pal = cast(PalT, cast(PaletteLookup, prev_pal).with_overrides(overrides))
         try:
             yield self._pal
         finally:
@@ -807,7 +807,7 @@ class Asset(_DrawingMixin):
 
     def _resolve_pal_index(self, token_or_idx: str | int) -> int:
         if isinstance(token_or_idx, str):
-            return self._pal[token_or_idx]
+            return cast(PaletteLookup, self._pal)[token_or_idx]
         idx = int(token_or_idx)
         if idx < 0 or idx > TRANSPARENT_INDEX:
             msg = f"Palette index {idx} out of range [0..{TRANSPARENT_INDEX}]"

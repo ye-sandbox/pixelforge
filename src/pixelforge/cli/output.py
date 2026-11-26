@@ -43,6 +43,18 @@ _VIOLATION_HINTS: dict[str, str] = {
     "missing-style": "Ensure SPEC.style_id matches a valid StylePack in styles/*.style.py.",
     "missing-parent": "Ensure SCENE.parent_id matches an existing AssetSpec id.",
     "scene-error": "Verify mount anchors, bounds, and perspective alignment in *.scene.py.",
+    "palette-stub-missing": (
+        "Run `pixelforge check --sync-stubs` to generate typed *_palette.py stubs."
+    ),
+    "palette-stub-stale": (
+        "Run `pixelforge check --sync-stubs` to regenerate out-of-date *_palette.py stubs."
+    ),
+    "emissive-bleed": (
+        "Replace emissive tokens on large painted surfaces with non-emissive paint tokens."
+    ),
+    "canvas-coverage": (
+        "Adjust asset geometry/margins so opaque coverage stays balanced inside the canvas."
+    ),
 }
 
 

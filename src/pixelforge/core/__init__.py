@@ -18,6 +18,12 @@ from pixelforge.core.palette import (
     resolve_reflections,
     resolve_variant_colors,
 )
+from pixelforge.core.palette_stub import (
+    generate_palette_stub,
+    palette_stub_class_name,
+    palette_stub_path,
+    write_palette_stub,
+)
 from pixelforge.core.plane import GridMode, Plane, Point2D
 from pixelforge.core.prng import hashf, mulberry32, xorshift32
 from pixelforge.core.surface import (
@@ -67,14 +73,18 @@ __all__ = [
     "StylePack",
     "build_reflection_lut",
     "build_rgba_lut",
+    "generate_palette_stub",
     "hashf",
     "hex_to_rgb",
     "iso_box",
     "iso_project",
     "iso_tile",
     "mulberry32",
+    "palette_stub_class_name",
+    "palette_stub_path",
     "prefabs",
     "resolve_reflections",
     "resolve_variant_colors",
+    "write_palette_stub",
     "xorshift32",
 ]

@@ -125,3 +125,62 @@ def test_orphan_pixels_advisory_and_strict() -> None:
     assert len(strict) == 1
     assert strict[0].rule == "orphan-pixels"
     assert strict[0].severity == "error"
+
+
+def test_advisory_canvas_coverage_diagnostics() -> None:
+    """Emit advisory `canvas-coverage` warnings for empty, sparse, and overfilled frames."""
+    style = _sample_style()
+
+    def render_empty(_a: Asset) -> None:
+        return None
+
+    empty_violations = check_asset_runtime(
+        LoadedAsset(SPEC=_sample_spec(), render=render_empty), style
+    )
+    assert any(
+        v.rule == "canvas-coverage" and v.severity == "warning" and "Empty frame" in v.detail
+        for v in empty_violations
+    )
+
+    def render_sparse(a: Asset) -> None:
+        a.rect(0, 0, 2, 1, 1)  # 2 / 64 = 3.125% < 5%
+
+    sparse_violations = check_asset_runtime(
+        LoadedAsset(SPEC=_sample_spec(), render=render_sparse), style
+    )
+    assert any(
+        v.rule == "canvas-coverage" and v.severity == "warning" and "Sparse" in v.detail
+        for v in sparse_violations
+    )
+
+    def render_overfilled(a: Asset) -> None:
+        a.rect(0, 0, 8, 8, 1)  # 64 / 64 = 100% > 95%
+
+    full_violations = check_asset_runtime(
+        LoadedAsset(SPEC=_sample_spec(), render=render_overfilled), style
+    )
+    assert any(
+        v.rule == "canvas-coverage" and v.severity == "warning" and "Overfilled" in v.detail
+        for v in full_violations
+    )
+
+
+def test_advisory_emissive_bleed_diagnostic() -> None:
+    """Emit advisory `emissive-bleed` warning when emissive pixels exceed 25% of opaque."""
+    style = StylePack(
+        id="test-style",
+        perspective="front-2.5d",
+        lighting_angle="top-left",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="OUTLINE", hex="#0d1117", flags=("outline",)),
+            PaletteColor(index=1, name="FILL", hex="#3b82f6", flags=("surface",)),
+            PaletteColor(index=2, name="GLOW", hex="#58a6ff", flags=("emissive",)),
+        ),
+    )
+
+    def render_bleed(a: Asset) -> None:
+        a.rect(1, 1, 6, 6, a.pal.GLOW)
+
+    violations = check_asset_runtime(LoadedAsset(SPEC=_sample_spec(), render=render_bleed), style)
+    assert any(v.rule == "emissive-bleed" and v.severity == "warning" for v in violations)
