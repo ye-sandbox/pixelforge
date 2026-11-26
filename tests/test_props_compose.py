@@ -19,8 +19,11 @@ PROPS_DIR = ROOT_DIR / "assets" / "props"
 EXPECTED_PROP_IDS = (
     "coffee_mug_iso",
     "desk_lamp_iso",
+    "keyboard_iso",
     "monitor_iso",
+    "mouse_iso",
     "network_switch_iso",
+    "pc_tower_iso",
     "potted_plant_iso",
     "storage_crate_iso",
 )
@@ -157,6 +160,67 @@ def test_props_compose_onto_bedroom_desk_iso_with_zero_clipping() -> None:
     assert all(p.perspective_match for p in res_b.placements)
     assert all(p.occluded_pixels == 0 for p in res_b.placements)
     assert res_b.warnings == ()
+
+    full_desk = SceneCompositionSpec(
+        parent_id="bedroom_desk_iso",
+        parent_state="night",
+        depth_sort="iso_y",
+        mounts=(
+            SceneMountSpec(
+                prop_id="monitor_iso",
+                anchor="hardware_0",
+                prop_anchor="mount_bottom",
+                state="active",
+                frame=0,
+            ),
+            SceneMountSpec(
+                prop_id="pc_tower_iso",
+                anchor="desk_pc",
+                prop_anchor="mount_bottom",
+                state="active",
+                frame=0,
+            ),
+            SceneMountSpec(
+                prop_id="desk_lamp_iso",
+                anchor="hardware_1",
+                prop_anchor="mount_bottom",
+                state="night",
+            ),
+            SceneMountSpec(
+                prop_id="keyboard_iso",
+                anchor="desk_keyboard",
+                prop_anchor="mount_bottom",
+                state="active",
+                frame=0,
+            ),
+            SceneMountSpec(
+                prop_id="mouse_iso",
+                anchor="desk_mouse",
+                prop_anchor="mount_bottom",
+                state="active",
+            ),
+            SceneMountSpec(
+                prop_id="network_switch_iso",
+                anchor="hardware_2",
+                prop_anchor="mount_bottom",
+                state="active",
+                frame=1,
+            ),
+        ),
+    )
+    res_full = compose_scene(
+        parent,
+        props,
+        style,
+        full_desk,
+        strict_bounds=True,
+        strict_perspective=True,
+    )
+    assert all(p.in_bounds for p in res_full.placements)
+    assert all(p.clipped_pixels == 0 for p in res_full.placements)
+    assert all(p.perspective_match for p in res_full.placements)
+    assert all(p.occluded_pixels == 0 for p in res_full.placements)
+    assert res_full.warnings == ()
 
 
 def test_network_switch_iso_exposes_individual_port_anchors() -> None:

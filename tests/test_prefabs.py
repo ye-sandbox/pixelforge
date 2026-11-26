@@ -636,6 +636,56 @@ def test_iso_room_geometry_projections_and_spill() -> None:
     assert all(0 <= pt[0] < 120 and 0 <= pt[1] < 100 for pt in right_spill)
 
 
+def test_iso_room_geometry_wall_box_center() -> None:
+    """Verify `wall_box_center` places furniture flush against left/right walls at `margin`."""
+    import pytest
+
+    room = prefabs.IsoRoomGeometry(cx=160, cy=136, hw=112, hh=56, wall_h=74)
+
+    # Matches bedroom_desk_iso exact right-wall placement (74x28 desk, leg_h+top_h=19, margin=1).
+    rx, ry = room.wall_box_center("right", 74, 28, 19, along=0.0, margin=1, corner_margin=4)
+    assert (rx, ry) == (186, 89)
+
+    # Left-wall placement mirrors the right-wall placement across cx=160.
+    lx, ly = room.wall_box_center("left", 28, 74, 19, along=0.0, margin=1, corner_margin=4)
+    assert (lx, ly) == (134, 89)
+
+    # Sliding along the wall shifts along the wall slope (+dx, +dy for right; -dx, +dy for left)
+    # while keeping exact `margin` px vertical separation from the baseboard.
+    r_start = room.wall_box_center("right", 40, 20, 0, along=0.0, margin=2, corner_margin=4)
+    r_mid = room.wall_box_center("right", 40, 20, 0, along=0.5, margin=2, corner_margin=4)
+    r_end = room.wall_box_center("right", 40, 20, 0, along=1.0, margin=2, corner_margin=4)
+    assert r_start[0] < r_mid[0] < r_end[0]
+    assert r_start[1] < r_mid[1] < r_end[1]
+
+    # Verify floor top corner sits `margin` px vertically below the baseboard line.
+    for wall, w, d, pt in (
+        ("right", 40, 20, r_mid),
+        ("left", 20, 40, room.wall_box_center("left", 20, 40, 0, along=0.5, margin=3)),
+    ):
+        tx = round(pt[0] - (w - d) * 0.5)
+        ty = round(pt[1] - (w // 2 + d // 2) * 0.5)
+        if wall == "right":
+            wall_y = room.apex_y + (tx - room.cx) * 0.5
+            assert abs((ty - wall_y) - 2.0) <= 0.5
+        else:
+            wall_y = room.apex_y + (room.cx - tx) * 0.5
+            assert abs((ty - wall_y) - 3.0) <= 0.5
+
+    # Height `h` lifts only the vertical Y coordinate.
+    assert room.wall_box_center("right", 40, 20, 18, along=0.5, margin=2) == (
+        r_mid[0],
+        r_mid[1] - 18,
+    )
+
+    # Oversized furniture clamps safely to the wall center without raising.
+    oversized = room.wall_box_center("left", 20, 140, 10, along=0.25, margin=2, corner_margin=8)
+    assert oversized[0] < room.cx
+
+    with pytest.raises(ValueError, match="Unsupported wall side"):
+        room.wall_box_center("front", 20, 20, 10)  # type: ignore[arg-type]
+
+
 def test_furniture_slots_and_rack_front_styles() -> None:
     """Verify `iso_desk`, `iso_rack`, and `iso_shelf` slot helpers and rack front styles."""
     asset = _make_asset(width=160, height=120)

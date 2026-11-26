@@ -164,6 +164,61 @@ class IsoRoomGeometry:
             self.floor_point(_clamp_unit(span_a + skew), far_v),
         )
 
+    def wall_box_center(
+        self,
+        wall: WallSide,
+        w: int,
+        d: int,
+        h: int = 0,
+        *,
+        along: float = 0.5,
+        margin: int = 2,
+        corner_margin: int = 2,
+    ) -> tuple[int, int]:
+        """Return top-center `(x, y)` to place an `iso_box`/`iso_desk` flush against `wall`.
+
+        Args:
+            wall: Target back wall (`"left"` or `"right"`).
+            w: Isometric span along `+u` (parallel to the right back wall).
+            d: Isometric span along `+v` (parallel to the left back wall).
+            h: Vertical elevation above the floor (`leg_h + top_h` for `iso_desk`,
+                `h` for `iso_rack`/`iso_shelf`/`iso_drawer_unit`, or `0` for floor center).
+            along: Clamped `[0.0, 1.0]` position along the wall from the back-center corner
+                (`0.0`) toward the outer room corner (`1.0`).
+            margin: Clearance in iso-depth pixels from the wall baseboard (`>= 0`).
+            corner_margin: Clearance in pixels along the wall from room corners (`>= 0`).
+        """
+        if wall not in ("left", "right"):
+            msg = f"Unsupported wall side: {wall!r}"
+            raise ValueError(msg)
+
+        iw = max(1, int(w))
+        id_ = max(1, int(d))
+        ih = max(0, int(h))
+        m = max(0, int(margin))
+        cm = max(0, int(corner_margin))
+        t = _clamp_unit(along)
+        hw_eff = max(1, self.hw)
+
+        # INVARIANT: In 2:1 iso, `u` moves (+1, +0.5) along the right wall and `v` moves
+        # (-1, +0.5) along the left wall, so offsetting `margin` along the perpendicular floor
+        # axis yields a `margin` px vertical gap from the baseboard line without trim overlap.
+        if wall == "right":
+            cm_eff = min(cm, max(0, (self.hw - iw) // 2))
+            travel = max(0.0, float(self.hw - iw - 2 * cm_eff))
+            u_start = cm_eff + t * travel
+            u_center = u_start + iw * 0.5
+            v_center = m + id_ * 0.5
+        else:
+            cm_eff = min(cm, max(0, (self.hw - id_) // 2))
+            travel = max(0.0, float(self.hw - id_ - 2 * cm_eff))
+            v_start = cm_eff + t * travel
+            u_center = m + iw * 0.5
+            v_center = v_start + id_ * 0.5
+
+        fx, fy = self.floor_point(u_center / float(hw_eff), v_center / float(hw_eff))
+        return (fx, fy - ih)
+
 
 def iso_room_shell(
     target: Canvas,

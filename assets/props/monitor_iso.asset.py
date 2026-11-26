@@ -39,7 +39,7 @@ def _draw_stand(a: Asset, p: PaletteLookup) -> None:
 
 def _draw_panel(a: Asset, p: PaletteLookup) -> None:
     is_active = a.state == "active"
-    with a.layer("panel", outline=p.INK), a.plane(p0=(5, 10), p1=(23, 2), p2=(5, 20)) as screen:
+    with a.layer("panel", outline=p.INK), a.plane(p0=(5, 2), p1=(23, 11), p2=(5, 12)) as screen:
         screen.rect(
             0.0,
             0.0,

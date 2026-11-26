@@ -210,7 +210,7 @@ def render(a: Asset) -> None:
 Import `from pixelforge import prefabs`. Every prefab is `StylePack`-agnostic (accepting explicit palette indices via `P = a.pal`), 100% deterministic, and compatible with both `Asset` and `Layer` targets.
 
 ### Architecture (`prefabs.architecture`)
-- `iso_room_shell(target, cx, cy, hw, hh, wall_h, *, floor, left_wall, right_wall, floor_alt=None, floor_dither_ratio=0.12, baseboard=None, wall_seam=None, outline=None, lighting_angle=None) -> IsoRoomGeometry` — 2:1 isometric room diamond, two back walls, baseboard trim, corner seam, and outer ink contour. Returns `IsoRoomGeometry` with `left_wall_plane(u0, v0, u1, v1)`, `right_wall_plane(u0, v0, u1, v1)`, `floor_point(u, v)`, and `window_spill_quad(u0, u1, *, wall="left", depth=0.35, inset=0.025)` aligned to `StylePack.lighting_angle`.
+- `iso_room_shell(target, cx, cy, hw, hh, wall_h, *, floor, left_wall, right_wall, floor_alt=None, floor_dither_ratio=0.12, baseboard=None, wall_seam=None, outline=None, lighting_angle=None) -> IsoRoomGeometry` — 2:1 isometric room diamond, two back walls, baseboard trim, corner seam, and outer ink contour. Returns `IsoRoomGeometry` with `left_wall_plane(u0, v0, u1, v1)`, `right_wall_plane(u0, v0, u1, v1)`, `floor_point(u, v)`, `wall_box_center(wall, w, d, h=0, *, along=0.5, margin=2, corner_margin=2)`, and `window_spill_quad(u0, u1, *, wall="left", depth=0.35, inset=0.025)` aligned to `StylePack.lighting_angle`.
 - `iso_floor_pattern(target, cx, cy, hw, hh, *, color, step=16, mode="planks")` — Bounded `"planks"`, `"tiles"`, or `"grid"` floor lines.
 - `iso_window(target, p0, p1, p2, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, scene=None)` — Skewed isometric wall window with multi-pane mullions, glass glint, sill, and optional clipped `scene(pane)` callback.
 - `front_window(target, x, y, w, h, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, frame_thickness=2, scene=None)` — `front-2.5d` rectangular window with clipped glass `scene(pane)`, mullions, glint, and sill.
@@ -311,9 +311,31 @@ prefabs.iso_window(
 
 ---
 
-## 9. Skill Completion Checklist
+## 9. Spatial Ergonomics & Scene Coherence
+
+When authoring isometric room scenes, workstation dioramas, or declarative `.scene.py` compositions, enforce physical room ergonomics and semantic coherence alongside pixel-level cleanliness:
+
+1. **Wall-Hugging Furniture Placement (`1–3px` Baseboard Clearance):**
+   - Place desks, racks, shelves, beds, and workbenches flush against a back wall at `1–3px` clearance from the baseboard via `room.wall_box_center(wall, w, d, h, along=..., margin=2, corner_margin=...)` on `IsoRoomGeometry` (passing `h=leg_h + top_h` for `iso_desk`/`iso_workbench`, or `h=h` for `iso_rack`/`iso_shelf`/`iso_drawer_unit`).
+   - Avoid floating desks, racks, or cabinets in the center of the room unless the object is intentionally freestanding (e.g., an area rug, central island workbench, or task chair).
+   - Ground floor-standing furniture with a `contact_shadow(...)` or clipped `dither` under-desk shadow so bases never appear to hover.
+2. **Functional Furniture Proportions:**
+   - Author workstation desks as **rectangular slabs** (`long_span >= 2 * depth`, e.g., `w=74, d=28` along the right wall or `w=28, d=74` along the left wall) rather than square tables (`36x36`) so monitors, keyboards, mice, and towers have realistic working depth and lateral span.
+   - Reserve compact/square footprints (`12x12`–`16x16`) for side server racks, drawer pedestals, task chairs, and stools.
+3. **Consistent Isometric Orientation & Facing:**
+   - **Right-wall desk (`wall="right"`, long axis along `+u` NW–SE):** The user sits on the SW side facing NE toward the wall; mount SW-facing `monitor_iso`, `keyboard_iso`, `mouse_iso`, and `pc_tower_iso` on the tabletop and tuck `iso_chair(..., facing="ne")` in front of the keyboard zone.
+   - **Left-wall desk (`wall="left"`, long axis along `+v` NE–SW):** The user sits on the SE side facing NW toward the wall; orient peripherals SE-facing and pair with `iso_chair(..., facing="nw")`.
+   - Mount wall fixtures (`iso_window`, `wall_panel`, `wall_ac_unit`, `wall_whiteboard`, `iso_wall_shelf`) via `room.left_wall_plane(...)` / `room.right_wall_plane(...)` so perspective skew matches the wall plane and tall props never occlude switches or windows unintentionally.
+4. **Complete Functional Prop Kits & Zero Duplication:**
+   - A PC workstation scene should provide a complete functional prop kit: **monitor + keyboard + mouse + PC tower (or laptop) + chair** (plus optional `desk_lamp_iso`, `network_switch_iso`, or `coffee_mug_iso`).
+   - **Zero baked-in vs. mounted duplication:** Never draw static monitor, keyboard, mouse, tower, or lamp pixels directly into the parent room `.asset.py` when those items are mounted via `.scene.py` (`SceneMountSpec`) or `pixelforge compose`. Author a clean desk surface/mat with exact `hardware_*` / `desk_*` anchors in `.asset.py`, and mount the interactive/animated props in `.scene.py`.
+
+---
+
+## 10. Skill Completion Checklist
 
 - [ ] Silhouette, layer order, and anchor plan defined before coding
+- [ ] Room/workstation scenes satisfy Spatial Ergonomics & Scene Coherence (wall-hugging `1–3px` placement via `IsoRoomGeometry`, rectangular desk proportions, consistent facing, complete prop kit, zero baked-in/mounted duplication)
 - [ ] `assets/<pack>/<id>.asset.py` strictly typed (`pyright` strict + `ruff` pass)
 - [ ] `uv run pixelforge check <id>` exits with code `0` (all AST + runtime guards pass)
 - [ ] `uv run pixelforge render <id> --sheet --animate --emissive` inspected visually and refined (2–4 surgical passes max)

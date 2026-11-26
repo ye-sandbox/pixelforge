@@ -74,6 +74,17 @@ def test_build_critic_payload_includes_contact_sheet_and_optional_diff(tmp_path:
     assert user_parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
+def test_critic_system_prompt_includes_spatial_and_scene_coherence_checks(tmp_path: Path) -> None:
+    loaded = _make_sample_asset(tmp_path)
+    payload = build_critic_payload(CriticAssetInput(asset=loaded, contact_sheet_png=_TINY_PNG))
+    system_prompt = payload["messages"][0]["content"]
+    assert "1-3px" in system_prompt
+    assert "rectangular workstation desk" in system_prompt
+    assert "facing direction" in system_prompt
+    assert "peripherals" in system_prompt
+    assert "duplicate baked-in props" in system_prompt
+
+
 def test_parse_critic_response_handles_fenced_json_and_threshold() -> None:
     raw = {
         "choices": [

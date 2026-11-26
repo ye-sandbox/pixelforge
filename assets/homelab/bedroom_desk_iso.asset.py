@@ -23,14 +23,14 @@ _FLOOR_HH = 56
 _WALL_H = 74
 
 
-def _draw_floor_and_walls(a: Asset, p: PaletteLookup) -> None:
+def _draw_floor_and_walls(a: Asset, p: PaletteLookup) -> prefabs.IsoRoomGeometry:
     is_night = a.state == "night"
     floor_base = p.FLOOR_D if is_night else p.FLOOR_M
     floor_alt = p.VOID if is_night else p.FLOOR_D
     left_wall = p.WALL_D if is_night else p.WALL_L
     right_wall = p.WALL_D if is_night else p.WALL_M
 
-    prefabs.iso_room_shell(
+    room = prefabs.iso_room_shell(
         a,
         _FLOOR_CX,
         _FLOOR_CY,
@@ -56,6 +56,7 @@ def _draw_floor_and_walls(a: Asset, p: PaletteLookup) -> None:
         step=24,
         mode="planks",
     )
+    return room
 
 
 def _draw_window(a: Asset, p: PaletteLookup) -> None:
@@ -134,18 +135,44 @@ def _draw_window(a: Asset, p: PaletteLookup) -> None:
     )
 
 
-def _draw_desk_and_slots(a: Asset, p: PaletteLookup) -> None:
-    is_night = a.state == "night"
+def _draw_desk_and_slots(
+    a: Asset,
+    p: PaletteLookup,
+    room: prefabs.IsoRoomGeometry,
+) -> prefabs.IsoDeskSlots:
+    # Rectangular PC desk tucked flush against the right back wall near the room corner.
+    shadow_plane = ((162, 83), (238, 121), (134, 97))
+    with prefabs.clipped_pane(a, shadow_plane) as sp:
+        sp.surface.data[sp.mask] = p.VOID
+        sp.surface.dither(
+            0,
+            0,
+            sp.width,
+            sp.height,
+            255,
+            p.VOID,
+            pattern="checker",
+            ratio=0.5,
+            mask="opaque",
+        )
 
-    prefabs.contact_shadow(a, 152, 122, 34, 16, color=p.VOID, dither_ratio=0.5)
-    prefabs.iso_desk(
+    desk_x, desk_y = room.wall_box_center(
+        "right",
+        74,
+        28,
+        19,
+        along=0.0,
+        margin=1,
+        corner_margin=4,
+    )
+    slots = prefabs.iso_desk(
         a,
-        152,
-        108,
-        44,
-        44,
-        leg_h=18,
-        top_h=5,
+        desk_x,
+        desk_y,
+        74,
+        28,
+        leg_h=15,
+        top_h=4,
         top=p.WOOD_L,
         left=p.WOOD_M,
         right=p.WOOD_D,
@@ -155,16 +182,37 @@ def _draw_desk_and_slots(a: Asset, p: PaletteLookup) -> None:
         outline=p.INK,
         highlight=p.WOOD_L,
         mat_color=p.METAL_D,
-        mat_w=44,
+        mat_w=40,
     )
 
-    # Side floor rack stand for AI cluster node
+    # Ergonomic task chair tucked in front of the keyboard zone
+    prefabs.contact_shadow(a, 158, 123, 9, 4, color=p.VOID, dither_ratio=0.5)
+    prefabs.iso_chair(
+        a,
+        158,
+        113,
+        seat_w=12,
+        seat_d=12,
+        seat_h=3,
+        back_h=10,
+        leg_h=5,
+        top=p.METAL_L,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        back=p.METAL_M,
+        leg=p.INK,
+        outline=p.INK,
+        facing="ne",
+    )
+
+    # Side floor rack stand beside the right end of the desk
+    prefabs.contact_shadow(a, 242, 143, 12, 6, color=p.VOID, dither_ratio=0.5)
     prefabs.iso_rack(
         a,
-        218,
-        138,
-        18,
-        18,
+        242,
+        136,
+        16,
+        16,
         6,
         top=p.METAL_H,
         left=p.METAL_M,
@@ -172,20 +220,15 @@ def _draw_desk_and_slots(a: Asset, p: PaletteLookup) -> None:
         outline=p.INK,
         anchor="center",
     )
-
-    # Desk lamp on back corner of desk (emissive warm glow at night)
-    a.rect(149, 86, 2, 7, p.METAL_H)
-    a.rect(147, 84, 6, 3, p.METAL_M)
-    if is_night:
-        a.rect(148, 86, 4, 1, p.WARM_LAMP)
+    return slots
 
 
 def _draw_breaker_panel(a: Asset, p: PaletteLookup) -> None:
     prefabs.wall_panel(
         a,
-        p0=(224, 66),
-        p1=(242, 75),
-        p2=(224, 92),
+        p0=(240, 74),
+        p1=(258, 83),
+        p2=(240, 100),
         frame=p.METAL_H,
         recess=p.METAL_D,
         slot=p.VOID,
@@ -199,14 +242,23 @@ def _draw_breaker_panel(a: Asset, p: PaletteLookup) -> None:
 def render(a: Asset) -> None:
     """Render the `bedroom_desk_iso` scene with hardware placement anchors."""
     p = a.pal
-    _draw_floor_and_walls(a, p)
+    room = _draw_floor_and_walls(a, p)
     _draw_window(a, p)
-    _draw_desk_and_slots(a, p)
+    slots = _draw_desk_and_slots(a, p, room)
     _draw_breaker_panel(a, p)
 
-    a.anchor_slots("hardware_", ((136, 104), (168, 112), (218, 136)))
-    a.anchor("breaker", 233, 81)
+    mon_pt = slots.top_point(0.44, 0.34)
+    lamp_pt = slots.top_point(0.14, 0.46)
+    pc_pt = slots.top_point(0.86, 0.45)
+    kbd_pt = slots.top_point(0.43, 0.68)
+    mouse_pt = slots.top_point(0.61, 0.68)
 
-    a.hitbox("desk", 108, 86, 88, 49)
-    a.hitbox("breaker", 224, 66, 18, 35)
+    a.anchor_slots("hardware_", (mon_pt, lamp_pt, (242, 134)))
+    a.anchor("breaker", 249, 89)
+    a.anchor("desk_pc", pc_pt[0], pc_pt[1])
+    a.anchor("desk_keyboard", kbd_pt[0], kbd_pt[1])
+    a.anchor("desk_mouse", mouse_pt[0], mouse_pt[1])
+
+    a.hitbox("desk", 134, 63, 104, 72)
+    a.hitbox("breaker", 240, 74, 18, 35)
     a.hitbox("room", 48, 6, 224, 186)

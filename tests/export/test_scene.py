@@ -473,7 +473,14 @@ def test_homelab_desk_scene_module_compiles_cleanly() -> None:
     parent = load_asset_module(repo_root / "assets" / "homelab" / "bedroom_desk_iso.asset.py")
     props = {
         pid: load_asset_module(repo_root / "assets" / "props" / f"{pid}.asset.py")
-        for pid in ("monitor_iso", "desk_lamp_iso", "network_switch_iso")
+        for pid in (
+            "monitor_iso",
+            "pc_tower_iso",
+            "desk_lamp_iso",
+            "keyboard_iso",
+            "mouse_iso",
+            "network_switch_iso",
+        )
     }
     bundle = export_scene_bundle(scene.SCENE, parent, props, style)
     assert bundle.manifest.id == "homelab_desk_scene"

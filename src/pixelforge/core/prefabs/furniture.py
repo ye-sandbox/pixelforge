@@ -142,38 +142,42 @@ def iso_desk(
     mat_color: int | None = None,
     mat_w: int | None = None,
 ) -> IsoDeskSlots:
-    """Draw a 2:1 isometric desk with side legs, beveled tabletop, and optional desk mat."""
+    """Draw a 2:1 isometric desk with corner legs, beveled tabletop, and optional desk mat."""
     iw = max(4, int(w))
     id_ = max(4, int(d))
     ileg_h = max(1, int(leg_h))
     itop_h = max(1, int(top_h))
 
-    leg_offset_x = max(2, round(iw * 0.72))
-    leg_offset_y = max(2, id_ // 10)
-    leg_span = max(2, min(6, iw // 10))
+    tx, ty = _resolve_box_top_origin(x, y, iw, id_, itop_h, "center")
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + iw // 2)
+    p_left = (tx - id_, ty + id_ // 2)
+    p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
 
-    target.iso_box(
-        x - leg_offset_x,
-        y + leg_offset_y,
-        leg_span,
-        leg_span,
-        ileg_h,
-        top=leg_top,
-        left=leg_left,
-        right=leg_right,
-        anchor="center",
-    )
-    target.iso_box(
-        x + leg_offset_x,
-        y + leg_offset_y,
-        leg_span,
-        leg_span,
-        ileg_h,
-        top=leg_top,
-        left=leg_left,
-        right=leg_right,
-        anchor="center",
-    )
+    leg_span = max(2, min(4, min(iw, id_) // 6))
+    du = min(0.24, max(0.08, (leg_span + 1.5) / float(iw)))
+    dv = min(0.24, max(0.10, (leg_span + 1.5) / float(id_)))
+
+    # INVARIANT: Draw all 4 corner legs back-to-front before the tabletop so the slab
+    # cleanly occludes leg tops across both square and rectangular desk ratios.
+    for lu, lv in (
+        (du, dv),
+        (du, 1.0 - dv),
+        (1.0 - du, dv),
+        (1.0 - du, 1.0 - dv),
+    ):
+        lx, ly = _project_diamond(p_top, p_right, p_left, lu, lv)
+        target.iso_box(
+            lx,
+            ly + itop_h - 1,
+            leg_span,
+            leg_span,
+            ileg_h + 1,
+            top=leg_top,
+            left=leg_left,
+            right=leg_right,
+            anchor="center",
+        )
 
     target.iso_box(
         x,
@@ -190,14 +194,12 @@ def iso_desk(
     )
 
     if mat_color is not None:
-        mw = max(4, int(mat_w) if mat_w is not None else iw)
-        target.iso_tile(x - max(0, iw // 11), y, mw, mat_color, height=max(2, mw // 2))
+        mw = max(4, int(mat_w) if mat_w is not None else round(iw * 0.56))
+        u_span = min(0.84, max(0.24, mw / float(iw)))
+        u0 = (1.0 - u_span) * 0.5
+        with target.plane(p0=p_top, p1=p_right, p2=p_left) as desk_top:
+            desk_top.rect(u0, 0.24, u_span, 0.58, fill=mat_color)
 
-    tx, ty = _resolve_box_top_origin(x, y, iw, id_, itop_h, "center")
-    p_top = (tx, ty)
-    p_right = (tx + iw, ty + iw // 2)
-    p_left = (tx - id_, ty + id_ // 2)
-    p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
     return IsoDeskSlots(
         center=(round(x), round(y)),
         p_top=p_top,

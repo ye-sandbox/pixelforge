@@ -51,8 +51,11 @@ EXPECTED_THINKPAD_IDS = (
 EXPECTED_PROPS_IDS = (
     "coffee_mug_iso",
     "desk_lamp_iso",
+    "keyboard_iso",
     "monitor_iso",
+    "mouse_iso",
     "network_switch_iso",
+    "pc_tower_iso",
     "potted_plant_iso",
     "storage_crate_iso",
 )
@@ -159,6 +162,9 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
         "hardware_1",
         "hardware_2",
         "breaker",
+        "desk_pc",
+        "desk_keyboard",
+        "desk_mouse",
     ]
 
     # Verify non-emissive painted blue/orange tokens on ThinkPad do not leak into emissive mask.
@@ -181,7 +187,8 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
     assert "export interface ThinkpadR51IsoManifestEntry" in dts_text
     assert (
         "export type BedroomDeskIsoAnchorName = "
-        '"hardware_0" | "hardware_1" | "hardware_2" | "breaker";' in dts_text
+        '"hardware_0" | "hardware_1" | "hardware_2" | "breaker" '
+        '| "desk_pc" | "desk_keyboard" | "desk_mouse";' in dts_text
     )
 
     # Verify --indexed-ts export contract & RLE roundtrip

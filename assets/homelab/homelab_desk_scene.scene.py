@@ -19,9 +19,27 @@ SCENE = SceneSpec(
             state_map={"day": "idle", "night": "active"},
         ),
         SceneMountSpec(
+            prop_id="pc_tower_iso",
+            anchor="desk_pc",
+            prop_anchor="mount_bottom",
+            state_map={"day": "idle", "night": "active"},
+        ),
+        SceneMountSpec(
             prop_id="desk_lamp_iso",
             anchor="hardware_1",
             prop_anchor="mount_bottom",
+        ),
+        SceneMountSpec(
+            prop_id="keyboard_iso",
+            anchor="desk_keyboard",
+            prop_anchor="mount_bottom",
+            state_map={"day": "idle", "night": "active"},
+        ),
+        SceneMountSpec(
+            prop_id="mouse_iso",
+            anchor="desk_mouse",
+            prop_anchor="mount_bottom",
+            state_map={"day": "idle", "night": "active"},
         ),
         SceneMountSpec(
             prop_id="network_switch_iso",
