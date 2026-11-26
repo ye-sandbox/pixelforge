@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import TracebackType
 from typing import Literal, Protocol, Self
 
@@ -10,6 +11,14 @@ from pixelforge.core.surface import (
     DitherPattern,
     IndexedSurface,
     compute_dither_selection,
+)
+from pixelforge.core.surface_maps import (
+    NORMAL_FRONT_DOWN,
+    NORMAL_ISO_LEFT,
+    NORMAL_ISO_RIGHT,
+    Normal3D,
+    infer_plane_normal,
+    normalize_normal,
 )
 from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint
 
@@ -39,6 +48,7 @@ class Plane:
     _u_vec: tuple[float, float]
     _v_vec: tuple[float, float]
     _emit_anchor: AnchorEmitter
+    _normal: Normal3D
 
     def __init__(
         self,
@@ -47,12 +57,19 @@ class Plane:
         p1: Point2D,
         p2: Point2D,
         emit_anchor: AnchorEmitter,
+        *,
+        normal: Normal3D | None = None,
     ) -> None:
         self._surface = surface
         self._p0 = (float(p0[0]), float(p0[1]))
         self._u_vec = (float(p1[0]) - self._p0[0], float(p1[1]) - self._p0[1])
         self._v_vec = (float(p2[0]) - self._p0[0], float(p2[1]) - self._p0[1])
         self._emit_anchor = emit_anchor
+        self._normal = (
+            normalize_normal(*normal)
+            if normal is not None
+            else infer_plane_normal(self._u_vec, self._v_vec)
+        )
 
     def __enter__(self) -> Self:
         return self
@@ -119,17 +136,38 @@ class Plane:
             if ny <= 0:
                 continue
             edge_color = color
-            if nx < 0 and side_left is not None:
-                edge_color = side_left
-            elif nx > 0 and side_right is not None:
-                edge_color = side_right
-            self._surface.quad(
-                (ax, ay),
-                (bx, by),
-                (bx, by + d),
-                (ax, ay + d),
-                edge_color,
-            )
+            side_normal = NORMAL_FRONT_DOWN
+            if nx < 0:
+                side_normal = NORMAL_ISO_LEFT
+                if side_left is not None:
+                    edge_color = side_left
+            elif nx > 0:
+                side_normal = NORMAL_ISO_RIGHT
+                if side_right is not None:
+                    edge_color = side_right
+            maps = self._surface.maps
+            if maps is not None:
+                slope = (by - ay) / (bx - ax) if bx != ax else 0.0
+                c_val = float(d) + float(ay) - slope * float(ax)
+                with (
+                    maps.normal_scope(side_normal),
+                    maps.height_plane_scope(slope, -1.0, c_val, 0.0, float(d)),
+                ):
+                    self._surface.quad(
+                        (ax, ay),
+                        (bx, by),
+                        (bx, by + d),
+                        (ax, ay + d),
+                        edge_color,
+                    )
+            else:
+                self._surface.quad(
+                    (ax, ay),
+                    (bx, by),
+                    (bx, by + d),
+                    (ax, ay + d),
+                    edge_color,
+                )
 
     def rect(
         self,
@@ -163,18 +201,26 @@ class Plane:
                     side_right=side_right,
                 )
 
-        if fill is not None:
-            self._surface.quad(c00, c10, c11, c01, fill, fill=True)
+        maps = self._surface.maps
+        top_height_ctx = (
+            maps.height_scope(float(extrude_y))
+            if maps is not None and extrude_y > 0
+            else nullcontext()
+        )
+        normal_ctx = maps.normal_scope(self._normal) if maps is not None else nullcontext()
+        with normal_ctx, top_height_ctx:
+            if fill is not None:
+                self._surface.quad(c00, c10, c11, c01, fill, fill=True)
 
-        if bevel is not None:
-            hi_color, lo_color = bevel
-            self._surface.line(c01[0], c01[1], c11[0], c11[1], lo_color)
-            self._surface.line(c10[0], c10[1], c11[0], c11[1], lo_color)
-            self._surface.line(c00[0], c00[1], c10[0], c10[1], hi_color)
-            self._surface.line(c00[0], c00[1], c01[0], c01[1], hi_color)
+            if bevel is not None:
+                hi_color, lo_color = bevel
+                self._surface.line(c01[0], c01[1], c11[0], c11[1], lo_color)
+                self._surface.line(c10[0], c10[1], c11[0], c11[1], lo_color)
+                self._surface.line(c00[0], c00[1], c10[0], c10[1], hi_color)
+                self._surface.line(c00[0], c00[1], c01[0], c01[1], hi_color)
 
-        if outline is not None:
-            self._surface.quad(c00, c10, c11, c01, outline, fill=False)
+            if outline is not None:
+                self._surface.quad(c00, c10, c11, c01, outline, fill=False)
 
     def grid(
         self,
@@ -212,20 +258,24 @@ class Plane:
         ratio = max(0.1, min(1.0, float(cell_fill)))
         du = w / cols
         dv = h / rows
-        for r in range(rows):
-            v0 = v + r * dv
-            v1 = v0 + dv * ratio
-            for c in range(cols):
-                u0 = u + c * du
-                u1 = u0 + du * ratio
-                c00, c10, c11, c01 = self._rect_corners(u0, v0, u1 - u0, v1 - v0)
-                self._surface.quad(c00, c10, c11, c01, color, fill=True)
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            for r in range(rows):
+                v0 = v + r * dv
+                v1 = v0 + dv * ratio
+                for c in range(cols):
+                    u0 = u + c * du
+                    u1 = u0 + du * ratio
+                    c00, c10, c11, c01 = self._rect_corners(u0, v0, u1 - u0, v1 - v0)
+                    self._surface.quad(c00, c10, c11, c01, color, fill=True)
 
     def line(self, u0: float, v0: float, u1: float, v1: float, color: int) -> None:
         """Draw a projected Bresenham line between `(u0, v0)` and `(u1, v1)`."""
         x0, y0 = self.project(u0, v0)
         x1, y1 = self.project(u1, v1)
-        self._surface.line(x0, y0, x1, y1, color)
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            self._surface.line(x0, y0, x1, y1, color)
 
     def dot(
         self,
@@ -238,10 +288,12 @@ class Plane:
     ) -> None:
         """Draw a projected 1px dot (or filled circle when `radius > 0`) and optional anchor."""
         px, py = self.project(u, v)
-        if radius <= 0:
-            self._surface.put(px, py, color)
-        else:
-            self._surface.circle(px, py, radius, color, fill=True)
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            if radius <= 0:
+                self._surface.put(px, py, color)
+            else:
+                self._surface.circle(px, py, radius, color, fill=True)
         if anchor is not None:
             self._emit_anchor(anchor, px, py)
 
@@ -256,19 +308,23 @@ class Plane:
         fill: bool = True,
     ) -> None:
         """Draw an arbitrary projected quadrilateral from four `(u, v)` vertices."""
-        self._surface.quad(
-            self.project(uv0[0], uv0[1]),
-            self.project(uv1[0], uv1[1]),
-            self.project(uv2[0], uv2[1]),
-            self.project(uv3[0], uv3[1]),
-            color,
-            fill=fill,
-        )
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            self._surface.quad(
+                self.project(uv0[0], uv0[1]),
+                self.project(uv1[0], uv1[1]),
+                self.project(uv2[0], uv2[1]),
+                self.project(uv3[0], uv3[1]),
+                color,
+                fill=fill,
+            )
 
     def put(self, u: float, v: float, color: int) -> None:
         """Write a single pixel at projected `(u, v)`."""
         px, py = self.project(u, v)
-        self._surface.put(px, py, color)
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            self._surface.put(px, py, color)
 
     def dither(
         self,
@@ -300,10 +356,22 @@ class Plane:
         region = self._surface.data[y0:y1, x0:x1]
         active = in_quad & (region != TRANSPARENT_INDEX) if mask == "opaque" else in_quad
         select_b = compute_dither_selection(x0, y0, x1, y1, pattern=pattern, ratio=ratio)
-        if color_b is not None:
-            region[active & select_b] = color_b
-        if color_a is not None:
-            region[active & ~select_b] = color_a
+        maps = self._surface.maps
+        with maps.normal_scope(self._normal) if maps is not None else nullcontext():
+            if color_b is not None:
+                mask_b = active & select_b
+                region[mask_b] = color_b
+                if maps is not None:
+                    maps.write_region_mask(
+                        x0, y0, x1, y1, mask_b, erase=(color_b == TRANSPARENT_INDEX)
+                    )
+            if color_a is not None:
+                mask_a = active & ~select_b
+                region[mask_a] = color_a
+                if maps is not None:
+                    maps.write_region_mask(
+                        x0, y0, x1, y1, mask_a, erase=(color_a == TRANSPARENT_INDEX)
+                    )
 
     def anchor(
         self,

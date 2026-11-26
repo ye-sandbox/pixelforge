@@ -90,6 +90,16 @@ def _render_asset_interface(entry: ExportedAssetManifestEntry, type_name: str) -
         lines.extend(["    readonly indexed: {", *indexed_lines, "    };"])
     if entry.files.lut is not None:
         lines.append("    readonly lut: string;")
+    if entry.files.normals is not None:
+        normal_lines = [f"      readonly {_ts_literal(state)}: string;" for state in entry.states]
+        lines.extend(["    readonly normals: {", *normal_lines, "    };"])
+    if entry.files.sheetNormal is not None:
+        lines.append("    readonly sheetNormal: string;")
+    if entry.files.height is not None:
+        height_lines = [f"      readonly {_ts_literal(state)}: string;" for state in entry.states]
+        lines.extend(["    readonly height: {", *height_lines, "    };"])
+    if entry.files.sheetHeight is not None:
+        lines.append("    readonly sheetHeight: string;")
     lines.append("  };")
 
     lines.extend(

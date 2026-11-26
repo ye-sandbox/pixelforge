@@ -805,6 +805,8 @@ def watch_loop(
     sheet: bool,
     emissive: bool | None,
     lut: bool,
+    normals: bool = False,
+    height: bool = False,
     indexed_ts: bool,
     indexed_ts_lazy: bool = False,
     atlas: AtlasFormat | None = None,
@@ -826,6 +828,8 @@ def watch_loop(
         scale=scale,
         emissive=emissive,
         lut=lut,
+        normals=normals,
+        height=height,
         animate=False,
         atlas=atlas,
     )

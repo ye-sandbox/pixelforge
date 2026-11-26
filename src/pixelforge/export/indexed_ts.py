@@ -232,6 +232,20 @@ def generate_sprites_ts(
     return "\n".join(lines)
 
 
+def _indexed_manifest_files_payload(bundle: ExportBundleResult) -> dict[str, object] | None:
+    files = bundle.manifest.files
+    payload: dict[str, object] = {}
+    if files.normals is not None:
+        payload["normals"] = files.normals
+    if files.sheetNormal is not None:
+        payload["sheetNormal"] = files.sheetNormal
+    if files.height is not None:
+        payload["height"] = files.height
+    if files.sheetHeight is not None:
+        payload["sheetHeight"] = files.sheetHeight
+    return payload or None
+
+
 def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
     """Generate `manifest.generated.ts` with typed metadata for CPU indexed framebuffers."""
     ordered = sorted(bundles, key=lambda b: b.manifest.id)
@@ -245,6 +259,11 @@ def generate_indexed_manifest_ts(bundles: Sequence[ExportBundleResult]) -> str:
             "states": list(bundle.manifest.states),
             "frames": bundle.manifest.frames,
             "fps": bundle.manifest.fps,
+            **(
+                {"files": files_payload}
+                if (files_payload := _indexed_manifest_files_payload(bundle)) is not None
+                else {}
+            ),
             "anchors": [
                 a.model_dump(exclude_none=True, mode="json") for a in bundle.manifest.anchors
             ],

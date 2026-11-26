@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Literal
 
 from pixelforge.core.surface import IndexedSurface
+from pixelforge.core.surface_maps import (
+    NORMAL_FLAT,
+    NORMAL_ISO_LEFT,
+    NORMAL_ISO_RIGHT,
+    NORMAL_ISO_TOP,
+)
 
 IsoAnchor = Literal["top", "center", "bottom"]
 
@@ -63,7 +70,7 @@ def _draw_with_optional_outline(
     pad = 1
     w = max(1, (max_x - min_x + 1) + 2 * pad)
     h = max(1, (max_y - min_y + 1) + 2 * pad)
-    return (IndexedSurface(w, h), min_x - pad, min_y - pad)
+    return (IndexedSurface(w, h, track_maps=surface.has_maps), min_x - pad, min_y - pad)
 
 
 def iso_tile(
@@ -90,14 +97,16 @@ def iso_tile(
     max_y = max(top[1], right[1], bottom[1], left[1])
 
     target, ox, oy = _draw_with_optional_outline(surface, min_x, min_y, max_x, max_y, outline)
-    target.quad(
-        (top[0] - ox, top[1] - oy),
-        (right[0] - ox, right[1] - oy),
-        (bottom[0] - ox, bottom[1] - oy),
-        (left[0] - ox, left[1] - oy),
-        color,
-        fill=fill,
-    )
+    maps = target.maps
+    with maps.normal_scope(NORMAL_ISO_TOP) if maps is not None else nullcontext():
+        target.quad(
+            (top[0] - ox, top[1] - oy),
+            (right[0] - ox, right[1] - oy),
+            (bottom[0] - ox, bottom[1] - oy),
+            (left[0] - ox, left[1] - oy),
+            color,
+            fill=fill,
+        )
     if outline is not None:
         target.auto_outline(outline)
         surface.blit_layer(target, ox, oy)
@@ -177,16 +186,42 @@ def iso_box(
 
     # INVARIANT: Draw visible side walls before the top face so top edges cleanly occlude
     # upper side-wall strokes without 1px seam artifacts.
+    maps = target.maps
     if ih > 0:
-        target.quad(_s(p_left), _s(p_front), _s(p_front_bot), _s(p_left_bot), left)
-        target.quad(_s(p_front), _s(p_right), _s(p_right_bot), _s(p_front_bot), right)
+        if maps is not None:
+            sl_x, sl_y = _s(p_left)
+            sr_x, sr_y = _s(p_front)
+            slope_l = dy_l / max(1, id_)
+            c_l = float(ih) + float(sl_y) - slope_l * float(sl_x)
+            with (
+                maps.normal_scope(NORMAL_ISO_LEFT),
+                maps.height_plane_scope(slope_l, -1.0, c_l, 0.0, float(ih)),
+            ):
+                target.quad(_s(p_left), _s(p_front), _s(p_front_bot), _s(p_left_bot), left)
 
-    target.quad(_s(p_top), _s(p_right), _s(p_front), _s(p_left), top)
+            slope_r = -dy_r / max(1, iw)
+            c_r = float(ih) + float(sr_y) - slope_r * float(sr_x)
+            with (
+                maps.normal_scope(NORMAL_ISO_RIGHT),
+                maps.height_plane_scope(slope_r, -1.0, c_r, 0.0, float(ih)),
+            ):
+                target.quad(_s(p_front), _s(p_right), _s(p_right_bot), _s(p_front_bot), right)
+        else:
+            target.quad(_s(p_left), _s(p_front), _s(p_front_bot), _s(p_left_bot), left)
+            target.quad(_s(p_front), _s(p_right), _s(p_right_bot), _s(p_front_bot), right)
 
-    if highlight is not None:
-        target.line(_s(p_left)[0], _s(p_left)[1], _s(p_front)[0], _s(p_front)[1], highlight)
-        target.line(_s(p_front)[0], _s(p_front)[1], _s(p_right)[0], _s(p_right)[1], highlight)
+    top_n = maps.normal_scope(NORMAL_ISO_TOP) if maps is not None else nullcontext()
+    top_h = maps.height_scope(float(ih)) if maps is not None else nullcontext()
+    with top_n, top_h:
+        target.quad(_s(p_top), _s(p_right), _s(p_front), _s(p_left), top)
+
+        if highlight is not None:
+            target.line(_s(p_left)[0], _s(p_left)[1], _s(p_front)[0], _s(p_front)[1], highlight)
+            target.line(_s(p_front)[0], _s(p_front)[1], _s(p_right)[0], _s(p_right)[1], highlight)
 
     if outline is not None:
-        target.auto_outline(outline)
+        out_n = maps.normal_scope(NORMAL_FLAT) if maps is not None else nullcontext()
+        out_h = maps.height_scope(0.0) if maps is not None else nullcontext()
+        with out_n, out_h:
+            target.auto_outline(outline)
         surface.blit_layer(target, ox, oy)

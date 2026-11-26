@@ -100,7 +100,7 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 uv run pixelforge init [--style homelab-16bit] [--force] [--root .]
 
 # Compilar módulos .asset.py em PNGs, spritesheets, máscaras emissivas, manifestos e diagnósticos
-uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Executar guard tests estáticos (AST) e de runtime (código de saída 0 se aprovado)
 uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] [--json] [--human] [--root .]
@@ -109,7 +109,7 @@ uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] 
 uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Observar arquivos .asset.py e .style.py e recompilar saídas automaticamente (opcional --serve Preview Studio)
-uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Extrair proporção, histograma de paleta e rascunho ASCII quantizado efêmeros de uma imagem de referência local
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--format llm|json|human] [--json] [--human] [--root .]

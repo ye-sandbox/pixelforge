@@ -116,6 +116,89 @@ def surface_to_indexed_png(surface: IndexedSurface, *, scale: int = 1) -> bytes:
     return rgba_to_png(surface_to_indexed_rgba(surface, scale=scale))
 
 
+def normal_map_to_rgba(
+    normals: NDArray[np.float32],
+    surface: IndexedSurface,
+    *,
+    scale: int = 1,
+) -> NDArray[np.uint8]:
+    """Encode `(H, W, 3)` camera-space normals into binary-alpha `(H, W, 4)` RGBA."""
+    s = _validate_scale(scale)
+    h, w = surface.height, surface.width
+    if normals.shape != (h, w, 3):
+        msg = f"Expected normal map shape ({h}, {w}, 3), got {normals.shape}"
+        raise ValueError(msg)
+
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    opaque = surface.data != TRANSPARENT_INDEX
+    if np.any(opaque):
+        vecs = normals[opaque]
+        norms = np.linalg.norm(vecs, axis=-1, keepdims=True)
+        safe = np.where(norms > 1e-8, vecs / np.maximum(norms, 1e-8), np.array([0.0, 0.0, 1.0]))
+        encoded = np.clip(np.round((safe * 0.5 + 0.5) * 255.0), 0, 255).astype(np.uint8)
+        rgba[opaque, :3] = encoded
+        rgba[opaque, 3] = 255
+
+    scaled = _upscale_nearest(rgba, s)
+    assert_binary_alpha(scaled)
+    return scaled
+
+
+def normal_map_to_png(
+    normals: NDArray[np.float32],
+    surface: IndexedSurface,
+    *,
+    scale: int = 1,
+) -> bytes:
+    """Encode `(H, W, 3)` camera-space normals into lossless binary-alpha PNG bytes."""
+    return rgba_to_png(normal_map_to_rgba(normals, surface, scale=scale))
+
+
+def height_map_to_rgba(
+    height_data: NDArray[np.float32],
+    surface: IndexedSurface,
+    *,
+    max_height: float | None = None,
+    scale: int = 1,
+) -> NDArray[np.uint8]:
+    """Encode `(H, W)` surface height into binary-alpha grayscale `(H, W, 4)` RGBA."""
+    s = _validate_scale(scale)
+    h, w = surface.height, surface.width
+    if height_data.shape != (h, w):
+        msg = f"Expected height map shape ({h}, {w}), got {height_data.shape}"
+        raise ValueError(msg)
+
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    opaque = surface.data != TRANSPARENT_INDEX
+    if np.any(opaque):
+        mh = float(np.max(height_data[opaque])) if max_height is None else float(max_height)
+        if mh > 0.0:
+            gray = np.clip(np.round((height_data[opaque] / mh) * 255.0), 0, 255).astype(np.uint8)
+        else:
+            # INVARIANT: Flat opaque shapes without depth variation emit 255 (foreground) vs
+            # transparent 0 so height shaders never treat opaque sprites as background.
+            gray = np.full(int(np.count_nonzero(opaque)), 255, dtype=np.uint8)
+        rgba[opaque, 0] = gray
+        rgba[opaque, 1] = gray
+        rgba[opaque, 2] = gray
+        rgba[opaque, 3] = 255
+
+    scaled = _upscale_nearest(rgba, s)
+    assert_binary_alpha(scaled)
+    return scaled
+
+
+def height_map_to_png(
+    height_data: NDArray[np.float32],
+    surface: IndexedSurface,
+    *,
+    max_height: float | None = None,
+    scale: int = 1,
+) -> bytes:
+    """Encode `(H, W)` surface height into lossless binary-alpha PNG bytes."""
+    return rgba_to_png(height_map_to_rgba(height_data, surface, max_height=max_height, scale=scale))
+
+
 def style_to_lut_rgba(
     style: StylePack,
     variants: Sequence[str | None] | None = None,

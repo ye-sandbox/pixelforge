@@ -21,6 +21,7 @@ from pixelforge.core.surface import (
     IndexedSurface,
     MirrorSource,
 )
+from pixelforge.core.surface_maps import Normal3D
 from pixelforge.core.types import (
     TRANSPARENT_INDEX,
     AnchorPoint,
@@ -88,6 +89,7 @@ class _LayerFrame:
     bevel: tuple[int, int] | None
     mirror_x: bool | MirrorSource
     layer: Layer
+    z: float | None = None
 
 
 class _DrawingMixin:
@@ -126,12 +128,26 @@ class _DrawingMixin:
     def _resolve_pal_index(self, token_or_idx: str | int) -> int:
         raise NotImplementedError
 
-    def _make_plane(self, p0: Point2D, p1: Point2D, p2: Point2D) -> Plane:
-        return Plane(self.surface, p0, p1, p2, self._emit_anchor)
+    def _make_plane(
+        self,
+        p0: Point2D,
+        p1: Point2D,
+        p2: Point2D,
+        *,
+        normal: Normal3D | None = None,
+    ) -> Plane:
+        return Plane(self.surface, p0, p1, p2, self._emit_anchor, normal=normal)
 
-    def plane(self, p0: Point2D, p1: Point2D, p2: Point2D) -> Plane:
+    def plane(
+        self,
+        p0: Point2D,
+        p1: Point2D,
+        p2: Point2D,
+        *,
+        normal: Normal3D | None = None,
+    ) -> Plane:
         """Open a normalized `(u, v)` affine `Plane` context onto the active surface."""
-        return self._make_plane(p0, p1, p2)
+        return self._make_plane(p0, p1, p2, normal=normal)
 
     def put(self, x: int | float, y: int | float, color: int) -> None:
         """Write a single integer-grid pixel (1px surgical escape hatch)."""
@@ -610,6 +626,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         frame: int = 0,
         variant: str | None = None,
         token_overrides: Mapping[str, str | int] | None = None,
+        track_maps: bool = False,
     ) -> None:
         active_state = spec.states[0] if state is None else state
         if active_state not in spec.states:
@@ -634,7 +651,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
             base_pal = base_pal.with_overrides(token_overrides)
         self._pal = cast(PalT, base_pal)
 
-        self._root_surface = IndexedSurface(spec.width, spec.height)
+        self._root_surface = IndexedSurface(spec.width, spec.height, track_maps=track_maps)
         self._layer_stack = []
         self._anchors = []
         self._hitboxes = []
@@ -684,6 +701,18 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
     def root_surface(self) -> IndexedSurface:
         """Top-level `width x height` indexed framebuffer."""
         return self._root_surface
+
+    @property
+    def normal_map(self) -> NDArray[np.float32] | None:
+        """Derived `(H, W, 3)` camera-space normal map when `track_maps=True`."""
+        maps = self._root_surface.maps
+        return maps.normals if maps is not None else None
+
+    @property
+    def height_map(self) -> NDArray[np.float32] | None:
+        """Derived `(H, W)` surface height map when `track_maps=True`."""
+        maps = self._root_surface.maps
+        return maps.height_data if maps is not None else None
 
     @property
     def surface(self) -> IndexedSurface:
@@ -740,6 +769,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         bevel: tuple[int, int] | None = None,
         mirror_x: bool | MirrorSource = False,
         role: LayerRole | None = None,
+        z: float | None = None,
     ) -> Layer:
         """Push an isolated compositional layer composited onto its parent on exit."""
         if not name:
@@ -748,7 +778,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         resolved_role = role if role is not None else _infer_layer_role(name)
         parent = self.surface
         lw, lh = size if size is not None else (parent.width, parent.height)
-        layer_surf = IndexedSurface(lw, lh)
+        layer_surf = IndexedSurface(lw, lh, track_maps=self._root_surface.has_maps)
         ox, oy = int(offset[0]), int(offset[1])
         layer_frame: list[_LayerFrame] = []
 
@@ -779,6 +809,7 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
                 bevel=bevel,
                 mirror_x=mirror_x,
                 layer=layer_obj,
+                z=z,
             )
         )
         return layer_obj
@@ -841,7 +872,16 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
             self._record_layer_span(frame, surf)
 
         parent = self.surface
-        parent.blit_layer(surf, frame.offset[0], frame.offset[1])
+        z_offset = 0.0
+        if parent.maps is not None and surf.maps is not None:
+            z_offset = _compute_layer_z_offset(
+                parent,
+                surf,
+                frame.offset[0],
+                frame.offset[1],
+                explicit_z=frame.z,
+            )
+        parent.blit_layer(surf, frame.offset[0], frame.offset[1], z_offset=z_offset)
 
     def _record_layer_span(self, frame: _LayerFrame, surf: IndexedSurface) -> None:
         ys, xs = np.nonzero(surf.data != TRANSPARENT_INDEX)
@@ -952,6 +992,37 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
             round(h),
             kind=kind,
         )
+
+
+def _compute_layer_z_offset(
+    parent: IndexedSurface,
+    child: IndexedSurface,
+    ox: int,
+    oy: int,
+    *,
+    explicit_z: float | None,
+) -> float:
+    if explicit_z is not None:
+        return float(explicit_z)
+    if parent.maps is None or child.maps is None:
+        return 0.0
+    sx0 = max(0, -ox)
+    sy0 = max(0, -oy)
+    tx0 = max(0, ox)
+    ty0 = max(0, oy)
+    copy_w = min(child.width - sx0, parent.width - tx0)
+    copy_h = min(child.height - sy0, parent.height - ty0)
+    if copy_w > 0 and copy_h > 0:
+        src_opaque = child.data[sy0 : sy0 + copy_h, sx0 : sx0 + copy_w] != TRANSPARENT_INDEX
+        dst_opaque = parent.data[ty0 : ty0 + copy_h, tx0 : tx0 + copy_w] != TRANSPARENT_INDEX
+        overlap = src_opaque & dst_opaque
+        if np.any(overlap):
+            parent_h = parent.maps.height_data[ty0 : ty0 + copy_h, tx0 : tx0 + copy_w]
+            return float(np.max(parent_h[overlap])) + 1.0
+    child_opaque = child.data != TRANSPARENT_INDEX
+    if np.any(child_opaque) and float(np.max(child.maps.height_data[child_opaque])) == 0.0:
+        return 1.0
+    return 0.0
 
 
 def _apply_sel_out(surf: IndexedSurface, spec: SelOutSpec) -> None:

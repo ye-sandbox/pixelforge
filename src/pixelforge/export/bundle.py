@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
+import numpy as np
+from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from pixelforge.core.builder import Asset, LayerSemanticSpan
@@ -35,6 +37,8 @@ from pixelforge.export.atlas import (
 from pixelforge.export.png import (
     frames_to_apng,
     frames_to_gif,
+    height_map_to_png,
+    normal_map_to_png,
     rgba_to_png,
     style_to_lut_png,
     surface_to_indexed_png,
@@ -80,6 +84,8 @@ class RenderedFrame:
     anchors: tuple[AnchorPoint, ...]
     hitboxes: tuple[HitboxRect, ...]
     layer_spans: tuple[LayerSemanticSpan, ...] = ()
+    normal_map: NDArray[np.float32] | None = None
+    height_map: NDArray[np.float32] | None = None
 
 
 class FrameMetadataEntry(BaseModel):
@@ -103,6 +109,10 @@ class ExportedAssetFiles(BaseModel):
     sheetEmissive: str | None = None
     indexed: dict[str, str] | None = None
     lut: str | None = None
+    normals: dict[str, str] | None = None
+    sheetNormal: str | None = None
+    height: dict[str, str] | None = None
+    sheetHeight: str | None = None
 
 
 class ExportedAssetManifestEntry(BaseModel):
@@ -137,6 +147,8 @@ class ExportBundleOptions(BaseModel):
     scale: int = 1
     emissive: bool | None = None
     lut: bool = False
+    normals: bool = False
+    height: bool = False
     animate: bool = False
     animate_format: Literal["gif", "apng"] = "gif"
     atlas: AtlasFormat | None = None
@@ -160,6 +172,7 @@ def render_asset_frames(
     *,
     variant: str | None = None,
     token_overrides: Mapping[str, str | int] | None = None,
+    track_maps: bool = False,
 ) -> tuple[RenderedFrame, ...]:
     """Deterministically execute `asset.render` for every `(state, frame)`."""
     spec = asset.SPEC
@@ -174,6 +187,7 @@ def render_asset_frames(
                 frame=frame,
                 variant=variant,
                 token_overrides=token_overrides,
+                track_maps=track_maps,
             )
             asset.render(builder)
             results.append(
@@ -184,6 +198,8 @@ def render_asset_frames(
                     anchors=builder.anchors,
                     hitboxes=builder.hitboxes,
                     layer_spans=builder.layer_spans,
+                    normal_map=builder.normal_map,
+                    height_map=builder.height_map,
                 )
             )
 
@@ -277,6 +293,59 @@ def _compute_bundle_digest(
     return hasher.hexdigest()
 
 
+def build_spritesheet_normal_map(
+    spec: AssetSpec,
+    rendered_frames: Sequence[RenderedFrame],
+) -> NDArray[np.float32]:
+    """Pack rendered frame normal maps into a `(states * H, frames * W, 3)` float32 array."""
+    sheet_w = spec.width * spec.frames
+    sheet_h = spec.height * len(spec.states)
+    sheet = np.zeros((sheet_h, sheet_w, 3), dtype=np.float32)
+    sheet[..., 2] = 1.0
+    by_key = {(item.state, item.frame): item for item in rendered_frames}
+
+    for state_idx, state in enumerate(spec.states):
+        for frame in range(spec.frames):
+            item = by_key.get((state, frame))
+            if item is not None and item.normal_map is not None:
+                x0 = frame * spec.width
+                y0 = state_idx * spec.height
+                sheet[y0 : y0 + spec.height, x0 : x0 + spec.width, :] = item.normal_map
+    return sheet
+
+
+def build_spritesheet_height_map(
+    spec: AssetSpec,
+    rendered_frames: Sequence[RenderedFrame],
+) -> NDArray[np.float32]:
+    """Pack rendered frame height maps into a `(states * H, frames * W)` float32 array."""
+    sheet_w = spec.width * spec.frames
+    sheet_h = spec.height * len(spec.states)
+    sheet = np.zeros((sheet_h, sheet_w), dtype=np.float32)
+    by_key = {(item.state, item.frame): item for item in rendered_frames}
+
+    for state_idx, state in enumerate(spec.states):
+        for frame in range(spec.frames):
+            item = by_key.get((state, frame))
+            if item is not None and item.height_map is not None:
+                x0 = frame * spec.width
+                y0 = state_idx * spec.height
+                sheet[y0 : y0 + spec.height, x0 : x0 + spec.width] = item.height_map
+    return sheet
+
+
+def _max_height_across_frames(rendered_frames: Sequence[RenderedFrame]) -> float:
+    max_h = 0.0
+    for item in rendered_frames:
+        if item.height_map is not None:
+            opaque = item.surface.data != 255
+            if np.any(opaque):
+                frame_max = float(np.max(item.height_map[opaque]))
+                if frame_max > max_h:
+                    max_h = frame_max
+    return max_h
+
+
 @dataclass(frozen=True)
 class _StateExportOutputs:
     files: dict[str, bytes]
@@ -284,6 +353,8 @@ class _StateExportOutputs:
     state_files: dict[str, str]
     emissive_files: dict[str, str]
     indexed_files: dict[str, str]
+    normal_files: dict[str, str]
+    height_files: dict[str, str]
 
 
 def _export_state_outputs(
@@ -293,12 +364,15 @@ def _export_state_outputs(
     opts: ExportBundleOptions,
     *,
     include_emissive: bool,
+    max_height: float,
 ) -> _StateExportOutputs:
     files: dict[str, bytes] = {}
     preview_files: dict[str, bytes] = {}
     state_files: dict[str, str] = {}
     emissive_files: dict[str, str] = {}
     indexed_files: dict[str, str] = {}
+    normal_files: dict[str, str] = {}
+    height_files: dict[str, str] = {}
 
     for state in spec.states:
         primary = by_key[(state, 0)]
@@ -327,6 +401,25 @@ def _export_state_outputs(
             indexed_files[state] = indexed_name
             files[indexed_name] = surface_to_indexed_png(primary.surface, scale=opts.scale)
 
+        if opts.normals and primary.normal_map is not None:
+            normal_name = f"{spec.id}_{state}_normal.png"
+            normal_files[state] = normal_name
+            files[normal_name] = normal_map_to_png(
+                primary.normal_map,
+                primary.surface,
+                scale=opts.scale,
+            )
+
+        if opts.height and primary.height_map is not None:
+            height_name = f"{spec.id}_{state}_height.png"
+            height_files[state] = height_name
+            files[height_name] = height_map_to_png(
+                primary.height_map,
+                primary.surface,
+                max_height=max_height,
+                scale=opts.scale,
+            )
+
         if opts.animate and spec.frames > 1:
             rgba_seq = [
                 surface_to_rgba(
@@ -351,6 +444,8 @@ def _export_state_outputs(
         state_files=state_files,
         emissive_files=emissive_files,
         indexed_files=indexed_files,
+        normal_files=normal_files,
+        height_files=height_files,
     )
 
 
@@ -361,9 +456,10 @@ def _export_spritesheet_outputs(
     opts: ExportBundleOptions,
     *,
     include_emissive: bool,
-) -> tuple[dict[str, bytes], str | None, str | None]:
+    max_height: float,
+) -> tuple[dict[str, bytes], str | None, str | None, str | None, str | None]:
     if spec.frames <= 1:
-        return ({}, None, None)
+        return ({}, None, None, None, None)
 
     files: dict[str, bytes] = {}
     sheet_surface = build_spritesheet_surface(spec, rendered_frames)
@@ -384,7 +480,25 @@ def _export_spritesheet_outputs(
                 emissive_only=True,
             )
         )
-    return (files, sheet_name, sheet_emissive_name)
+
+    sheet_normal_name: str | None = None
+    if opts.normals and any(item.normal_map is not None for item in rendered_frames):
+        sheet_normal_name = f"{spec.id}_sheet_normal.png"
+        sheet_normals = build_spritesheet_normal_map(spec, rendered_frames)
+        files[sheet_normal_name] = normal_map_to_png(sheet_normals, sheet_surface, scale=opts.scale)
+
+    sheet_height_name: str | None = None
+    if opts.height and any(item.height_map is not None for item in rendered_frames):
+        sheet_height_name = f"{spec.id}_sheet_height.png"
+        sheet_heights = build_spritesheet_height_map(spec, rendered_frames)
+        files[sheet_height_name] = height_map_to_png(
+            sheet_heights,
+            sheet_surface,
+            max_height=max_height,
+            scale=opts.scale,
+        )
+
+    return (files, sheet_name, sheet_emissive_name, sheet_normal_name, sheet_height_name)
 
 
 def _export_atlas_outputs(
@@ -471,19 +585,24 @@ def export_rendered_frames_bundle(
         )
     )
 
+    max_height = _max_height_across_frames(rendered_frames) if opts.height else 0.0
     state_out = _export_state_outputs(
         spec,
         style,
         by_key,
         opts,
         include_emissive=include_emissive,
+        max_height=max_height,
     )
-    sheet_files, sheet_name, sheet_emissive_name = _export_spritesheet_outputs(
-        spec,
-        style,
-        rendered_frames,
-        opts,
-        include_emissive=include_emissive,
+    sheet_files, sheet_name, sheet_emissive_name, sheet_normal_name, sheet_height_name = (
+        _export_spritesheet_outputs(
+            spec,
+            style,
+            rendered_frames,
+            opts,
+            include_emissive=include_emissive,
+            max_height=max_height,
+        )
     )
     atlas_files = _export_atlas_outputs(
         spec,
@@ -522,6 +641,10 @@ def export_rendered_frames_bundle(
         sheetEmissive=sheet_emissive_name,
         indexed=state_out.indexed_files if opts.lut else None,
         lut=lut_name,
+        normals=state_out.normal_files if opts.normals and state_out.normal_files else None,
+        sheetNormal=sheet_normal_name,
+        height=state_out.height_files if opts.height and state_out.height_files else None,
+        sheetHeight=sheet_height_name,
     )
 
     manifest = ExportedAssetManifestEntry(
@@ -563,6 +686,7 @@ def export_asset_bundle(
         style,
         variant=opts.variant,
         token_overrides=opts.token_overrides,
+        track_maps=(opts.normals or opts.height),
     )
     return export_rendered_frames_bundle(asset.SPEC, rendered_frames, style, opts)
 

@@ -173,6 +173,7 @@ def _render_single_frame(
     state: str,
     frame: int,
     variant: str | None,
+    track_maps: bool = False,
 ) -> RenderedFrame:
     spec = asset.SPEC
     if state not in spec.states:
@@ -183,7 +184,7 @@ def _render_single_frame(
         msg = f"Asset {spec.id!r} frame {frame} out of range [0..{spec.frames - 1}]"
         raise SceneCompositionError(msg)
 
-    builder = Asset(spec, style, state=state, frame=frame, variant=variant)
+    builder = Asset(spec, style, state=state, frame=frame, variant=variant, track_maps=track_maps)
     asset.render(builder)
     return RenderedFrame(
         state=state,
@@ -192,6 +193,8 @@ def _render_single_frame(
         anchors=builder.anchors,
         hitboxes=builder.hitboxes,
         layer_spans=builder.layer_spans,
+        normal_map=builder.normal_map,
+        height_map=builder.height_map,
     )
 
 
@@ -347,6 +350,7 @@ def _blit_mounted_prop(
     *,
     strict_bounds: bool,
     strict_perspective: bool,
+    track_maps: bool = False,
 ) -> tuple[
     _StagedPlacement,
     list[str],
@@ -369,6 +373,7 @@ def _blit_mounted_prop(
         state=prop_state,
         frame=prop_frame,
         variant=variant,
+        track_maps=track_maps,
     )
 
     if mount.prop_anchor is not None:
@@ -401,7 +406,15 @@ def _blit_mounted_prop(
             raise SceneCompositionError(detail)
         warnings.append(detail)
 
-    composite.blit_layer(prop_rendered.surface, dest_x, dest_y)
+    z_offset = 0.0
+    if (
+        composite.maps is not None
+        and prop_rendered.surface.maps is not None
+        and 0 <= parent_anchor.x < composite.width
+        and 0 <= parent_anchor.y < composite.height
+    ):
+        z_offset = float(composite.maps.height_data[parent_anchor.y, parent_anchor.x])
+    composite.blit_layer(prop_rendered.surface, dest_x, dest_y, z_offset=z_offset)
     staged = _StagedPlacement(
         mount=mount,
         perspective=prop.SPEC.perspective,
@@ -510,6 +523,7 @@ def compose_scene(
     *,
     strict_bounds: bool = False,
     strict_perspective: bool = False,
+    track_maps: bool = False,
 ) -> SceneCompositionResult:
     """Deterministically compose child prop assets onto a parent scene's declared anchors."""
     if parent.SPEC.id != spec.parent_id:
@@ -529,6 +543,7 @@ def compose_scene(
         state=parent_state,
         frame=spec.parent_frame,
         variant=spec.variant,
+        track_maps=track_maps,
     )
     composite = parent_rendered.surface.clone()
     ordered_mounts = _order_mounts(
@@ -552,6 +567,7 @@ def compose_scene(
             spec.variant,
             strict_bounds=strict_bounds,
             strict_perspective=strict_perspective,
+            track_maps=track_maps,
         )
         staged.append(entry)
         warnings.extend(prop_warnings)
@@ -627,6 +643,7 @@ def compose_scene_results(
     variant: str | None = None,
     strict_bounds: bool | None = None,
     strict_perspective: bool | None = None,
+    track_maps: bool = False,
 ) -> tuple[AssetSpec, tuple[SceneCompositionResult, ...], tuple[str, ...]]:
     """Synchronously compose all `(state, frame)` pairs and return scene results."""
     asset_spec = resolve_scene_asset_spec(scene_spec, parent, props_by_id)
@@ -669,6 +686,7 @@ def compose_scene_results(
                 comp_spec,
                 strict_bounds=eff_strict_bounds,
                 strict_perspective=eff_strict_perspective,
+                track_maps=track_maps,
             )
             for warning in res.warnings:
                 seen_warnings.setdefault(warning, None)
@@ -721,6 +739,7 @@ def export_scene_bundle(
         props_by_id,
         style,
         variant=opts.variant,
+        track_maps=(opts.normals or opts.height),
     )
     rendered_frames = tuple(
         RenderedFrame(
@@ -730,6 +749,8 @@ def export_scene_bundle(
             anchors=res.parent_anchors,
             hitboxes=res.parent_hitboxes,
             layer_spans=res.layer_spans,
+            normal_map=res.surface.maps.normals if res.surface.maps is not None else None,
+            height_map=res.surface.maps.height_data if res.surface.maps is not None else None,
         )
         for idx, res in enumerate(results)
     )

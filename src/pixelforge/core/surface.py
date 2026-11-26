@@ -8,6 +8,7 @@ from typing import Final, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from pixelforge.core.surface_maps import SurfaceMaps
 from pixelforge.core.types import TRANSPARENT_INDEX
 
 DitherPattern = Literal["bayer2", "bayer4", "checker"]
@@ -88,12 +89,16 @@ class IndexedSurface:
     width: int
     height: int
     data: NDArray[np.uint8]
+    _maps: SurfaceMaps | None
 
     def __init__(
         self,
         width: int,
         height: int,
         initial_data: NDArray[np.uint8] | None = None,
+        *,
+        track_maps: bool = False,
+        initial_maps: SurfaceMaps | None = None,
     ) -> None:
         w = int(width)
         h = int(height)
@@ -110,6 +115,23 @@ class IndexedSurface:
             self.data = np.array(initial_data, dtype=np.uint8, copy=True)
         else:
             self.data = np.full((h, w), TRANSPARENT_INDEX, dtype=np.uint8)
+
+        if initial_maps is not None:
+            self._maps = initial_maps.clone()
+        elif track_maps:
+            self._maps = SurfaceMaps(w, h)
+        else:
+            self._maps = None
+
+    @property
+    def maps(self) -> SurfaceMaps | None:
+        """Optional companion normal and height maps when `track_maps=True`."""
+        return self._maps
+
+    @property
+    def has_maps(self) -> bool:
+        """Return True when normal/height map tracking is active on this surface."""
+        return self._maps is not None
 
     def in_bounds(self, x: int | float, y: int | float) -> bool:
         """Return True if integer-truncated `(x, y)` lies inside `[0, width) x [0, height)`."""
@@ -134,6 +156,8 @@ class IndexedSurface:
         if ix < 0 or ix >= self.width or iy < 0 or iy >= self.height:
             return
         self.data[iy, ix] = c
+        if self._maps is not None:
+            self._maps.write_pixel(ix, iy, erase=(c == TRANSPARENT_INDEX))
 
     def erase(self, x: int | float, y: int | float) -> None:
         """Clear a single pixel to `TRANSPARENT_INDEX`."""
@@ -141,11 +165,19 @@ class IndexedSurface:
 
     def clear(self, color: int = TRANSPARENT_INDEX) -> None:
         """Fill the entire surface with `color` (defaults to transparent `255`)."""
-        self.data.fill(_normalize_index(color))
+        c = _normalize_index(color)
+        self.data.fill(c)
+        if self._maps is not None:
+            self._maps.clear(erase=(c == TRANSPARENT_INDEX))
 
     def clone(self) -> IndexedSurface:
         """Return an independent deep copy of this surface."""
-        return IndexedSurface(self.width, self.height, self.data)
+        return IndexedSurface(
+            self.width,
+            self.height,
+            self.data,
+            initial_maps=self._maps,
+        )
 
     def _hspan(self, x0: int, x1: int, y: int, color: int) -> None:
         if y < 0 or y >= self.height:
@@ -155,6 +187,8 @@ class IndexedSurface:
         if start > end:
             return
         self.data[y, start : end + 1] = color
+        if self._maps is not None:
+            self._maps.write_span(start, end, y, erase=(color == TRANSPARENT_INDEX))
 
     def rect(
         self,
@@ -182,6 +216,8 @@ class IndexedSurface:
             y1 = min(self.height, iy + ih)
             if x0 < x1 and y0 < y1:
                 self.data[y0:y1, x0:x1] = c
+                if self._maps is not None:
+                    self._maps.write_rect(x0, y0, x1, y1, erase=(c == TRANSPARENT_INDEX))
             return
 
         x_end = ix + iw - 1
@@ -299,6 +335,8 @@ class IndexedSurface:
         while True:
             if 0 <= ix0 < w and 0 <= iy0 < h:
                 data[iy0, ix0] = c
+                if self._maps is not None:
+                    self._maps.write_pixel(ix0, iy0, erase=(c == TRANSPARENT_INDEX))
             if ix0 == ix1 and iy0 == iy1:
                 break
             e2 = 2 * err
@@ -518,6 +556,8 @@ class IndexedSurface:
                 rx += 1
 
             self.data[sy, lx : rx + 1] = replacement
+            if self._maps is not None:
+                self._maps.write_span(lx, rx, sy, erase=(replacement == TRANSPARENT_INDEX))
             self._scan_neighbor_row(lx, rx, sy - 1, target, stack)
             self._scan_neighbor_row(lx, rx, sy + 1, target, stack)
 
@@ -573,9 +613,19 @@ class IndexedSurface:
         region = self.data[y0:y1, x0:x1]
         active = (region != TRANSPARENT_INDEX) if mask == "opaque" else np.ones_like(region, bool)
         if cb is not None:
-            region[active & select_b] = cb
+            mask_b = active & select_b
+            region[mask_b] = cb
+            if self._maps is not None:
+                self._maps.write_region_mask(
+                    x0, y0, x1, y1, mask_b, erase=(cb == TRANSPARENT_INDEX)
+                )
         if ca is not None:
-            region[active & ~select_b] = ca
+            mask_a = active & ~select_b
+            region[mask_a] = ca
+            if self._maps is not None:
+                self._maps.write_region_mask(
+                    x0, y0, x1, y1, mask_a, erase=(ca == TRANSPARENT_INDEX)
+                )
 
     def spr(
         self,
@@ -600,6 +650,8 @@ class IndexedSurface:
         src: IndexedSurface,
         dx: int | float = 0,
         dy: int | float = 0,
+        *,
+        z_offset: float = 0.0,
     ) -> None:
         """Composite non-transparent pixels from `src` onto this surface at `(dx, dy)`."""
         ox = int(dx)
@@ -617,6 +669,18 @@ class IndexedSurface:
         dst_patch = self.data[ty0 : ty0 + copy_h, tx0 : tx0 + copy_w]
         opaque = src_patch != TRANSPARENT_INDEX
         dst_patch[opaque] = src_patch[opaque]
+        if self._maps is not None and src._maps is not None:
+            self._maps.blit(
+                src._maps,
+                opaque,
+                sx0,
+                sy0,
+                tx0,
+                ty0,
+                copy_w,
+                copy_h,
+                z_offset=z_offset,
+            )
 
     def mirror_x(self, source: MirrorSource = "left") -> None:
         """Mirror one horizontal half of the surface onto the opposite half."""
@@ -630,14 +694,20 @@ class IndexedSurface:
         else:
             msg = f"Invalid mirror source: {source!r}"
             raise ValueError(msg)
+        if self._maps is not None:
+            self._maps.mirror_x(source)
 
     def flip_x(self) -> None:
         """Flip the entire surface horizontally in-place."""
         self.data[:] = self.data[:, ::-1]
+        if self._maps is not None:
+            self._maps.flip_x()
 
     def flip_y(self) -> None:
         """Flip the entire surface vertically in-place."""
         self.data[:] = self.data[::-1, :]
+        if self._maps is not None:
+            self._maps.flip_y()
 
     def _cardinal_opaque_masks(
         self,
@@ -662,6 +732,8 @@ class IndexedSurface:
         opaque, above, below, left, right = self._cardinal_opaque_masks()
         border = (~opaque) & (above | below | left | right)
         self.data[border] = c
+        if self._maps is not None:
+            self._maps.write_global_mask(border, erase=(c == TRANSPARENT_INDEX))
 
     def sel_out(
         self,
@@ -684,6 +756,10 @@ class IndexedSurface:
         self.data[side_mask] = c_side
         self.data[bot_mask] = c_bot
         self.data[top_mask] = c_top
+        if self._maps is not None:
+            self._maps.write_global_mask(side_mask, erase=(c_side == TRANSPARENT_INDEX))
+            self._maps.write_global_mask(bot_mask, erase=(c_bot == TRANSPARENT_INDEX))
+            self._maps.write_global_mask(top_mask, erase=(c_top == TRANSPARENT_INDEX))
 
     def edge_mask(
         self,

@@ -112,6 +112,8 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         animate_format=args.animate_format,
         emissive=args.emissive,
         lut=bool(args.lut),
+        normals=bool(args.normals),
+        height=bool(args.height),
         indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
         indexed_ts_lazy=bool(args.indexed_ts_lazy),
         atlas=args.atlas,
@@ -158,6 +160,8 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         sheet=bool(args.sheet),
         emissive=emissive,
         lut=bool(args.lut),
+        normals=bool(args.normals),
+        height=bool(args.height),
         indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
         indexed_ts_lazy=bool(args.indexed_ts_lazy),
         atlas=args.atlas,
@@ -361,6 +365,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render_p.add_argument("--lut", action="store_true", help="Emit indexed PNGs + 1D LUT")
     render_p.add_argument(
+        "--normals",
+        action="store_true",
+        help="Emit derived 2D normal map PNGs (_normal.png)",
+    )
+    render_p.add_argument(
+        "--height",
+        action="store_true",
+        help="Emit derived 2D height map PNGs (_height.png)",
+    )
+    render_p.add_argument(
         "--indexed-ts",
         action="store_true",
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
@@ -416,6 +430,16 @@ def build_parser() -> argparse.ArgumentParser:
     watch_p.add_argument("--sheet", action="store_true", help="Generate diagnostic .contact.png")
     watch_p.add_argument("--emissive", action="store_true", help="Force emissive mask emission")
     watch_p.add_argument("--lut", action="store_true", help="Emit indexed PNGs + 1D LUT")
+    watch_p.add_argument(
+        "--normals",
+        action="store_true",
+        help="Emit derived 2D normal map PNGs (_normal.png)",
+    )
+    watch_p.add_argument(
+        "--height",
+        action="store_true",
+        help="Emit derived 2D height map PNGs (_height.png)",
+    )
     watch_p.add_argument(
         "--indexed-ts",
         action="store_true",
