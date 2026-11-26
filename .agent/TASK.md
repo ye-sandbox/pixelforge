@@ -8,10 +8,10 @@
 
 ## Active Task
 
-### `[32.2]` External Repository Consumption & Packaging Ergonomics
+### `[33.1]` Derived Gameplay Semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot` & `interact_zones`)
 
-- [ ] Verify and document installing/running `pixelforge` as a standalone tool (`uv tool` / git dependency) against external consumer repositories via `--root`.
-- [ ] Add hermetic end-to-end tests covering standalone CLI invocation against an external repository layout.
+- [ ] Derive collision masks, walkable grids, occlusion zones, and interaction triggers directly from `Asset`/`Layer`/`SceneSpec`/`Tilemap` geometry.
+- [ ] Export typed contracts to `manifest.json`, `manifest.d.ts`, `--indexed-ts`, and Tiled/Godot.
 
 ---
 
@@ -19,6 +19,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[32.2]` External Repository Consumption & Packaging Ergonomics (`6c7b4ba`)
 - `[32.1]` Lightweight Local Preview Studio (`pixelforge watch --serve`) (`86578ce`)
 - `[31.2]` Scene-Aware `pixelforge critic`, Enriched `diff` Metrics & PR Summary Mode (`1eb9ef4`)
 - `[31.1]` Deterministic Scene Ergonomics Guards in `pixelforge check` (`be22749`)
@@ -42,7 +43,6 @@ _All Track C items promoted or completed._
 _All Track D items promoted or completed._
 
 ### Track E — Gameplay Semantics, Derived Maps & AI Ergonomics
-- `[33.1]` **Derived Gameplay Semantics (`collision_grid`, `walkable_mask`, `y_sort_pivot` & `interact_zones`):** Derive collision masks, walkable grids, occlusion zones, and interaction triggers directly from `Asset`/`Layer`/`SceneSpec`/`Tilemap` geometry, exporting typed contracts to `manifest.json`, `manifest.d.ts`, `--indexed-ts`, and Tiled/Godot.
 - `[34.1]` **Derived Lighting & Surface Maps (`_normal.png` & `_height.png`):** Generate optional 2D normal and height masks from `Plane`/`iso_box` face orientations and layer depth (`--normals` / `--height`) for dynamic WebGL2/engine lighting without breaking indexed pixel aesthetics.
 - `[35.1]` **First-Class Bitmap Fonts & Pixel Text Atlas:** Expose deterministic bitmap/pixel font compilation (evolving `_font.py`) into glyph sprite atlases, spacing metrics, and `manifest.d.ts` definitions for crisp 1× HUDs, terminals, and dialogue boxes.
 - `[36.1]` **Typed Frame Events & Audio Cues (`frameMetadata.events`):** Extend `AssetSpec`, `manifest.d.ts`, `--indexed-ts`, and Aseprite atlas exports with deterministic per-`(state, frame)` event tags (e.g., `footstep`, `spark`, `beep`) so external runtimes and audio compilers sync deterministically to animations.
