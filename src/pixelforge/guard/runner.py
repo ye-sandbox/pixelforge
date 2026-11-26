@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -213,6 +213,220 @@ def load_all_assets(assets_dir: Path) -> dict[str, LoadedAsset]:
     return assets
 
 
+def _check_core_ast(core_dir: Path) -> list[GuardViolation]:
+    if not core_dir.is_dir():
+        return []
+    violations: list[GuardViolation] = []
+    for core_file in sorted(core_dir.rglob("*.py")):
+        violations.extend(check_ast_file(core_file, scope="core"))
+    return violations
+
+
+def _load_and_check_styles(
+    styles_dir: Path,
+) -> tuple[dict[str, StylePack], int, list[GuardViolation]]:
+    style_files = discover_style_files(styles_dir)
+    styles: dict[str, StylePack] = {}
+    style_origins: dict[str, Path] = {}
+    violations: list[GuardViolation] = []
+
+    for style_path in style_files:
+        ast_issues = check_ast_file(style_path, scope="style")
+        violations.extend(ast_issues)
+        if ast_issues:
+            continue
+        try:
+            pack = load_style_module(style_path)
+        except Exception as exc:
+            violations.append(
+                GuardViolation(
+                    file=str(style_path),
+                    line=1,
+                    col=0,
+                    rule="load-error",
+                    detail=str(exc),
+                )
+            )
+            continue
+
+        if pack.id in style_origins:
+            violations.append(
+                GuardViolation(
+                    file=str(style_path),
+                    line=1,
+                    col=0,
+                    rule="duplicate-id",
+                    detail=(
+                        f"Duplicate style ID {pack.id!r} "
+                        f"(already declared in {style_origins[pack.id]})"
+                    ),
+                )
+            )
+            continue
+        style_origins[pack.id] = style_path
+        styles[pack.id] = pack
+
+    return styles, len(style_files), violations
+
+
+def _should_report_path(
+    path: Path,
+    suffix: str,
+    target_paths: set[Path] | None,
+    asset_id: str | None,
+) -> bool:
+    in_target_paths = target_paths is None or path.resolve() in target_paths
+    return in_target_paths and (asset_id is None or path.stem.removesuffix(suffix) == asset_id)
+
+
+def _load_guarded_module[T](
+    path: Path,
+    suffix: str,
+    loader: Callable[[Path], T],
+    target_paths: set[Path] | None,
+    asset_id: str | None,
+) -> tuple[T | None, int, list[GuardViolation]]:
+    ast_issues = check_ast_file(path, scope="asset")
+    if ast_issues:
+        if _should_report_path(path, suffix, target_paths, asset_id):
+            return None, 1, ast_issues
+        return None, 0, []
+
+    try:
+        loaded = loader(path)
+    except Exception as exc:
+        if _should_report_path(path, suffix, target_paths, asset_id):
+            return (
+                None,
+                1,
+                [
+                    GuardViolation(
+                        file=str(path),
+                        line=1,
+                        col=0,
+                        rule="load-error",
+                        detail=str(exc),
+                    )
+                ],
+            )
+        return None, 0, []
+
+    return loaded, 0, []
+
+
+def _file_violation(path: Path, rule: str, detail: str) -> list[GuardViolation]:
+    return [GuardViolation(file=str(path), line=1, col=0, rule=rule, detail=detail)]
+
+
+def _check_duplicate_id(
+    path: Path,
+    spec_id: str,
+    asset_origins: dict[str, Path],
+    in_target_paths: bool,
+    asset_id: str | None,
+) -> tuple[bool, int, list[GuardViolation]]:
+    if spec_id not in asset_origins:
+        return False, 0, []
+    if in_target_paths and (asset_id is None or spec_id == asset_id):
+        detail = f"Duplicate asset ID {spec_id!r} (already declared in {asset_origins[spec_id]})"
+        return True, 1, _file_violation(path, "duplicate-id", detail)
+    return True, 0, []
+
+
+def _check_single_asset(
+    asset_path: Path,
+    styles: Mapping[str, StylePack],
+    target_paths: set[Path] | None,
+    asset_id: str | None,
+    strict_orphans: bool,
+    asset_origins: dict[str, Path],
+    loaded_assets_by_id: dict[str, LoadedAsset],
+) -> tuple[int, list[GuardViolation]]:
+    in_target_paths = target_paths is None or asset_path.resolve() in target_paths
+    loaded, checked_delta, pre_violations = _load_guarded_module(
+        asset_path, ".asset", load_asset_module, target_paths, asset_id
+    )
+    if loaded is None:
+        return checked_delta, pre_violations
+
+    is_dup, dup_checked, dup_violations = _check_duplicate_id(
+        asset_path, loaded.SPEC.id, asset_origins, in_target_paths, asset_id
+    )
+    if is_dup:
+        return dup_checked, dup_violations
+
+    asset_origins[loaded.SPEC.id] = asset_path
+    loaded_assets_by_id[loaded.SPEC.id] = loaded
+
+    if not in_target_paths or (asset_id is not None and loaded.SPEC.id != asset_id):
+        return 0, []
+
+    style = styles.get(loaded.SPEC.style_id)
+    if style is None:
+        return 1, _file_violation(
+            asset_path,
+            "missing-style",
+            f"Referenced style {loaded.SPEC.style_id!r} not found in styles/",
+        )
+
+    return 1, check_asset_runtime(
+        loaded,
+        style,
+        file_path=str(asset_path),
+        strict_orphans=strict_orphans,
+    )
+
+
+def _check_single_scene(
+    scene_path: Path,
+    styles: Mapping[str, StylePack],
+    target_paths: set[Path] | None,
+    asset_id: str | None,
+    asset_origins: dict[str, Path],
+    loaded_assets_by_id: Mapping[str, LoadedAsset],
+) -> tuple[int, list[GuardViolation]]:
+    in_target_paths = target_paths is None or scene_path.resolve() in target_paths
+    loaded_scene, checked_delta, pre_violations = _load_guarded_module(
+        scene_path, ".scene", load_scene_module, target_paths, asset_id
+    )
+    if loaded_scene is None:
+        return checked_delta, pre_violations
+
+    scene_spec = loaded_scene.SCENE
+    is_dup, dup_checked, dup_violations = _check_duplicate_id(
+        scene_path, scene_spec.id, asset_origins, in_target_paths, asset_id
+    )
+    if is_dup:
+        return dup_checked, dup_violations
+
+    asset_origins[scene_spec.id] = scene_path
+    if not in_target_paths or (asset_id is not None and scene_spec.id != asset_id):
+        return 0, []
+
+    parent = loaded_assets_by_id.get(scene_spec.parent_id)
+    if parent is None:
+        return 1, _file_violation(
+            scene_path,
+            "missing-parent",
+            f"Parent asset {scene_spec.parent_id!r} not found under assets/",
+        )
+
+    missing_style = scene_spec.style_id or parent.SPEC.style_id
+    style = styles.get(missing_style)
+    if style is None:
+        return 1, _file_violation(
+            scene_path,
+            "missing-style",
+            f"Referenced style {missing_style!r} not found in styles/",
+        )
+
+    try:
+        compose_scene_frames(scene_spec, parent, loaded_assets_by_id, style)
+    except SceneCompositionError as exc:
+        return 1, _file_violation(scene_path, "scene-error", str(exc))
+    return 1, []
+
+
 def run_checks(
     root: Path,
     *,
@@ -221,225 +435,39 @@ def run_checks(
     strict_orphans: bool = False,
 ) -> CheckReport:
     """Run AST static guards and runtime invariant checks across the project."""
-    violations: list[GuardViolation] = []
     target_paths = {p.resolve() for p in asset_paths} if asset_paths is not None else None
+    violations = _check_core_ast(root / "src" / "pixelforge" / "core")
+    styles, styles_checked, style_violations = _load_and_check_styles(root / "styles")
+    violations.extend(style_violations)
 
-    core_dir = root / "src" / "pixelforge" / "core"
-    if core_dir.is_dir():
-        for core_file in sorted(core_dir.rglob("*.py")):
-            violations.extend(check_ast_file(core_file, scope="core"))
-
-    style_files = discover_style_files(root / "styles")
-    styles: dict[str, StylePack] = {}
-    style_origins: dict[str, Path] = {}
-    for style_path in style_files:
-        ast_issues = check_ast_file(style_path, scope="style")
-        violations.extend(ast_issues)
-        if not ast_issues:
-            try:
-                pack = load_style_module(style_path)
-            except Exception as exc:
-                violations.append(
-                    GuardViolation(
-                        file=str(style_path),
-                        line=1,
-                        col=0,
-                        rule="load-error",
-                        detail=str(exc),
-                    )
-                )
-                continue
-
-            if pack.id in style_origins:
-                violations.append(
-                    GuardViolation(
-                        file=str(style_path),
-                        line=1,
-                        col=0,
-                        rule="duplicate-id",
-                        detail=(
-                            f"Duplicate style ID {pack.id!r} "
-                            f"(already declared in {style_origins[pack.id]})"
-                        ),
-                    )
-                )
-                continue
-            style_origins[pack.id] = style_path
-            styles[pack.id] = pack
-
-    asset_files = discover_asset_files(root / "assets")
     asset_origins: dict[str, Path] = {}
     loaded_assets_by_id: dict[str, LoadedAsset] = {}
     assets_checked = 0
-    for asset_path in asset_files:
-        in_target_paths = target_paths is None or asset_path.resolve() in target_paths
-        ast_issues = check_ast_file(asset_path, scope="asset")
-        if ast_issues:
-            if in_target_paths and (
-                asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id
-            ):
-                violations.extend(ast_issues)
-                assets_checked += 1
-            continue
 
-        try:
-            loaded = load_asset_module(asset_path)
-        except Exception as exc:
-            if in_target_paths and (
-                asset_id is None or asset_path.stem.removesuffix(".asset") == asset_id
-            ):
-                violations.append(
-                    GuardViolation(
-                        file=str(asset_path),
-                        line=1,
-                        col=0,
-                        rule="load-error",
-                        detail=str(exc),
-                    )
-                )
-                assets_checked += 1
-            continue
-
-        if loaded.SPEC.id in asset_origins:
-            if in_target_paths and (asset_id is None or loaded.SPEC.id == asset_id):
-                violations.append(
-                    GuardViolation(
-                        file=str(asset_path),
-                        line=1,
-                        col=0,
-                        rule="duplicate-id",
-                        detail=(
-                            f"Duplicate asset ID {loaded.SPEC.id!r} "
-                            f"(already declared in {asset_origins[loaded.SPEC.id]})"
-                        ),
-                    )
-                )
-                assets_checked += 1
-            continue
-        asset_origins[loaded.SPEC.id] = asset_path
-        loaded_assets_by_id[loaded.SPEC.id] = loaded
-
-        if not in_target_paths:
-            continue
-        if asset_id is not None and loaded.SPEC.id != asset_id:
-            continue
-
-        assets_checked += 1
-        style = styles.get(loaded.SPEC.style_id)
-        if style is None:
-            violations.append(
-                GuardViolation(
-                    file=str(asset_path),
-                    line=1,
-                    col=0,
-                    rule="missing-style",
-                    detail=f"Referenced style {loaded.SPEC.style_id!r} not found in styles/",
-                )
-            )
-            continue
-
-        violations.extend(
-            check_asset_runtime(
-                loaded,
-                style,
-                file_path=str(asset_path),
-                strict_orphans=strict_orphans,
-            )
+    for asset_path in discover_asset_files(root / "assets"):
+        checked_delta, asset_violations = _check_single_asset(
+            asset_path,
+            styles,
+            target_paths,
+            asset_id,
+            strict_orphans,
+            asset_origins,
+            loaded_assets_by_id,
         )
+        assets_checked += checked_delta
+        violations.extend(asset_violations)
 
     for scene_path in discover_scene_files(root / "assets"):
-        in_target_paths = target_paths is None or scene_path.resolve() in target_paths
-        ast_issues = check_ast_file(scene_path, scope="asset")
-        if ast_issues:
-            if in_target_paths and (
-                asset_id is None or scene_path.stem.removesuffix(".scene") == asset_id
-            ):
-                violations.extend(ast_issues)
-                assets_checked += 1
-            continue
-
-        try:
-            loaded_scene = load_scene_module(scene_path)
-        except Exception as exc:
-            if in_target_paths and (
-                asset_id is None or scene_path.stem.removesuffix(".scene") == asset_id
-            ):
-                violations.append(
-                    GuardViolation(
-                        file=str(scene_path),
-                        line=1,
-                        col=0,
-                        rule="load-error",
-                        detail=str(exc),
-                    )
-                )
-                assets_checked += 1
-            continue
-
-        scene_spec = loaded_scene.SCENE
-        if scene_spec.id in asset_origins:
-            if in_target_paths and (asset_id is None or scene_spec.id == asset_id):
-                violations.append(
-                    GuardViolation(
-                        file=str(scene_path),
-                        line=1,
-                        col=0,
-                        rule="duplicate-id",
-                        detail=(
-                            f"Duplicate asset ID {scene_spec.id!r} "
-                            f"(already declared in {asset_origins[scene_spec.id]})"
-                        ),
-                    )
-                )
-                assets_checked += 1
-            continue
-        asset_origins[scene_spec.id] = scene_path
-
-        if not in_target_paths:
-            continue
-        if asset_id is not None and scene_spec.id != asset_id:
-            continue
-
-        assets_checked += 1
-        parent = loaded_assets_by_id.get(scene_spec.parent_id)
-        if parent is None:
-            violations.append(
-                GuardViolation(
-                    file=str(scene_path),
-                    line=1,
-                    col=0,
-                    rule="missing-parent",
-                    detail=f"Parent asset {scene_spec.parent_id!r} not found under assets/",
-                )
-            )
-            continue
-
-        missing_style = scene_spec.style_id or parent.SPEC.style_id
-        style = styles.get(missing_style)
-        if style is None:
-            violations.append(
-                GuardViolation(
-                    file=str(scene_path),
-                    line=1,
-                    col=0,
-                    rule="missing-style",
-                    detail=f"Referenced style {missing_style!r} not found in styles/",
-                )
-            )
-            continue
-
-        try:
-            compose_scene_frames(scene_spec, parent, loaded_assets_by_id, style)
-        except SceneCompositionError as exc:
-            violations.append(
-                GuardViolation(
-                    file=str(scene_path),
-                    line=1,
-                    col=0,
-                    rule="scene-error",
-                    detail=str(exc),
-                )
-            )
+        checked_delta, scene_violations = _check_single_scene(
+            scene_path,
+            styles,
+            target_paths,
+            asset_id,
+            asset_origins,
+            loaded_assets_by_id,
+        )
+        assets_checked += checked_delta
+        violations.extend(scene_violations)
 
     if asset_id is not None and assets_checked == 0:
         violations.append(
@@ -457,7 +485,7 @@ def run_checks(
     return CheckReport(
         violations=tuple(violations),
         assets_checked=assets_checked,
-        styles_checked=len(style_files),
+        styles_checked=styles_checked,
         errors=errors,
         warnings=warnings,
     )

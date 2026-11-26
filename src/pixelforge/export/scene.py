@@ -249,6 +249,206 @@ def _compute_placed_bounds(
     return bbox, clipped_pixels == 0, clipped_pixels, canvas_mask
 
 
+@dataclass(frozen=True)
+class _StagedPlacement:
+    mount: SceneMountSpec
+    perspective: str
+    perspective_match: bool
+    state: str
+    frame: int
+    dest_x: int
+    dest_y: int
+    width: int
+    height: int
+    opaque_bbox: tuple[int, int, int, int] | None
+    in_bounds: bool
+    clipped_pixels: int
+    canvas_mask: NDArray[np.bool_]
+
+
+def _order_mounts(
+    mounts: tuple[SceneMountSpec, ...],
+    parent_anchors: tuple[AnchorPoint, ...],
+    parent_id: str,
+    depth_sort: DepthSortMode,
+) -> list[tuple[SceneMountSpec, AnchorPoint]]:
+    # INVARIANT: Sort mounts deterministically before blitting so painter's-algorithm
+    # compositing and occlusion checks never depend on dict order. `iso_y` sorts by
+    # (z_index, anchor_y + offset_y, decl_index) for back-to-front isometric layering.
+    resolved_anchors = [
+        _resolve_anchor_point(parent_anchors, m.anchor, owner_id=parent_id) for m in mounts
+    ]
+    if depth_sort == "iso_y":
+        ordered = sorted(
+            enumerate(zip(mounts, resolved_anchors, strict=True)),
+            key=lambda item: (item[1][0].z_index, item[1][1].y + item[1][0].offset_y, item[0]),
+        )
+    else:
+        ordered = sorted(
+            enumerate(zip(mounts, resolved_anchors, strict=True)),
+            key=lambda item: (item[1][0].z_index, item[0]),
+        )
+    return [pair for _, pair in ordered]
+
+
+def _validate_mounted_prop(
+    mount: SceneMountSpec,
+    parent_spec: AssetSpec,
+    props_by_id: Mapping[str, AssetModule],
+    style_id: str,
+    *,
+    strict_perspective: bool,
+) -> tuple[AssetModule, bool, list[str]]:
+    prop = props_by_id.get(mount.prop_id)
+    if prop is None:
+        msg = f"Mounted prop asset {mount.prop_id!r} not found"
+        raise SceneCompositionError(msg)
+    if prop.SPEC.style_id != style_id:
+        msg = (
+            f"Prop asset {prop.SPEC.id!r} uses style {prop.SPEC.style_id!r}, "
+            f"cannot compose onto {style_id!r}"
+        )
+        raise SceneCompositionError(msg)
+
+    warnings: list[str] = []
+    perspective_match = prop.SPEC.perspective == parent_spec.perspective
+    if not perspective_match:
+        persp_detail = (
+            f"Prop {prop.SPEC.id!r} has perspective {prop.SPEC.perspective!r}, "
+            f"which differs from parent {parent_spec.id!r} ({parent_spec.perspective!r})"
+        )
+        if strict_perspective:
+            raise SceneCompositionError(persp_detail)
+        warnings.append(persp_detail)
+    return prop, perspective_match, warnings
+
+
+def _blit_mounted_prop(
+    composite: IndexedSurface,
+    parent_spec: AssetSpec,
+    parent_state: str,
+    mount: SceneMountSpec,
+    parent_anchor: AnchorPoint,
+    props_by_id: Mapping[str, AssetModule],
+    style: StylePack,
+    variant: str | None,
+    *,
+    strict_bounds: bool,
+    strict_perspective: bool,
+) -> tuple[_StagedPlacement, list[str]]:
+    prop, perspective_match, warnings = _validate_mounted_prop(
+        mount,
+        parent_spec,
+        props_by_id,
+        style.id,
+        strict_perspective=strict_perspective,
+    )
+    prop_state = _resolve_prop_state(prop, mount, parent_state)
+    prop_frame = mount.frame if mount.frame is not None else 0
+    prop_rendered = _render_single_frame(
+        prop,
+        style,
+        state=prop_state,
+        frame=prop_frame,
+        variant=variant,
+    )
+
+    if mount.prop_anchor is not None:
+        child_anchor = _resolve_anchor_point(
+            prop_rendered.anchors,
+            mount.prop_anchor,
+            owner_id=prop.SPEC.id,
+        )
+        align_x, align_y = child_anchor.x, child_anchor.y
+    else:
+        align_x = prop_rendered.surface.width // 2
+        align_y = prop_rendered.surface.height - 1
+
+    dest_x = parent_anchor.x - align_x + mount.offset_x
+    dest_y = parent_anchor.y - align_y + mount.offset_y
+
+    bbox, in_bounds, clipped_pixels, canvas_mask = _compute_placed_bounds(
+        prop_rendered.surface,
+        dest_x,
+        dest_y,
+        composite.width,
+        composite.height,
+    )
+    if not in_bounds:
+        detail = (
+            f"Prop {prop.SPEC.id!r} at anchor {mount.anchor!r} exceeds canvas "
+            f"{composite.width}x{composite.height} ({clipped_pixels} clipped pixel(s))"
+        )
+        if strict_bounds:
+            raise SceneCompositionError(detail)
+        warnings.append(detail)
+
+    composite.blit_layer(prop_rendered.surface, dest_x, dest_y)
+    staged = _StagedPlacement(
+        mount=mount,
+        perspective=prop.SPEC.perspective,
+        perspective_match=perspective_match,
+        state=prop_state,
+        frame=prop_frame,
+        dest_x=dest_x,
+        dest_y=dest_y,
+        width=prop_rendered.surface.width,
+        height=prop_rendered.surface.height,
+        opaque_bbox=bbox,
+        in_bounds=in_bounds,
+        clipped_pixels=clipped_pixels,
+        canvas_mask=canvas_mask,
+    )
+    return staged, warnings
+
+
+def _finalize_placements(
+    staged: list[_StagedPlacement],
+) -> tuple[list[MountedPropPlacement], list[str]]:
+    placements: list[MountedPropPlacement] = []
+    warnings: list[str] = []
+
+    for idx, entry in enumerate(staged):
+        occluded_mask = np.zeros_like(entry.canvas_mask)
+        occluded_by: list[str] = []
+        for later in staged[idx + 1 :]:
+            overlap = entry.canvas_mask & later.canvas_mask
+            if np.any(overlap):
+                occluded_mask |= overlap
+                occluded_by.append(f"{later.mount.prop_id}@{later.mount.anchor}")
+
+        occluded_pixels = int(np.count_nonzero(occluded_mask))
+        if occluded_pixels > 0:
+            warnings.append(
+                f"Prop {entry.mount.prop_id!r} at {entry.mount.anchor!r} has {occluded_pixels} "
+                f"pixel(s) occluded by {', '.join(occluded_by)}"
+            )
+
+        placements.append(
+            MountedPropPlacement(
+                prop_id=entry.mount.prop_id,
+                anchor=entry.mount.anchor,
+                prop_anchor=entry.mount.prop_anchor,
+                perspective=entry.perspective,
+                perspective_match=entry.perspective_match,
+                state=entry.state,
+                frame=entry.frame,
+                z_index=entry.mount.z_index,
+                dest_x=entry.dest_x,
+                dest_y=entry.dest_y,
+                width=entry.width,
+                height=entry.height,
+                opaque_bbox=entry.opaque_bbox,
+                in_bounds=entry.in_bounds,
+                clipped_pixels=entry.clipped_pixels,
+                occluded_by=tuple(occluded_by),
+                occluded_pixels=occluded_pixels,
+            )
+        )
+
+    return placements, warnings
+
+
 def compose_scene(
     parent: AssetModule,
     props_by_id: Mapping[str, AssetModule],
@@ -278,178 +478,30 @@ def compose_scene(
         variant=spec.variant,
     )
     composite = parent_rendered.surface.clone()
+    ordered_mounts = _order_mounts(
+        spec.mounts, parent_rendered.anchors, parent.SPEC.id, spec.depth_sort
+    )
 
-    # INVARIANT: Sort mounts deterministically before blitting so painter's-algorithm
-    # compositing and occlusion checks never depend on dict order. `iso_y` sorts by
-    # (z_index, anchor_y + offset_y, decl_index) for back-to-front isometric layering.
-    resolved_anchors = [
-        _resolve_anchor_point(parent_rendered.anchors, m.anchor, owner_id=parent.SPEC.id)
-        for m in spec.mounts
-    ]
-    if spec.depth_sort == "iso_y":
-        ordered_mounts = sorted(
-            enumerate(zip(spec.mounts, resolved_anchors, strict=True)),
-            key=lambda item: (item[1][0].z_index, item[1][1].y + item[1][0].offset_y, item[0]),
-        )
-    else:
-        ordered_mounts = sorted(
-            enumerate(zip(spec.mounts, resolved_anchors, strict=True)),
-            key=lambda item: (item[1][0].z_index, item[0]),
-        )
-
-    staged: list[
-        tuple[
-            SceneMountSpec,
-            str,
-            bool,
-            str,
-            int,
-            int,
-            int,
-            int,
-            int,
-            tuple[int, int, int, int] | None,
-            bool,
-            int,
-            NDArray[np.bool_],
-        ]
-    ] = []
+    staged: list[_StagedPlacement] = []
     warnings: list[str] = []
-
-    for _, (mount, parent_anchor) in ordered_mounts:
-        prop = props_by_id.get(mount.prop_id)
-        if prop is None:
-            msg = f"Mounted prop asset {mount.prop_id!r} not found"
-            raise SceneCompositionError(msg)
-        if prop.SPEC.style_id != style.id:
-            msg = (
-                f"Prop asset {prop.SPEC.id!r} uses style {prop.SPEC.style_id!r}, "
-                f"cannot compose onto {style.id!r}"
-            )
-            raise SceneCompositionError(msg)
-
-        perspective_match = prop.SPEC.perspective == parent.SPEC.perspective
-        if not perspective_match:
-            persp_detail = (
-                f"Prop {prop.SPEC.id!r} has perspective {prop.SPEC.perspective!r}, "
-                f"which differs from parent {parent.SPEC.id!r} ({parent.SPEC.perspective!r})"
-            )
-            if strict_perspective:
-                raise SceneCompositionError(persp_detail)
-            warnings.append(persp_detail)
-
-        prop_state = _resolve_prop_state(prop, mount, parent_state)
-        prop_frame = mount.frame if mount.frame is not None else 0
-        prop_rendered = _render_single_frame(
-            prop,
-            style,
-            state=prop_state,
-            frame=prop_frame,
-            variant=spec.variant,
-        )
-
-        if mount.prop_anchor is not None:
-            child_anchor = _resolve_anchor_point(
-                prop_rendered.anchors,
-                mount.prop_anchor,
-                owner_id=prop.SPEC.id,
-            )
-            align_x, align_y = child_anchor.x, child_anchor.y
-        else:
-            align_x = prop_rendered.surface.width // 2
-            align_y = prop_rendered.surface.height - 1
-
-        dest_x = parent_anchor.x - align_x + mount.offset_x
-        dest_y = parent_anchor.y - align_y + mount.offset_y
-
-        bbox, in_bounds, clipped_pixels, canvas_mask = _compute_placed_bounds(
-            prop_rendered.surface,
-            dest_x,
-            dest_y,
-            composite.width,
-            composite.height,
-        )
-        if not in_bounds:
-            detail = (
-                f"Prop {prop.SPEC.id!r} at anchor {mount.anchor!r} exceeds canvas "
-                f"{composite.width}x{composite.height} ({clipped_pixels} clipped pixel(s))"
-            )
-            if strict_bounds:
-                raise SceneCompositionError(detail)
-            warnings.append(detail)
-
-        composite.blit_layer(prop_rendered.surface, dest_x, dest_y)
-        staged.append(
-            (
-                mount,
-                prop.SPEC.perspective,
-                perspective_match,
-                prop_state,
-                prop_frame,
-                dest_x,
-                dest_y,
-                prop_rendered.surface.width,
-                prop_rendered.surface.height,
-                bbox,
-                in_bounds,
-                clipped_pixels,
-                canvas_mask,
-            )
-        )
-
-    placements: list[MountedPropPlacement] = []
-    for idx, entry in enumerate(staged):
-        (
+    for mount, parent_anchor in ordered_mounts:
+        entry, prop_warnings = _blit_mounted_prop(
+            composite,
+            parent.SPEC,
+            parent_state,
             mount,
-            prop_perspective,
-            perspective_match,
-            prop_state,
-            prop_frame,
-            dest_x,
-            dest_y,
-            prop_w,
-            prop_h,
-            bbox,
-            in_bounds,
-            clipped_pixels,
-            mask,
-        ) = entry
-        occluded_mask = np.zeros_like(mask)
-        occluded_by: list[str] = []
-        for later_mount, *_, later_mask in staged[idx + 1 :]:
-            overlap = mask & later_mask
-            if np.any(overlap):
-                occluded_mask |= overlap
-                occluded_by.append(f"{later_mount.prop_id}@{later_mount.anchor}")
-
-        occluded_pixels = int(np.count_nonzero(occluded_mask))
-        if occluded_pixels > 0:
-            warnings.append(
-                f"Prop {mount.prop_id!r} at {mount.anchor!r} has {occluded_pixels} "
-                f"pixel(s) occluded by {', '.join(occluded_by)}"
-            )
-
-        placements.append(
-            MountedPropPlacement(
-                prop_id=mount.prop_id,
-                anchor=mount.anchor,
-                prop_anchor=mount.prop_anchor,
-                perspective=prop_perspective,
-                perspective_match=perspective_match,
-                state=prop_state,
-                frame=prop_frame,
-                z_index=mount.z_index,
-                dest_x=dest_x,
-                dest_y=dest_y,
-                width=prop_w,
-                height=prop_h,
-                opaque_bbox=bbox,
-                in_bounds=in_bounds,
-                clipped_pixels=clipped_pixels,
-                occluded_by=tuple(occluded_by),
-                occluded_pixels=occluded_pixels,
-            )
+            parent_anchor,
+            props_by_id,
+            style,
+            spec.variant,
+            strict_bounds=strict_bounds,
+            strict_perspective=strict_perspective,
         )
+        staged.append(entry)
+        warnings.extend(prop_warnings)
+
+    placements, occlusion_warnings = _finalize_placements(staged)
+    warnings.extend(occlusion_warnings)
 
     return SceneCompositionResult(
         parent_id=parent.SPEC.id,
@@ -622,14 +674,30 @@ def _format_placement_line(p: MountedPropPlacement) -> str:
     )
 
 
-def generate_scene_sheet(
+@dataclass(frozen=True)
+class _SceneSheetLayout:
+    pad: int
+    header_h: int
+    zoom_val: int
+    zoom_x: int
+    zoom_y: int
+    zoomed_w: int
+    zoomed_h: int
+    right_x: int
+    right_y: int
+    table_y: int
+    canvas_w: int
+    canvas_h: int
+    title_line: str
+    summary_line: str
+    summary_color: Rgb
+    placement_lines: list[str]
+
+
+def _compute_sheet_layout(
     result: SceneCompositionResult,
-    style: StylePack,
-    *,
-    variant: str | None = None,
-    zoom: int | None = None,
-) -> SceneSheetResult:
-    """Render a diagnostic composite scene contact sheet with anchor/bounds overlays."""
+    zoom: int | None,
+) -> _SceneSheetLayout:
     pad = 16
     header_h = 38
     surf = result.surface
@@ -658,6 +726,8 @@ def generate_scene_sheet(
         f"props={len(result.placements)}  oob={oob_count}  "
         f"occluded={occ_count}  persp_mismatch={persp_mismatch_count}"
     )
+    has_warn = occ_count > 0 or persp_mismatch_count > 0
+    summary_color = _TEXT_ERR if oob_count > 0 else (_TEXT_WARN if has_warn else _TEXT_MUTED)
 
     right_col_w = max(surf.width + 24, 180)
     table_y = max(zoom_y + zoomed_h + 18, right_y + surf.height * 2 + 46)
@@ -669,76 +739,136 @@ def generate_scene_sheet(
         pad + max(measure_text(title_line)[0], measure_text(summary_line)[0]) + pad,
     )
     canvas_h = table_y + table_h + pad
+    return _SceneSheetLayout(
+        pad=pad,
+        header_h=header_h,
+        zoom_val=zoom_val,
+        zoom_x=zoom_x,
+        zoom_y=zoom_y,
+        zoomed_w=zoomed_w,
+        zoomed_h=zoomed_h,
+        right_x=right_x,
+        right_y=right_y,
+        table_y=table_y,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        title_line=title_line,
+        summary_line=summary_line,
+        summary_color=summary_color,
+        placement_lines=placement_lines,
+    )
 
-    canvas = np.empty((canvas_h, canvas_w, 4), dtype=np.uint8)
-    canvas[:, :] = (*_BG_MAIN, 255)
-    fill_rgba_rect(canvas, 0, 0, canvas_w, header_h, _BG_HEADER)
-    fill_rgba_rect(canvas, 0, header_h, canvas_w, 1, _BORDER_SUBTLE)
 
-    draw_bitmap_text(canvas, title_line, pad, 8, _TEXT_LIGHT)
-    has_warn = occ_count > 0 or persp_mismatch_count > 0
-    summary_color = _TEXT_ERR if oob_count > 0 else (_TEXT_WARN if has_warn else _TEXT_MUTED)
-    draw_bitmap_text(canvas, summary_line, pad, 22, summary_color)
-
-    rgba_1x = surface_to_rgba(surf, style, variant=variant)
+def _draw_zoomed_preview(
+    canvas: NDArray[np.uint8],
+    rgba_1x: NDArray[np.uint8],
+    surf: IndexedSurface,
+    layout: _SceneSheetLayout,
+) -> None:
+    zoom_val = layout.zoom_val
     zoomed_rgba = np.repeat(np.repeat(rgba_1x, zoom_val, axis=0), zoom_val, axis=1)
-    draw_checkerboard(canvas, zoom_x, zoom_y, zoomed_w, zoomed_h, _CHECK_DARK_A, _CHECK_DARK_B, 8)
-    composite_rgba(canvas, zoomed_rgba, zoom_x, zoom_y)
-    _draw_rect_outline(canvas, zoom_x - 1, zoom_y - 1, zoomed_w + 2, zoomed_h + 2, _BORDER_SUBTLE)
+    draw_checkerboard(
+        canvas,
+        layout.zoom_x,
+        layout.zoom_y,
+        layout.zoomed_w,
+        layout.zoomed_h,
+        _CHECK_DARK_A,
+        _CHECK_DARK_B,
+        8,
+    )
+    composite_rgba(canvas, zoomed_rgba, layout.zoom_x, layout.zoom_y)
+    _draw_rect_outline(
+        canvas,
+        layout.zoom_x - 1,
+        layout.zoom_y - 1,
+        layout.zoomed_w + 2,
+        layout.zoomed_h + 2,
+        _BORDER_SUBTLE,
+    )
 
     tick_step = 16 if max(surf.width, surf.height) > 96 else 4
     for x in range(0, surf.width + 1, tick_step):
-        px = zoom_x + x * zoom_val
-        fill_rgba_rect(canvas, px, zoom_y - 3, 1, 3, _RULER_COLOR)
+        px = layout.zoom_x + x * zoom_val
+        fill_rgba_rect(canvas, px, layout.zoom_y - 3, 1, 3, _RULER_COLOR)
         if x < surf.width:
-            draw_bitmap_text(canvas, str(x), px, zoom_y - 11, _RULER_COLOR)
+            draw_bitmap_text(canvas, str(x), px, layout.zoom_y - 11, _RULER_COLOR)
     for y in range(0, surf.height + 1, tick_step):
-        py = zoom_y + y * zoom_val
-        fill_rgba_rect(canvas, zoom_x - 3, py, 3, 1, _RULER_COLOR)
+        py = layout.zoom_y + y * zoom_val
+        fill_rgba_rect(canvas, layout.zoom_x - 3, py, 3, 1, _RULER_COLOR)
         if y < surf.height:
             label = str(y)
             tw, _ = measure_text(label)
-            draw_bitmap_text(canvas, label, max(4, zoom_x - 5 - tw), py, _RULER_COLOR)
+            draw_bitmap_text(canvas, label, max(4, layout.zoom_x - 5 - tw), py, _RULER_COLOR)
 
+
+def _draw_sheet_overlays(
+    canvas: NDArray[np.uint8],
+    result: SceneCompositionResult,
+    layout: _SceneSheetLayout,
+) -> None:
+    zoom_val = layout.zoom_val
     for anchor in result.parent_anchors:
-        ax = zoom_x + anchor.x * zoom_val + (zoom_val // 2)
-        ay = zoom_y + anchor.y * zoom_val + (zoom_val // 2)
+        ax = layout.zoom_x + anchor.x * zoom_val + (zoom_val // 2)
+        ay = layout.zoom_y + anchor.y * zoom_val + (zoom_val // 2)
         fill_rgba_rect(canvas, ax - 3, ay, 7, 1, _ANCHOR_COLOR)
         fill_rgba_rect(canvas, ax, ay - 3, 1, 7, _ANCHOR_COLOR)
 
     for p in result.placements:
         bx, by, bw, bh = (
-            p.opaque_bbox
-            if p.opaque_bbox is not None
-            else (
-                p.dest_x,
-                p.dest_y,
-                p.width,
-                p.height,
-            )
+            p.opaque_bbox if p.opaque_bbox is not None else (p.dest_x, p.dest_y, p.width, p.height)
         )
         has_prop_warn = p.occluded_pixels > 0 or not p.perspective_match
         color = _TEXT_ERR if not p.in_bounds else (_TEXT_WARN if has_prop_warn else _TEXT_OK)
-        rx = zoom_x + bx * zoom_val
-        ry = zoom_y + by * zoom_val
+        rx = layout.zoom_x + bx * zoom_val
+        ry = layout.zoom_y + by * zoom_val
         _draw_rect_outline(canvas, rx, ry, bw * zoom_val, bh * zoom_val, color)
-        draw_bitmap_text(canvas, f"{p.prop_id}@{p.anchor}", rx + 2, max(zoom_y, ry - 8), color)
+        draw_bitmap_text(
+            canvas, f"{p.prop_id}@{p.anchor}", rx + 2, max(layout.zoom_y, ry - 8), color
+        )
 
-    draw_bitmap_text(canvas, "1X DARK", right_x, right_y, _TEXT_MUTED)
+
+def _draw_1x_previews(
+    canvas: NDArray[np.uint8],
+    rgba_1x: NDArray[np.uint8],
+    surf: IndexedSurface,
+    layout: _SceneSheetLayout,
+) -> None:
+    draw_bitmap_text(canvas, "1X DARK", layout.right_x, layout.right_y, _TEXT_MUTED)
     draw_checkerboard(
-        canvas, right_x, right_y + 10, surf.width, surf.height, _CHECK_DARK_A, _CHECK_DARK_B, 4
+        canvas,
+        layout.right_x,
+        layout.right_y + 10,
+        surf.width,
+        surf.height,
+        _CHECK_DARK_A,
+        _CHECK_DARK_B,
+        4,
     )
-    composite_rgba(canvas, rgba_1x, right_x, right_y + 10)
+    composite_rgba(canvas, rgba_1x, layout.right_x, layout.right_y + 10)
 
-    light_y = right_y + surf.height + 24
-    draw_bitmap_text(canvas, "1X LIGHT", right_x, light_y, _TEXT_MUTED)
+    light_y = layout.right_y + surf.height + 24
+    draw_bitmap_text(canvas, "1X LIGHT", layout.right_x, light_y, _TEXT_MUTED)
     draw_checkerboard(
-        canvas, right_x, light_y + 10, surf.width, surf.height, _CHECK_LIGHT_A, _CHECK_LIGHT_B, 4
+        canvas,
+        layout.right_x,
+        light_y + 10,
+        surf.width,
+        surf.height,
+        _CHECK_LIGHT_A,
+        _CHECK_LIGHT_B,
+        4,
     )
-    composite_rgba(canvas, rgba_1x, right_x, light_y + 10)
+    composite_rgba(canvas, rgba_1x, layout.right_x, light_y + 10)
 
-    draw_bitmap_text(canvas, "MOUNT PLACEMENTS", pad, table_y, _TEXT_LIGHT)
-    for idx, line in enumerate(placement_lines):
+
+def _draw_placement_table(
+    canvas: NDArray[np.uint8],
+    result: SceneCompositionResult,
+    layout: _SceneSheetLayout,
+) -> None:
+    draw_bitmap_text(canvas, "MOUNT PLACEMENTS", layout.pad, layout.table_y, _TEXT_LIGHT)
+    for idx, line in enumerate(layout.placement_lines):
         if idx < len(result.placements):
             pl = result.placements[idx]
             has_row_warn = pl.occluded_pixels > 0 or not pl.perspective_match
@@ -747,11 +877,35 @@ def generate_scene_sheet(
             )
         else:
             row_col = _TEXT_MUTED
-        draw_bitmap_text(canvas, line, pad, table_y + 14 + idx * 12, row_col)
+        draw_bitmap_text(canvas, line, layout.pad, layout.table_y + 14 + idx * 12, row_col)
+
+
+def generate_scene_sheet(
+    result: SceneCompositionResult,
+    style: StylePack,
+    *,
+    variant: str | None = None,
+    zoom: int | None = None,
+) -> SceneSheetResult:
+    """Render a diagnostic composite scene contact sheet with anchor/bounds overlays."""
+    layout = _compute_sheet_layout(result, zoom)
+    canvas = np.empty((layout.canvas_h, layout.canvas_w, 4), dtype=np.uint8)
+    canvas[:, :] = (*_BG_MAIN, 255)
+    fill_rgba_rect(canvas, 0, 0, layout.canvas_w, layout.header_h, _BG_HEADER)
+    fill_rgba_rect(canvas, 0, layout.header_h, layout.canvas_w, 1, _BORDER_SUBTLE)
+
+    draw_bitmap_text(canvas, layout.title_line, layout.pad, 8, _TEXT_LIGHT)
+    draw_bitmap_text(canvas, layout.summary_line, layout.pad, 22, layout.summary_color)
+
+    rgba_1x = surface_to_rgba(result.surface, style, variant=variant)
+    _draw_zoomed_preview(canvas, rgba_1x, result.surface, layout)
+    _draw_sheet_overlays(canvas, result, layout)
+    _draw_1x_previews(canvas, rgba_1x, result.surface, layout)
+    _draw_placement_table(canvas, result, layout)
 
     return SceneSheetResult(
-        width=canvas_w,
-        height=canvas_h,
+        width=layout.canvas_w,
+        height=layout.canvas_h,
         rgba=canvas,
         png=rgba_to_png(canvas),
     )
