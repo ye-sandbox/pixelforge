@@ -53,6 +53,19 @@ class LayerSemanticSpan:
     mask: NDArray[np.bool_]
 
 
+@dataclass(frozen=True)
+class LayerDiagnostic:
+    """Per-layer bounding box and pixel count captured when `track_layers=True`."""
+
+    name: str
+    role: LayerRole
+    depth: int
+    offset: tuple[int, int]
+    size: tuple[int, int]
+    opaque_bbox: tuple[int, int, int, int] | None
+    pixel_count: int
+
+
 def _infer_layer_role(name: str) -> LayerRole:
     lower = name.lower()
     if lower in {"collision", "solid", "wall", "walls", "blocker", "colliders"} or lower.startswith(
@@ -196,6 +209,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
     _hitboxes: list[HitboxRect]
     _events: list[str]
     _layer_spans: list[LayerSemanticSpan]
+    _track_layers: bool
+    _layer_diagnostics: list[LayerDiagnostic]
 
     def __init__(
         self,
@@ -207,6 +222,7 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         variant: str | None = None,
         token_overrides: Mapping[str, str | int] | None = None,
         track_maps: bool = False,
+        track_layers: bool = False,
     ) -> None:
         active_state = spec.states[0] if state is None else state
         if active_state not in spec.states:
@@ -237,6 +253,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         self._hitboxes = []
         self._events = []
         self._layer_spans = []
+        self._track_layers = track_layers
+        self._layer_diagnostics = []
 
     def __enter__(self) -> Self:
         return self
@@ -330,6 +348,11 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
     def layer_spans(self) -> tuple[LayerSemanticSpan, ...]:
         """Snapshot of recorded semantic layer spans."""
         return tuple(self._layer_spans)
+
+    @property
+    def layer_diagnostics(self) -> tuple[LayerDiagnostic, ...]:
+        """Snapshot of per-layer bounding boxes and pixel counts (`track_layers=True`)."""
+        return tuple(self._layer_diagnostics)
 
     def hashf(self, x: int, y: int, salt: int = 0) -> float:
         """Stateless deterministic `[0, 1)` coordinate hash salted by asset seed."""
@@ -465,6 +488,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
 
         if frame.role != "visual":
             self._record_layer_span(frame, surf)
+        if self._track_layers:
+            self._record_layer_diagnostic(frame, surf, depth=len(self._layer_stack))
 
         parent = self.surface
         z_offset = 0.0
@@ -499,6 +524,39 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
                 w=max_x - min_x + 1,
                 h=max_y - min_y + 1,
                 mask=patch,
+            )
+        )
+
+    def _record_layer_diagnostic(
+        self,
+        frame: _LayerFrame,
+        surf: IndexedSurface,
+        *,
+        depth: int,
+    ) -> None:
+        ys, xs = np.nonzero(surf.data != TRANSPARENT_INDEX)
+        parent_ox, parent_oy = self._current_offset()
+        gx_off = parent_ox + frame.offset[0]
+        gy_off = parent_oy + frame.offset[1]
+        if len(xs) == 0:
+            bbox: tuple[int, int, int, int] | None = None
+            pixel_count = 0
+        else:
+            min_x = int(xs.min())
+            max_x = int(xs.max())
+            min_y = int(ys.min())
+            max_y = int(ys.max())
+            bbox = (gx_off + min_x, gy_off + min_y, max_x - min_x + 1, max_y - min_y + 1)
+            pixel_count = len(xs)
+        self._layer_diagnostics.append(
+            LayerDiagnostic(
+                name=frame.name,
+                role=frame.role,
+                depth=depth,
+                offset=frame.offset,
+                size=(surf.width, surf.height),
+                opaque_bbox=bbox,
+                pixel_count=pixel_count,
             )
         )
 

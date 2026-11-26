@@ -26,6 +26,7 @@ from pixelforge.cli.output import (
     emit_reference_analysis,
     resolve_output_format,
 )
+from pixelforge.cli.probe_cmd import probe_asset_workflow
 from pixelforge.cli.render_cmd import render_once
 from pixelforge.cli.scaffold import scaffold_project
 from pixelforge.cli.settings import (
@@ -382,6 +383,24 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_probe(args: argparse.Namespace) -> int:
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
+    root = _resolve_root(args.root)
+    return probe_asset_workflow(
+        root,
+        asset_id=str(args.asset_id),
+        region=args.region,
+        state=args.state,
+        frame=int(args.frame),
+        show_layers=bool(args.layers),
+        output_format=output_format,
+        out=_out,
+        err=_err,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pixelforge CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -718,6 +737,26 @@ def build_parser() -> argparse.ArgumentParser:
     add_format_arguments(inspect_scenes_p)
     inspect_scenes_p.add_argument("--root", default=None, help="Project root directory")
 
+    probe_p = sub.add_parser(
+        "probe",
+        help="Emit exact pixel ASCII slices, layer bboxes, token histograms, and orphan coords",
+    )
+    probe_p.add_argument("asset_id", help="Asset ID to probe")
+    probe_p.add_argument(
+        "--region",
+        default=None,
+        help="Optional slice region 'x,y,w,h' (defaults to full canvas <=64x64 or opaque bbox)",
+    )
+    probe_p.add_argument("--state", default=None, help="Asset state (defaults to first state)")
+    probe_p.add_argument("--frame", type=int, default=0, help="Frame index (default: 0)")
+    probe_p.add_argument(
+        "--layers",
+        action="store_true",
+        help="Include per-layer opaque_bbox and pixel count breakdown",
+    )
+    add_format_arguments(probe_p)
+    probe_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -749,6 +788,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_critic(args)
     if args.command == "inspect":
         return _cmd_inspect(args)
+    if args.command == "probe":
+        return _cmd_probe(args)
 
     parser.print_help()
     return 2

@@ -122,6 +122,9 @@ uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <n
 
 # Introspect StylePack token groups, prefab signatures, asset anchors/states, and scene mounts
 uv run pixelforge inspect {style|presets|prefabs|api|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
+
+# Probe exact token-mapped ASCII slices, layer bboxes, token histograms, and orphan-pixel coordinates
+uv run pixelforge probe <asset_id> [--region x,y,w,h] [--state <name>] [--frame 0] [--layers] [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Svelte 5 Integration
