@@ -8,7 +8,11 @@
 
 ## Active Task
 
-_None currently active (all queued roadmap tasks completed)._
+### `[38.2]` Semantic Palette Aliases & `UniversalPalette` Protocol
+- [ ] Add `aliases: dict[str, str] = Field(default_factory=dict)` to `StylePack` (`src/pixelforge/core/types.py`) with integrity validation (alias targets must exist in `palette`).
+- [ ] Resolve `aliases` in `PaletteLookup` (`src/pixelforge/core/palette.py`) and `pixelforge check --sync-stubs` (`src/pixelforge/core/palette_stub.py`).
+- [ ] Define a `UniversalPalette` `Protocol` (`INK`, `BG_D`/`BG_M`/`BG_L`, `SURFACE_D`/`SURFACE_M`/`SURFACE_L`, `ACCENT_1`/`ACCENT_2`, `EMISSIVE_1`/`EMISSIVE_2`) and wire standard aliases into built-in presets where applicable.
+- [ ] Add hermetic `pytest` coverage verifying compiling a single `.asset.py` across multiple `StylePack`s via `UniversalPalette` aliases; run `ruff`, `pyright`, and `pytest`.
 
 ---
 
@@ -16,6 +20,7 @@ _None currently active (all queued roadmap tasks completed)._
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[38.1]` Dynamic `default_style` Resolution & Built-In StylePack Presets (`pixelforge init --style`) (`0c4d5e7`)
 - `[90.5]` Decompose Remaining Dense Modules (`export/scene.py`, `core/prefabs/details.py`, `core/builder.py`, `cli/watch_cmd.py`) (`5bfea27`)
 - `[37.1]` AI Ergonomics (`analyze-ref --scaffold` & Multi-Scene World Graph) (`43d3adb`)
 
@@ -39,6 +44,9 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ---
 
 ## Backlog (Upcoming, in priority order)
+
+### Track F — Generic Multi-Game Palette & Preset System
+- `[38.3]` **Multi-Genre Preset Showcase & Guard Verification**: Add smoke/showcase assets exercising `ink-1bit`, `retro-pocket-4`, `sweetie-16`, `endesga-32`, `cozy-pastel`, and `scifi-neon` (including emissive bloom isolation) and verify `pixelforge check` + `pytest` across all presets.
 
 ### Track C — Deterministic Spatial Guards & Visual Critic Loop
 _All Track C items promoted or completed._
