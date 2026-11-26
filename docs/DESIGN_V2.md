@@ -63,7 +63,8 @@ pixelforge/
 │       │   ├── prng.py              # Deterministic mulberry32 & hashf (uint32)
 │       │   ├── iso.py               # iso_project, iso_tile, iso_box (2:1 isometric)
 │       │   ├── plane.py             # Plane context manager & (u, v) affine projection
-│       │   └── builder.py           # build123d-style Asset & Layer context managers, masking, scatter
+│       │   ├── builder.py           # build123d-style Asset & Layer context managers, masking, scatter
+│       │   └── prefabs/             # StylePack-agnostic architecture, furniture, details & atmosphere kits
 │       ├── export/
 │       │   ├── png.py               # Surface -> RGBA / indexed / 1D LUT -> Pillow PNG bytes
 │       │   ├── bundle.py            # State PNGs, horizontal sheet, emissive sheet, GIF/APNG, manifest.json
@@ -143,6 +144,7 @@ def render(a: Asset) -> None:
 - **`with a.plane(p0, p1, p2)`**: maps normalized `(u, v)` coordinates onto any angled/isometric quadrilateral via integer affine projection (`rect`, `grid`, `line`, `dot`, `anchor`).
 - **Token Overrides & Multi-Anchor Scenes**: supports deterministic token-remap helpers (so avatar styles can share a base silhouette with per-style shirt/hair/skin/accent swaps) and named multi-anchor layouts for full `320×200` static room/rack scenes (`hw_slot_0..N`, `window`, `solar_panel`, `breaker`, `bed`, `desk`, `door`).
 - **Pixel Primitives**: `put`, `erase`, `get`, `rect`, `rounded_rect`, `line`, `circle`, `ellipse`, `polygon`, `quad`, `fill`, `dither` (Bayer 2×2, Bayer 4×4, checker), `spr` (ASCII grid), `scatter` (deterministic masked placement), `auto_outline`, `sel_out`, `edge_mask`, `mirror_x`, `flip_x`, `flip_y`, `iso_box`, `iso_tile`.
+- **Reusable Prefab Kits (`pixelforge.prefabs`)**: `architecture` (`iso_room_shell`, `iso_floor_pattern`, `iso_window`, `front_window`, `wall_vent`), `furniture` (`iso_desk`, `iso_rack`, `iso_shelf`), `details` (`contact_shadow`, `iso_cable_run`, `wall_panel`, `wall_poster`), and `atmosphere` (`clipped_pane`, `sky_backdrop`, `sun`, `moon`, `starfield`, `clouds`, `horizon_silhouette`, `weather_rain`, `weather_snow`, `day_night_cycle`, `window_light_spill`, `light_beam`).
 
 ---
 

@@ -36,6 +36,9 @@ def _make_style() -> StylePack:
             PaletteColor(index=10, name="METAL_D", hex="#4c566a", flags=("shadow",)),
             PaletteColor(index=11, name="SKY", hex="#88c0d0", flags=("surface",)),
             PaletteColor(index=12, name="LED", hex="#a3be8c", flags=("emissive",)),
+            PaletteColor(index=13, name="SKY_DARK", hex="#1b263b", flags=("surface",)),
+            PaletteColor(index=14, name="SUN", hex="#ebcb8b", flags=("bright",)),
+            PaletteColor(index=15, name="CLOUD", hex="#eceff4", flags=("bright",)),
         ),
     )
 
@@ -236,8 +239,179 @@ def test_prefabs_bounds_safety_and_layer_compatibility() -> None:
 def test_prefabs_pass_core_ast_guard_rules() -> None:
     """Verify every module under `src/pixelforge/core/prefabs/` passes `core` AST guards."""
     py_files = sorted(PREFABS_DIR.glob("*.py"))
-    assert len(py_files) == 4
+    assert len(py_files) == 5
     for path in py_files:
         assert infer_scope(path) == "core"
         violations = check_ast_file(path, scope="core")
         assert violations == [], f"AST guard violations in {path}: {violations}"
+
+
+def test_window_pane_clipping_and_mullion_integrity() -> None:
+    """Verify oversized atmospheric primitives never bleed outside glass or overwrite mullions."""
+    iso_asset = _make_asset(width=96, height=80)
+    p = iso_asset.pal
+    iso_asset.clear(p.WALL_L)
+
+    def _oversized_vista(pane: prefabs.ClippedPane) -> None:
+        prefabs.sky_backdrop(pane, bands=(p.SKY_DARK, p.SKY))
+        prefabs.sun(pane, 0.05, 0.05, radius=18, color=p.SUN, halo=p.CLOUD, rays=True)
+        prefabs.moon(pane, 0.95, 0.95, radius=16, color=p.CLOUD, crater_color=p.METAL_D)
+        prefabs.clouds(pane, color=p.CLOUD, shade_color=p.METAL_H, count=3, phase=0.25, seed=9)
+        prefabs.horizon_silhouette(pane, color=p.INK, mode="city", seed=9)
+        prefabs.weather_rain(pane, color=p.SKY, splash_color=p.CLOUD, count=24, phase=0.5, seed=9)
+
+    win_p0, win_p1, win_p2 = (20, 22), (62, 1), (20, 58)
+    prefabs.iso_window(
+        iso_asset,
+        win_p0,
+        win_p1,
+        win_p2,
+        frame=p.METAL_M,
+        sky=p.SKY_DARK,
+        outline=p.INK,
+        mullion=p.METAL_H,
+        cols=2,
+        rows=2,
+        glint=p.CLOUD,
+        scene=_oversized_vista,
+    )
+
+    # Outer wall outside the window bounding polygon must remain untouched `WALL_L`.
+    assert iso_asset.get(5, 5) == p.WALL_L
+    assert iso_asset.get(18, 22) == p.WALL_L
+    assert iso_asset.get(70, 50) == p.WALL_L
+    # Mullion intersection center pixel must remain `METAL_H` (not overwritten by sun/rain).
+    with iso_asset.plane(win_p0, win_p1, win_p2) as check_plane:
+        mx, my = check_plane.project(0.5, 0.5)
+        assert iso_asset.get(mx, my) == p.METAL_H
+
+    # Front-2.5d window clipping check
+    front_asset = _make_asset(width=64, height=48)
+    fp = front_asset.pal
+    front_asset.clear(fp.WALL_R)
+    prefabs.front_window(
+        front_asset,
+        12,
+        6,
+        40,
+        32,
+        frame=fp.METAL_M,
+        sky=fp.SKY_DARK,
+        outline=fp.INK,
+        mullion=fp.METAL_H,
+        cols=2,
+        rows=2,
+        glint=fp.CLOUD,
+        sill=fp.WOOD_M,
+        scene=_oversized_vista,
+    )
+    assert front_asset.get(0, 0) == fp.WALL_R
+    assert front_asset.get(11, 10) == fp.WALL_R
+    assert front_asset.get(53, 10) == fp.WALL_R
+    assert front_asset.get(12, 6) == fp.INK
+    assert front_asset.get(32, 22) == fp.METAL_H
+    assert front_asset.get(11, 37) == fp.WOOD_M
+
+
+def test_atmosphere_weather_loops_and_day_night_cycle() -> None:
+    """Verify periodic weather loops, crescent moon, horizon modes, and day-night cycle."""
+    # Seamless periodic wrapping: phase=0.0 and phase=1.0 must produce identical pixels.
+    for fn_name in ("rain", "snow", "clouds"):
+        a0 = _make_asset(width=48, height=36)
+        a_mid = _make_asset(width=48, height=36)
+        a1 = _make_asset(width=48, height=36)
+        for idx, asset in enumerate((a0, a_mid, a1)):
+            p = asset.pal
+            phase = (0.0, 0.5, 1.0)[idx]
+            with prefabs.clipped_pane(asset, (4, 4, 40, 28)) as pane:
+                prefabs.sky_backdrop(pane, bands=(p.SKY_DARK, p.SKY), pattern="bayer4")
+                if fn_name == "rain":
+                    prefabs.weather_rain(
+                        pane, color=p.CLOUD, splash_color=p.SUN, count=14, phase=phase, seed=42
+                    )
+                elif fn_name == "snow":
+                    prefabs.weather_snow(
+                        pane, color=p.CLOUD, alt_color=p.METAL_H, count=16, phase=phase, seed=42
+                    )
+                else:
+                    prefabs.clouds(
+                        pane, color=p.CLOUD, shade_color=p.METAL_H, count=2, phase=phase, seed=42
+                    )
+
+        assert np.array_equal(a0.root_surface.data, a1.root_surface.data)
+        assert not np.array_equal(a0.root_surface.data, a_mid.root_surface.data)
+
+    # Day-night cycle progression across phases
+    steps = [
+        prefabs.eval_day_night_cycle(
+            ph,
+            day_bands=(11, 14),
+            dusk_bands=(13, 6),
+            night_bands=(0, 13),
+        )
+        for ph in (0.15, 0.45, 0.70, 0.90)
+    ]
+    assert steps[0].celestial_kind == "sun" and steps[0].star_visibility == 0.0
+    assert steps[1].celestial_kind == "sun" and steps[1].star_visibility > 0.0
+    assert steps[2].celestial_kind == "moon" and steps[2].star_visibility == 1.0
+    assert steps[3].celestial_kind == "sun" and steps[3].spill_intensity > steps[2].spill_intensity
+
+    # Crescent moon, starfield, horizon modes, and light_beam
+    probe = _make_asset(width=64, height=64)
+    pp = probe.pal
+    probe.rect(0, 0, 64, 64, pp.FLOOR)
+    for mode in ("city", "rooftops", "hills", "trees"):
+        with prefabs.clipped_pane(probe, (8, 4, 48, 30)) as pane:
+            prefabs.day_night_cycle(
+                pane,
+                phase=0.72,
+                day_bands=(pp.SKY, pp.CLOUD),
+                dusk_bands=(pp.WOOD_M, pp.SUN),
+                night_bands=(pp.SKY_DARK, pp.FLOOR_D),
+                sun_color=pp.SUN,
+                moon_color=pp.CLOUD,
+                star_color=pp.LED,
+                horizon_color=pp.INK,
+                horizon_accent=pp.SUN,
+                horizon_mode=mode,
+                frame=1,
+                frames=4,
+                seed=11,
+            )
+            prefabs.moon(pane, 0.25, 0.25, radius=3, color=pp.CLOUD, crescent=True)
+
+    prefabs.light_beam(
+        probe,
+        (8, 4, 48, 30),
+        color=pp.WOOD_L,
+        secondary_color=pp.FLOOR_D,
+        dx=0,
+        dy=18,
+        spread=6,
+    )
+    unique_indices = set(np.unique(probe.root_surface.data).tolist())
+    allowed = {c.index for c in probe.style.palette} | {TRANSPARENT_INDEX}
+    assert unique_indices <= allowed
+    # Verify non-emissive light_beam did not introduce emissive LED index onto floor below y=34.
+    assert pp.LED not in set(np.unique(probe.root_surface.data[35:, :]).tolist())
+
+
+def test_iso_window_legacy_compatibility() -> None:
+    """Verify `iso_window` preserves legacy 1x2 layout when new optional args are omitted."""
+    asset = _make_asset(width=64, height=48)
+    p = asset.pal
+    prefabs.iso_window(
+        asset,
+        (10, 14),
+        (42, 0),
+        (10, 38),
+        frame=p.METAL_M,
+        sky=p.SKY,
+        outline=p.INK,
+        sky_alt=p.CLOUD,
+        mullion=p.METAL_D,
+        sill=p.WOOD_M,
+    )
+    assert np.any(asset.root_surface.data == p.SKY)
+    assert np.any(asset.root_surface.data == p.METAL_D)
+    assert np.any(asset.root_surface.data == p.WOOD_M)

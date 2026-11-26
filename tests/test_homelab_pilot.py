@@ -39,6 +39,8 @@ EXPECTED_HOMELAB_IDS = (
     "old_laptop_iso",
     "used_gpu_rig",
     "used_gpu_rig_iso",
+    "window_cycles_iso",
+    "window_vistas_front",
 )
 EXPECTED_THINKPAD_IDS = (
     "thinkpad_r51_front",

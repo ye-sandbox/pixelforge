@@ -37,6 +37,8 @@ Activate this skill whenever the task involves:
   - `uv run pixelforge check [asset_id] [--strict-orphans]` — AST static + runtime guard verification
   - `uv run pixelforge render [asset_id] --sheet [--animate] [--emissive] [--lut] [--indexed-ts] [--scale 1] [--variant <name>] [--out dist]` — Compile PNGs, spritesheets, emissive masks, `manifest.json`, `manifest.d.ts`, `.pixelforge/sheets/<id>.contact.png`, and `.pixelforge/previews/<id>_<state>.gif`
   - `uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs]` — Side-by-side + highlighted magenta pixel-diff PNG against a git baseline
+  - `uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32]` — Extract aspect ratio, palette histogram, and quantized ASCII sketch from a local reference image without importing external rasters into `.asset.py`
+  - `uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet]` — Mount micro-props onto parent scene anchors and verify zero clipping/occlusion
   - `uv run ruff check . && uv run ruff format --check .`, `uv run pyright`, `uv run pytest` — Repository validation gates
 
 ---
@@ -203,7 +205,113 @@ def render(a: Asset) -> None:
 
 ---
 
-## 7. Skill Completion Checklist
+## 7. Prefab Kits Reference (`pixelforge.prefabs`)
+
+Import `from pixelforge import prefabs`. Every prefab is `StylePack`-agnostic (accepting explicit palette indices via `P = a.pal`), 100% deterministic, and compatible with both `Asset` and `Layer` targets.
+
+### Architecture (`prefabs.architecture`)
+- `iso_room_shell(target, cx, cy, hw, hh, wall_h, *, floor, left_wall, right_wall, floor_alt=None, floor_dither_ratio=0.12, baseboard=None, wall_seam=None, outline=None)` — 2:1 isometric room diamond, two back walls, baseboard trim, corner seam, and outer ink contour.
+- `iso_floor_pattern(target, cx, cy, hw, hh, *, color, step=16, mode="planks")` — Bounded `"planks"`, `"tiles"`, or `"grid"` floor lines.
+- `iso_window(target, p0, p1, p2, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, scene=None)` — Skewed isometric wall window with multi-pane mullions, glass glint, sill, and optional clipped `scene(pane)` callback.
+- `front_window(target, x, y, w, h, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, frame_thickness=2, scene=None)` — `front-2.5d` rectangular window with clipped glass `scene(pane)`, mullions, glint, and sill.
+- `iso_window_glass_region(p0, p1, p2)` / `front_window_glass_region(x, y, w, h, *, frame_thickness=2)` — Return the exact inner glass `PaneRegion` for standalone atmospheric calls.
+- `wall_vent(target, p0, p1, p2, *, frame, slat, outline=None, slats=3)` — Louvered isometric wall vent.
+
+### Furniture (`prefabs.furniture`)
+- `iso_desk(target, x, y, w, d, *, leg_h=18, top_h=5, top, left, right, leg_top, leg_left, leg_right, outline=None, highlight=None, mat_color=None, mat_w=None)` — 2:1 isometric desk with legs, beveled top, and optional desk mat.
+- `iso_rack(target, x, y, w, d, h, *, top, left, right, outline=None, highlight=None, bay_color=None, led_color=None, bays=3, anchor="center")` — Isometric equipment/server rack with optional front-left drive bays and status LEDs.
+- `iso_shelf(target, x, y, w, d, h, *, shelves=2, top, left, right, post, outline=None, anchor="center")` — Open corner-post shelving unit.
+
+### Details (`prefabs.details`)
+- `contact_shadow(target, cx, cy, rx, ry, *, color, dither_ratio=0.5)` — Grounded elliptical checker/Bayer contact shadow.
+- `iso_cable_run(target, points, *, color, highlight=None)` — Pixel-crisp cable polyline with optional 1px highlight.
+- `wall_panel(target, p0, p1, p2, *, frame, recess, slot, outline=None, cols=2, rows=3, status_led=None)` — Isometric breaker/control panel.
+- `wall_poster(target, p0, p1, p2, *, border, fill, accent=None, outline=None)` — Framed isometric wall poster.
+
+### Atmosphere, Clipped Vistas & Light Spill (`prefabs.atmosphere`)
+All atmospheric primitives accept either a `ClippedPane` (inside `scene=` or `with prefabs.clipped_pane(a, region) as pane:`) or `(target, region=...)` directly, supporting **both** `iso-2:1` planes `(p0, p1, p2)` and `front-2.5d` rectangles `(x, y, w, h)`:
+
+- `clipped_pane(target, region)` — Auxiliary `IndexedSurface` + boolean glass mask that guarantees celestial bodies, clouds, skylines, rain, and snow never bleed onto frames or mullions.
+- `sky_backdrop(target, *, bands, region=None, pattern="bayer4", dither_width=0.65)` — Multi-band ordered-dither gradient across `bands` (top to bottom).
+- `sun(target, u=0.28, v=0.28, *, radius=3, color, halo=None, rays=False, ray_color=None, region=None)` — Pixel sun with optional checker halo and cardinal/diagonal rays.
+- `moon(target, u=0.72, v=0.28, *, radius=3, color, crater_color=None, shadow_color=None, crescent=False, halo=None, region=None)` — Full moon with pixel craters or carved crescent moon preserving sky/stars behind it.
+- `starfield(target, *, count=12, color, twinkle_color=None, frame=0, frames=1, seed=0, max_v=0.78, region=None)` — Fixed-position stars with smooth periodic twinkling.
+- `clouds(target, *, color, shade_color=None, count=2, phase=0.0, min_v=0.14, max_v=0.48, seed=0, region=None)` — Vectorized flat-bottomed clouds drifting seamlessly with `phase = a.frame / a.frames`.
+- `horizon_silhouette(target, *, color, accent=None, mode="city", base_v=0.74, seed=0, region=None)` — `"city"`, `"rooftops"`, `"hills"`, or `"trees"` horizon clipped to the glass bottom.
+- `weather_rain(target, *, color, splash_color=None, count=16, phase=0.0, slant=-0.14, length=0.14, seed=0, region=None)` — Looping diagonal rain streaks (`speed in {1, 2}` integer cycles so `phase=0` wraps cleanly to `phase=1`).
+- `weather_snow(target, *, color, alt_color=None, count=18, phase=0.0, drift=0.08, seed=0, region=None)` — Looping swaying snowflakes with depth parallax (`phase = a.frame / a.frames`).
+- `eval_day_night_cycle(...)` / `day_night_cycle(target, *, phase, day_bands, dusk_bands, night_bands, sun_color, moon_color, star_color, ...)` — Sweeps sky bands, sun/moon arc, star visibility, clouds, and horizon across `phase` (`0.0..1.0`), returning `CycleStep` (with `spill_intensity` and `celestial_kind`) to drive interior lighting.
+- `window_light_spill(target, *, points, color, secondary_color=None, pattern="bayer4", near_ratio=0.70, far_ratio=0.18, mask="opaque")` & `light_beam(target, region, *, color, secondary_color=None, dx=24, dy=16, spread=6, ...)` — Tapered ordered-dither floor/wall light projection.
+
+---
+
+## 8. Atmospheric Window Recipes & Token Discipline
+
+### Clipped Window Recipe (`iso-2:1` & `front-2.5d`)
+```python
+phase = a.frame / float(a.frames)
+
+
+def _vista(pane: prefabs.ClippedPane) -> None:
+    if a.state == "cycle":
+        prefabs.day_night_cycle(
+            pane,
+            phase=phase,
+            day_bands=(p.SOLAR_B, p.GLASS_L, p.SCREEN_L),
+            dusk_bands=(p.WINDOW_SKY, p.WARM_AMBER, p.ORANGE),
+            night_bands=(p.VOID, p.WINDOW_SKY, p.SCREEN_D),
+            sun_color=p.HAIR_Y,
+            moon_color=p.WHITE,
+            star_color=p.STAR,
+            sun_halo=p.WHITE,
+            moon_crater=p.SMOKE,
+            cloud_color=p.SMOKE,
+            horizon_color=p.WALL_D,
+            horizon_accent=p.WARM_LAMP,
+            frame=a.frame,
+            frames=a.frames,
+            seed=a.seed,
+        )
+    elif a.state == "rain":
+        prefabs.sky_backdrop(pane, bands=(p.VOID, p.WALL_M, p.GLASS_D))
+        prefabs.clouds(
+            pane, color=p.METAL_M, shade_color=p.METAL_D, count=3, phase=phase, seed=a.seed
+        )
+        prefabs.horizon_silhouette(pane, color=p.WALL_D, mode="rooftops", seed=a.seed)
+        prefabs.weather_rain(
+            pane, color=p.GLASS_L, splash_color=p.WHITE, count=18, phase=phase, seed=a.seed
+        )
+
+
+# Use iso_window(...) for iso-2:1 wall planes, or front_window(...) for front-2.5d rects
+prefabs.iso_window(
+    a,
+    p0=(14, 24),
+    p1=(44, 9),
+    p2=(14, 49),
+    frame=p.METAL_M,
+    sky=p.WINDOW_SKY,
+    outline=p.INK,
+    mullion=p.METAL_L,
+    cols=2,
+    rows=2,
+    glint=p.GLASS_L,
+    sill=p.WOOD_L,
+    scene=_vista,
+)
+```
+
+### Emissive vs. Non-Emissive Token Discipline (`homelab-16bit`)
+- **NEVER emissive:** sky bands (`WINDOW_SKY`, `SOLAR_B`, `SCREEN_D`, `GLASS_D`, `GLASS_L`), clouds (`WHITE`, `SMOKE`), daytime sun (`HAIR_Y`), moon body (`WHITE`), rain/snow (`GLASS_L`, `WHITE`, `SMOKE`), horizon silhouettes (`WALL_D`, `WALL_M`), and interior `window_light_spill` / `light_beam` (`FLOOR_L`, `FLOOR_M`, `TILE_L`). Using `SOLAR_L` or `WARM_LAMP` on sky/clouds/floor spills will blow out the WebGL2 bloom mask.
+- **Intentionally emissive (only true light emitters):** night `starfield` (`STAR`), optional distant lit city windows (`WARM_LAMP`), and powered interior LEDs/lamps (`LED_*`, `WARM_LAMP`).
+
+### `analyze-ref` & `compose` Workflow Tips
+- **Proportions from reference:** Run `uv run pixelforge analyze-ref photo.png --style homelab-16bit --size 32x32` before drawing complex props to get exact aspect ratio, dominant palette tokens, and a terminal ASCII blockout—never import the image inside `.asset.py`.
+- **Scene prop mounting:** Emit `mount_bottom` on props and `hardware_0..N` on scenes, then run `uv run pixelforge compose bedroom_desk_iso --mount monitor_iso@hardware_0:mount_bottom --strict-bounds --sheet` to validate zero clipping or overlap before committing.
+
+---
+
+## 9. Skill Completion Checklist
 
 - [ ] Silhouette, layer order, and anchor plan defined before coding
 - [ ] `assets/<pack>/<id>.asset.py` strictly typed (`pyright` strict + `ruff` pass)

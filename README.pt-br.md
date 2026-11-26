@@ -16,7 +16,7 @@ Compilador determinístico e composicional de pixel art indexada em Python (esti
 O `pixelforge` elimina os modos de falha estruturais de geradores de pixel art baseados em difusão raster (mixels, halos semi-transparentes, deriva de paleta entre sprites, instabilidade entre frames de animação e PNGs sem metadados de âncoras) ao modelar cada asset como um módulo Python composicional (`*.asset.py`) sobre um framebuffer indexado `numpy` `uint8`.
 
 Capacidades principais ([`docs/DESIGN_V2.md`](docs/DESIGN_V2.md)):
-- **API Composicional Estilo `build123d`:** Gerenciadores de contexto (`with a.layer(...)`, `with a.plane(...)`) com contorno automático, contorno seletivo (`sel_out`), espelhamento, projeção afim `(u, v)` (`rect`, `grid`, `line`, `dot`, `anchor`), primitivas isométricas `2:1` (`iso_box`, `iso_tile`) e escapes cirúrgicos de 1px (`put`, `erase`, `spr`).
+- **API Composicional Estilo `build123d` e Kits de Prefabs:** Gerenciadores de contexto (`with a.layer(...)`, `with a.plane(...)`) com contorno automático, contorno seletivo (`sel_out`), espelhamento, projeção afim `(u, v)` (`rect`, `grid`, `line`, `dot`, `anchor`), primitivas isométricas `2:1` (`iso_box`, `iso_tile`), `prefabs` reutilizáveis (`architecture`, `furniture`, `details` e `atmosphere` com janelas recortadas, ciclos dia/noite, clima animado e projeção de luz em `iso-2:1` e `front-2.5d`) e escapes cirúrgicos de 1px (`put`, `erase`, `spr`).
 - **Framebuffer Indexado Sem Mixels:** Superfícies `numpy.ndarray(dtype=np.uint8)` em coordenadas inteiras (índices semânticos `0..254`, com `255` permanentemente reservado para alpha binário `0`).
 - **Paletas Semânticas e Troca por LUT:** Tokens nomeados com flags de material (`outline`, `emissive`, `bright`, `shadow`, `metal`, `accent`) e tabelas `reflections` permitindo alternância sem perdas entre estados/horários (`healthy`/`dusty`/`faulty`, `day`/`night`) sem redesenhar a geometria.
 - **Exportação Headless em Milissegundos:** Codificação vetorizada com `numpy` + `Pillow` gerando PNGs 1× (ou `--scale N`) com alpha binário, spritesheets horizontais, máscaras emissivas, texturas `--lut` opcionais, `manifest.json` + **`manifest.d.ts`** e pacotes **`--indexed-ts`** (`Uint8Array` RLE/base64) para jogos Svelte 5.
@@ -120,7 +120,7 @@ uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <n
 │   ├── DESIGN_V2.md               # Especificação canônica v2 Python e contratos
 │   └── adr/decisions.md           # Diário de Decisões Arquiteturais (ADRs)
 ├── src/pixelforge/
-│   ├── core/                      # IndexedSurface, StylePack, PRNG, Iso, Plane, Asset/Layer
+│   ├── core/                      # IndexedSurface, StylePack, PRNG, Iso, Plane, Asset/Layer, Prefabs (architecture/furniture/details/atmosphere)
 │   ├── export/                    # PNG/GIF, bundle, svelte_types, indexed_ts, contact_sheet, diff
 │   ├── guard/                     # Regras estáticas AST, regras de runtime, runner
 │   └── cli/                       # Entrypoint fino da CLI e configuração pydantic-settings

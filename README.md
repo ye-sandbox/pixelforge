@@ -16,7 +16,7 @@ Deterministic Python compositional indexed pixel art compiler (`build123d`-style
 `pixelforge` eliminates the structural failure modes of raster image-diffusion pixel art (mixels, blurry alpha halos, cross-asset palette drift, jittery animation frames, and silent PNGs without anchor coordinates) by authoring assets as compositional Python modules (`*.asset.py`) over a `numpy` `uint8` indexed framebuffer.
 
 Core capabilities ([`docs/DESIGN_V2.md`](docs/DESIGN_V2.md)):
-- **Compositional `build123d`-Style API:** Context managers (`with a.layer(...)`, `with a.plane(...)`) with automatic outlines, selective outlines (`sel_out`), mirroring, affine `(u, v)` projection (`rect`, `grid`, `line`, `dot`, `anchor`), `2:1` isometric primitives (`iso_box`, `iso_tile`), and 1px surgical escape hatches (`put`, `erase`, `spr`).
+- **Compositional `build123d`-Style API & Prefab Kits:** Context managers (`with a.layer(...)`, `with a.plane(...)`) with automatic outlines, selective outlines (`sel_out`), mirroring, affine `(u, v)` projection (`rect`, `grid`, `line`, `dot`, `anchor`), `2:1` isometric primitives (`iso_box`, `iso_tile`), reusable `prefabs` (`architecture`, `furniture`, `details`, and clipped `atmosphere` vistas/weather/cycles/light spill for both `iso-2:1` and `front-2.5d`), and 1px surgical escape hatches (`put`, `erase`, `spr`).
 - **Zero-Mixel Indexed Framebuffer:** Integer-coordinate `numpy.ndarray(dtype=np.uint8)` surfaces (`0..254` semantic palette indices, `255` permanently reserved for binary alpha `0`).
 - **Semantic Palettes & LUT Swaps:** Named color tokens with material flags (`outline`, `emissive`, `bright`, `shadow`, `metal`, `accent`) and `reflections` tables enabling lossless state/time swaps (`healthy`/`dusty`/`faulty`, `day`/`night`) without redrawing geometry.
 - **Headless Millisecond Exports:** Vectorized `numpy` + `Pillow` encoding outputting 1× (or `--scale N`) binary-alpha PNGs, horizontal spritesheets, emissive masks, optional `--lut` textures, `manifest.json` + **`manifest.d.ts`**, and **`--indexed-ts`** RLE/base64 `Uint8Array` bundles for Svelte 5 games.
@@ -120,7 +120,7 @@ uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <n
 │   ├── DESIGN_V2.md               # Canonical v2 Python specification & contracts
 │   └── adr/decisions.md           # Architectural Decisions Log (ADR diary)
 ├── src/pixelforge/
-│   ├── core/                      # IndexedSurface, StylePack, PRNG, Iso, Plane, Asset/Layer
+│   ├── core/                      # IndexedSurface, StylePack, PRNG, Iso, Plane, Asset/Layer, Prefabs (architecture/furniture/details/atmosphere)
 │   ├── export/                    # PNG/GIF, bundle, svelte_types, indexed_ts, contact_sheet, diff
 │   ├── guard/                     # AST static rules, runtime rules, runner
 │   └── cli/                       # Thin CLI entrypoint and pydantic-settings config

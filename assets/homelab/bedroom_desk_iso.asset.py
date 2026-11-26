@@ -60,26 +60,78 @@ def _draw_floor_and_walls(a: Asset, p: PaletteLookup) -> None:
 
 def _draw_window(a: Asset, p: PaletteLookup) -> None:
     is_night = a.state == "night"
-    sky_color = p.WINDOW_SKY if is_night else p.SOLAR_B
+    win_p0 = (76, 64)
+    win_p1 = (122, 41)
+    win_p2 = (76, 98)
+
+    def _draw_vista(pane: prefabs.ClippedPane) -> None:
+        if is_night:
+            prefabs.sky_backdrop(pane, bands=(p.VOID, p.WINDOW_SKY, p.SCREEN_D))
+            prefabs.starfield(pane, count=9, color=p.STAR, seed=a.seed)
+            prefabs.moon(
+                pane,
+                0.72,
+                0.28,
+                radius=3,
+                color=p.WHITE,
+                crater_color=p.SMOKE,
+                crescent=True,
+            )
+            prefabs.horizon_silhouette(
+                pane,
+                color=p.WALL_D,
+                accent=p.WARM_AMBER,
+                mode="city",
+                base_v=0.76,
+                seed=a.seed,
+            )
+            return
+
+        prefabs.sky_backdrop(pane, bands=(p.SOLAR_B, p.GLASS_L, p.SCREEN_L))
+        prefabs.sun(pane, 0.28, 0.28, radius=3, color=p.HAIR_Y, halo=p.WHITE)
+        prefabs.clouds(
+            pane,
+            color=p.WHITE,
+            shade_color=p.SMOKE,
+            count=2,
+            phase=0.15,
+            seed=a.seed,
+        )
+        prefabs.horizon_silhouette(
+            pane,
+            color=p.WALL_M,
+            mode="city",
+            base_v=0.78,
+            seed=a.seed,
+        )
 
     prefabs.iso_window(
         a,
-        p0=(76, 64),
-        p1=(122, 41),
-        p2=(76, 98),
+        p0=win_p0,
+        p1=win_p1,
+        p2=win_p2,
         frame=p.METAL_M,
-        sky=sky_color,
+        sky=p.WINDOW_SKY,
         outline=p.INK,
-        sky_alt=None if is_night else p.GLASS_L,
         mullion=p.METAL_M,
+        cols=2,
+        rows=2,
+        glint=p.GLASS_L,
+        sill=p.METAL_L,
+        scene=_draw_vista,
     )
 
-    if is_night:
-        a.rect(92, 74, 3, 3, p.STAR)
-        a.put(108, 70, p.STAR)
-        a.put(85, 82, p.STAR)
-    else:
-        a.iso_tile(118, 126, 40, p.FLOOR_L, height=20)
+    # Crisp isometric floor light spill using strictly non-emissive floor tokens.
+    prefabs.window_light_spill(
+        a,
+        points=((78, 122), (120, 101), (154, 118), (112, 139)),
+        color=p.FLOOR_L,
+        secondary_color=p.TILE_L if is_night else p.FLOOR_M,
+        pattern="bayer4",
+        near_ratio=0.32 if is_night else 0.72,
+        far_ratio=0.05 if is_night else 0.18,
+        mask="opaque",
+    )
 
 
 def _draw_desk_and_slots(a: Asset, p: PaletteLookup) -> None:

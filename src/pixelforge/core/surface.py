@@ -29,6 +29,26 @@ _BAYER_4X4: Final[NDArray[np.float64]] = (
 ) / 16.0
 
 
+def compute_dither_thresholds(
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    *,
+    pattern: DitherPattern = "bayer4",
+) -> NDArray[np.float64]:
+    """Return ordered dither thresholds in `[0, 1)` over `[x0, x1) x [y0, y1)`."""
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    if pattern == "bayer2":
+        return np.asarray(_BAYER_2X2[yy & 1, xx & 1], dtype=np.float64)
+    if pattern == "bayer4":
+        return np.asarray(_BAYER_4X4[yy & 3, xx & 3], dtype=np.float64)
+    if pattern == "checker":
+        return np.where(((xx + yy) & 1) == 0, 0.25, 0.75)
+    msg = f"Unsupported dither pattern: {pattern!r}"
+    raise ValueError(msg)
+
+
 def compute_dither_selection(
     x0: int,
     y0: int,
@@ -39,19 +59,15 @@ def compute_dither_selection(
     ratio: float = 0.5,
 ) -> NDArray[np.bool_]:
     """Compute a boolean mask selecting pixels for `color_b` over `[x0, x1) x [y0, y1)`."""
-    yy, xx = np.mgrid[y0:y1, x0:x1]
-    if pattern == "bayer2":
-        return np.asarray(_BAYER_2X2[yy & 1, xx & 1] < ratio, dtype=bool)
-    if pattern == "bayer4":
-        return np.asarray(_BAYER_4X4[yy & 3, xx & 3] < ratio, dtype=bool)
     if pattern == "checker":
+        yy, xx = np.mgrid[y0:y1, x0:x1]
         if ratio <= 0.0:
             return np.zeros_like(xx, dtype=bool)
         if ratio >= 1.0:
             return np.ones_like(xx, dtype=bool)
         return np.asarray(((xx + yy) & 1) == 0, dtype=bool)
-    msg = f"Unsupported dither pattern: {pattern!r}"
-    raise ValueError(msg)
+    thresholds = compute_dither_thresholds(x0, y0, x1, y1, pattern=pattern)
+    return np.asarray(thresholds < ratio, dtype=bool)
 
 
 def _normalize_index(color: int) -> int:
@@ -267,6 +283,13 @@ class IndexedSurface:
         ix1 = int(x1)
         iy1 = int(y1)
 
+        if iy0 == iy1:
+            self._hspan(min(ix0, ix1), max(ix0, ix1), iy0, c)
+            return
+
+        w = self.width
+        h = self.height
+        data = self.data
         dx = abs(ix1 - ix0)
         dy = -abs(iy1 - iy0)
         sx = 1 if ix0 < ix1 else -1
@@ -274,7 +297,8 @@ class IndexedSurface:
         err = dx + dy
 
         while True:
-            self.put(ix0, iy0, c)
+            if 0 <= ix0 < w and 0 <= iy0 < h:
+                data[iy0, ix0] = c
             if ix0 == ix1 and iy0 == iy1:
                 break
             e2 = 2 * err
