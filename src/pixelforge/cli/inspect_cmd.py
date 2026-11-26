@@ -22,6 +22,7 @@ from pixelforge.guard.runner import (
     load_asset_module,
     load_scene_module,
 )
+from pixelforge.presets import DEFAULT_INIT_PRESET, PRESET_IDS, load_all_presets
 
 _PREFAB_CATEGORIES: Final[tuple[str, ...]] = (
     "architecture",
@@ -173,11 +174,20 @@ def inspect_style_workflow(
     root: Path,
     *,
     style_id: str | None,
+    presets: bool = False,
     output_format: OutputFormat,
     out: OutputFn,
     err: OutputFn,
 ) -> int:
-    """Inspect one or all `StylePack` definitions under `styles/`."""
+    """Inspect one or all `StylePack` definitions under `styles/` (or built-in presets)."""
+    if presets:
+        return inspect_presets_workflow(
+            preset_id=style_id,
+            output_format=output_format,
+            out=out,
+            err=err,
+        )
+
     styles = load_all_styles(root / "styles")
     if not styles:
         err(f"No .style.py files found under {root / 'styles'}")
@@ -194,6 +204,76 @@ def inspect_style_workflow(
         selected = [styles[k] for k in sorted(styles)]
 
     _emit_styles(selected, output_format=output_format, out=out)
+    return 0
+
+
+def _emit_preset_summary(
+    presets: list[StylePack],
+    *,
+    output_format: OutputFormat,
+    out: OutputFn,
+) -> None:
+    if output_format == "json":
+        payload = {
+            "total": len(presets),
+            "default": DEFAULT_INIT_PRESET,
+            "presets": [
+                {
+                    "id": s.id,
+                    "perspective": s.perspective,
+                    "lighting_angle": s.lighting_angle,
+                    "token_count": len(s.palette),
+                    "emissive_count": sum(1 for c in s.palette if "emissive" in c.flags),
+                    "variants": sorted(s.variants),
+                }
+                for s in presets
+            ],
+        }
+        out(json.dumps(payload, indent=2))
+        return
+
+    if output_format == "human":
+        out(f"Built-in StylePack presets ({len(presets)}, default: {DEFAULT_INIT_PRESET}):")
+        for s in presets:
+            emissive_n = sum(1 for c in s.palette if "emissive" in c.flags)
+            variants_str = ", ".join(sorted(s.variants)) or "none"
+            default_tag = " [default]" if s.id == DEFAULT_INIT_PRESET else ""
+            out(
+                f"  {s.id}{default_tag} — {len(s.palette)} colors "
+                f"({emissive_n} emissive), {s.perspective}, variants={variants_str}"
+            )
+        return
+
+    out(f"presets={len(presets)} default={DEFAULT_INIT_PRESET}")
+    for s in presets:
+        emissive_n = sum(1 for c in s.palette if "emissive" in c.flags)
+        variants_str = ",".join(sorted(s.variants)) or "none"
+        out(
+            f"preset={s.id} perspective={s.perspective} colors={len(s.palette)} "
+            f"emissive={emissive_n} variants={variants_str}"
+        )
+
+
+def inspect_presets_workflow(
+    *,
+    preset_id: str | None,
+    output_format: OutputFormat,
+    out: OutputFn,
+    err: OutputFn,
+) -> int:
+    """Inspect built-in `StylePack` presets available for `pixelforge init --style`."""
+    presets = load_all_presets()
+    if preset_id is not None:
+        if preset_id not in presets:
+            suggestion = _suggest_close(preset_id, list(PRESET_IDS))
+            available = ", ".join(PRESET_IDS)
+            err(f"Unknown preset {preset_id!r}; available: {available}{suggestion}")
+            return 1
+        _emit_styles([presets[preset_id]], output_format=output_format, out=out)
+        return 0
+
+    ordered = [presets[pid] for pid in PRESET_IDS]
+    _emit_preset_summary(ordered, output_format=output_format, out=out)
     return 0
 
 

@@ -24,7 +24,7 @@ def _git(repo: Path, *args: str) -> None:
 def test_cli_init_and_check(tmp_path: Path) -> None:
     """Verify `init` scaffolds starter files and `check` validates them."""
     assert main(["init", "--root", str(tmp_path)]) == 0
-    assert (tmp_path / "styles" / "homelab_16bit.style.py").is_file()
+    assert (tmp_path / "styles" / "sweetie_16.style.py").is_file()
     assert (tmp_path / "assets" / "example_crate.asset.py").is_file()
     env_example = tmp_path / ".env.example"
     assert env_example.is_file()
@@ -68,7 +68,7 @@ def test_cli_render_with_all_outputs(
     assert (out_dir / "sprites" / "example_crate_idle.png").is_file()
     assert (out_dir / "sprites" / "example_crate_idle_emissive.png").is_file()
     assert (out_dir / "sprites" / "example_crate_idle_idx.png").is_file()
-    assert (out_dir / "sprites" / "homelab-16bit_lut.png").is_file()
+    assert (out_dir / "sprites" / "sweetie-16_lut.png").is_file()
     assert (out_dir / "manifest.json").is_file()
     assert (out_dir / "manifest.d.ts").is_file()
     assert (out_dir / "indexed" / "palette.generated.ts").is_file()
@@ -91,8 +91,8 @@ def test_cli_diff_against_git_head(tmp_path: Path, capsys: pytest.CaptureFixture
 
     asset_file = tmp_path / "assets" / "example_crate.asset.py"
     updated = asset_file.read_text(encoding="utf-8").replace(
-        "a.put(12, 11, p.ACCENT_CYAN)",
-        "a.put(12, 10, p.ACCENT_CYAN)",
+        "a.put(12, 11, p.CYAN)",
+        "a.put(12, 10, p.CYAN)",
     )
     asset_file.write_text(updated, encoding="utf-8")
 
@@ -116,9 +116,9 @@ def test_cli_diff_palette_only_against_git_head(
     _git(tmp_path, "commit", "-m", "init")
     capsys.readouterr()
 
-    style_file = tmp_path / "styles" / "homelab_16bit.style.py"
+    style_file = tmp_path / "styles" / "sweetie_16.style.py"
     original_style = style_file.read_text(encoding="utf-8")
-    updated_style = original_style.replace("#38bdf8", "#ff00aa")
+    updated_style = original_style.replace("#73eff7", "#ff00aa")
     assert updated_style != original_style
     style_file.write_text(updated_style, encoding="utf-8")
 
@@ -136,14 +136,9 @@ def test_cli_diff_palette_only_against_git_head(
 
     # Variant added only in working tree falls back to current style without crashing
     variant_style = updated_style.replace(
-        "variants={},",
-        'variants={"night": {"ACCENT_CYAN": "#00ffcc"}},',
+        '"dusk": {',
+        '"night": {"CYAN": "#00ffcc"},\n        "dusk": {',
     )
-    if variant_style == updated_style:
-        variant_style = updated_style.replace(
-            "    palette=(",
-            '    variants={"night": {"ACCENT_CYAN": "#00ffcc"}},\n    palette=(',
-        )
     style_file.write_text(variant_style, encoding="utf-8")
     rc_variant = main(
         ["diff", "example_crate", "--base", "HEAD", "--variant", "night", "--root", str(tmp_path)]
@@ -309,7 +304,7 @@ def test_cli_analyze_ref_ephemeral_and_guardrails(
             "analyze-ref",
             str(ref_png),
             "--style",
-            "homelab-16bit",
+            "sweetie-16",
             "--size",
             "8x6",
             "--root",
@@ -321,7 +316,7 @@ def test_cli_analyze_ref_ephemeral_and_guardrails(
     assert "ephemeral=true" in out
     assert "src=32x24" in out
     assert "4:3" in out
-    assert "ACCENT_CYAN" in out
+    assert "SKY" in out or "CYAN" in out
     assert sorted((tmp_path / "assets").rglob("*")) == before_assets
     assert not (tmp_path / "dist").exists()
 
@@ -424,23 +419,23 @@ def test_cli_multi_style_indexed_ts_namespaces_per_style(tmp_path: Path) -> None
     """Multi-style `--indexed-ts` writes into `dist/indexed/<style_slug>/` without overwriting."""
     assert main(["init", "--root", str(tmp_path)]) == 0
     second_style = (
-        (tmp_path / "styles" / "homelab_16bit.style.py")
+        (tmp_path / "styles" / "sweetie_16.style.py")
         .read_text(encoding="utf-8")
-        .replace("homelab-16bit", "retro-amber")
+        .replace("sweetie-16", "retro-amber")
     )
     (tmp_path / "styles" / "retro_amber.style.py").write_text(second_style, encoding="utf-8")
     second_asset = (
         (tmp_path / "assets" / "example_crate.asset.py")
         .read_text(encoding="utf-8")
         .replace('id="example_crate"', 'id="amber_crate"')
-        .replace("'homelab-16bit'", "'retro-amber'")
-        .replace('"homelab-16bit"', '"retro-amber"')
+        .replace("'sweetie-16'", "'retro-amber'")
+        .replace('"sweetie-16"', '"retro-amber"')
     )
     (tmp_path / "assets" / "amber_crate.asset.py").write_text(second_asset, encoding="utf-8")
 
     assert main(["render", "--root", str(tmp_path), "--indexed-ts"]) == 0
     out_dir = tmp_path / "dist" / "indexed"
-    assert (out_dir / "homelab_16bit" / "manifest.generated.ts").is_file()
+    assert (out_dir / "sweetie_16" / "manifest.generated.ts").is_file()
     assert (out_dir / "retro_amber" / "manifest.generated.ts").is_file()
     assert not (out_dir / "manifest.generated.ts").exists()
 
@@ -449,10 +444,10 @@ def test_cli_render_no_emissive_animate_apng_and_sheet_variant(tmp_path: Path) -
     """Verify `--no-emissive`, `--animate-format apng`, and `--sheet --variant`."""
     assert main(["init", "--root", str(tmp_path)]) == 0
 
-    style_file = tmp_path / "styles" / "homelab_16bit.style.py"
+    style_file = tmp_path / "styles" / "sweetie_16.style.py"
     style_src = style_file.read_text(encoding="utf-8").replace(
-        "    palette=(",
-        '    variants={"amber": {"ACCENT_CYAN": "#ffaa00"}},\n    palette=(',
+        '"dusk": {',
+        '"amber": {"CYAN": "#ffaa00"},\n        "dusk": {',
     )
     style_file.write_text(style_src, encoding="utf-8")
 
@@ -686,9 +681,9 @@ def test_cli_watch_incremental_dependency_invalidation(
     _add_sibling_asset(tmp_path, "sibling_crate")
 
     alt_style_src = (
-        (tmp_path / "styles" / "homelab_16bit.style.py")
+        (tmp_path / "styles" / "sweetie_16.style.py")
         .read_text(encoding="utf-8")
-        .replace("homelab-16bit", "alt-style")
+        .replace("sweetie-16", "alt-style")
     )
     (tmp_path / "styles" / "alt_style.style.py").write_text(alt_style_src, encoding="utf-8")
 
@@ -696,7 +691,7 @@ def test_cli_watch_incremental_dependency_invalidation(
         (tmp_path / "assets" / "example_crate.asset.py")
         .read_text(encoding="utf-8")
         .replace('id="example_crate"', 'id="alt_box"')
-        .replace("homelab-16bit", "alt-style")
+        .replace("sweetie-16", "alt-style")
     )
     (tmp_path / "assets" / "alt_box.asset.py").write_text(alt_asset_src, encoding="utf-8")
     capsys.readouterr()
@@ -716,8 +711,8 @@ def test_cli_watch_incremental_dependency_invalidation(
             sib.write_text(text, encoding="utf-8")
             os.utime(sib, ns=(sib.stat().st_atime_ns, sib.stat().st_mtime_ns + 1_000_000))
         elif cycle_idx == 2:
-            # Edit homelab_16bit.style.py -> rebuilds example_crate & sibling_crate, not alt_box
-            sty = tmp_path / "styles" / "homelab_16bit.style.py"
+            # Edit sweetie_16.style.py -> rebuilds example_crate & sibling_crate, not alt_box
+            sty = tmp_path / "styles" / "sweetie_16.style.py"
             text = sty.read_text(encoding="utf-8") + "\n# style touch\n"
             sty.write_text(text, encoding="utf-8")
             os.utime(sty, ns=(sty.stat().st_atime_ns, sty.stat().st_mtime_ns + 1_000_000))
@@ -763,7 +758,7 @@ def test_cli_watch_incremental_dependency_invalidation(
     assert "rendered alt_box" not in cycle_logs[3]
     manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest.keys()) == {"alt_box", "example_crate"}
-    homelab_sprites = (out_dir / "indexed" / "homelab_16bit" / "sprites.generated.ts").read_text(
+    homelab_sprites = (out_dir / "indexed" / "sweetie_16" / "sprites.generated.ts").read_text(
         encoding="utf-8"
     )
     assert '"example_crate"' in homelab_sprites
@@ -786,8 +781,8 @@ def test_cli_declarative_scene_render_check_compose_and_watch(
             "frames=2,",
         )
         .replace(
-            "a.put(12, 11, p.ACCENT_CYAN)",
-            "a.put(12, 11, p.ACCENT_CYAN if a.frame == 0 else p.CHASSIS_LIGHT)",
+            "a.put(12, 11, p.CYAN)",
+            "a.put(12, 11, p.CYAN if a.frame == 0 else p.SLATE_L)",
         )
     )
     lamp_path.write_text(lamp_src, encoding="utf-8")
@@ -916,7 +911,7 @@ def test_cli_output_formats_llm_json_human_and_conflicts(
     # 2. render: default llm, --format json, --format human
     assert main(["render", "--root", str(tmp_path)]) == 0
     render_llm = capsys.readouterr().out
-    assert "asset=example_crate style=homelab-16bit size=24x24" in render_llm
+    assert "asset=example_crate style=sweetie-16 size=24x24" in render_llm
     assert "summary rendered=1" in render_llm
 
     assert main(["render", "--format", "json", "--root", str(tmp_path)]) == 0

@@ -296,7 +296,7 @@ from pixelforge import Asset, AssetSpec
 
 SPEC = AssetSpec(
     id="room_base",
-    style_id="homelab-16bit",
+    style_id="sweetie-16",
     perspective="iso-2:1",
     width=48,
     height=48,
@@ -308,7 +308,7 @@ SPEC = AssetSpec(
 
 def render(a: Asset) -> None:
     p = a.pal
-    a.rect(8, 8, 32, 32, p.CHASSIS_DARK)
+    a.rect(8, 8, 32, 32, p.SLATE_D)
     a.anchor("slot_a", 24, 28)
     a.anchor("slot_oob", 2, 2)
 """,
@@ -462,7 +462,7 @@ from pixelforge import Asset, AssetSpec
 
 SPEC = AssetSpec(
     id="hall_base",
-    style_id="homelab-16bit",
+    style_id="sweetie-16",
     perspective="iso-2:1",
     width=32,
     height=32,
@@ -471,7 +471,7 @@ SPEC = AssetSpec(
 
 def render(a: Asset) -> None:
     p = a.pal
-    a.rect(4, 4, 24, 24, p.CHASSIS_DARK)
+    a.rect(4, 4, 24, 24, p.SLATE_D)
     a.anchor("door_east", 20, 16)
 """,
         encoding="utf-8",

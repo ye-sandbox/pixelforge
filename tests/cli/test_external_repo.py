@@ -63,8 +63,8 @@ def test_external_repo_end_to_end_via_root(tmp_path: Path) -> None:
 
     init_proc = _run_cli(["init", "--root", str(ext_repo)], cwd=caller_cwd)
     assert init_proc.returncode == 0, init_proc.stderr
-    assert (ext_repo / "styles" / "homelab_16bit.style.py").is_file()
-    assert (ext_repo / "styles" / "homelab_16bit_palette.py").is_file()
+    assert (ext_repo / "styles" / "sweetie_16.style.py").is_file()
+    assert (ext_repo / "styles" / "sweetie_16_palette.py").is_file()
     assert (ext_repo / "assets" / "example_crate.asset.py").is_file()
     assert (ext_repo / ".env.example").is_file()
 
@@ -81,7 +81,7 @@ from pixelforge.core.types import AssetSpec
 
 SPEC = AssetSpec(
     id="status_beacon",
-    style_id="homelab-16bit",
+    style_id="sweetie-16",
     perspective="iso-2:1",
     width=8,
     height=8,
@@ -93,9 +93,9 @@ SPEC = AssetSpec(
 
 def render(a: Asset) -> None:
     p = a.pal
-    with a.layer("lamp", outline=p.OUTLINE):
-        a.put(3, 3, p.ACCENT_CYAN)
-        a.put(4, 3, p.ACCENT_CYAN)
+    with a.layer("lamp", outline=p.INK):
+        a.put(3, 3, p.CYAN)
+        a.put(4, 3, p.CYAN)
     a.anchor("base", 3, 4)
 ''',
         encoding="utf-8",
@@ -192,7 +192,7 @@ SCENE = SceneSpec(
     crate_path = ext_repo / "assets" / "example_crate.asset.py"
     crate_src = crate_path.read_text(encoding="utf-8")
     crate_path.write_text(
-        crate_src.replace("a.put(13, 11, p.ACCENT_CYAN)", "a.put(13, 12, p.ACCENT_CYAN)"),
+        crate_src.replace("a.put(13, 11, p.CYAN)", "a.put(13, 12, p.CYAN)"),
         encoding="utf-8",
     )
     diff_proc = _run_cli(

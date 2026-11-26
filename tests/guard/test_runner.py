@@ -55,9 +55,9 @@ def test_load_asset_from_git(tmp_path: Path) -> None:
 def test_run_checks_and_loaders_fail_on_duplicate_ids(tmp_path: Path) -> None:
     """Emit `duplicate-id` in `run_checks` and raise `ValueError` in loaders."""
     assert main(["init", "--root", str(tmp_path)]) == 0
-    style_copy = tmp_path / "styles" / "homelab_dup.style.py"
+    style_copy = tmp_path / "styles" / "sweetie_dup.style.py"
     style_copy.write_text(
-        (tmp_path / "styles" / "homelab_16bit.style.py").read_text(encoding="utf-8"),
+        (tmp_path / "styles" / "sweetie_16.style.py").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     asset_copy = tmp_path / "assets" / "example_crate_dup.asset.py"
@@ -89,7 +89,7 @@ def test_run_checks_missing_asset_id_returns_error(tmp_path: Path) -> None:
 def test_run_checks_detects_stale_and_missing_palette_stubs(tmp_path: Path) -> None:
     """Detect missing/stale `*_palette.py` stubs and refresh them via `--sync-stubs`."""
     assert main(["init", "--root", str(tmp_path)]) == 0
-    stub_path = tmp_path / "styles" / "homelab_16bit_palette.py"
+    stub_path = tmp_path / "styles" / "sweetie_16_palette.py"
     assert stub_path.is_file()
 
     # Stale stub triggers an error

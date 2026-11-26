@@ -56,18 +56,18 @@ def test_inspect_style_formats_and_error(
     # Default LLM-first output
     assert main(["inspect", "style", "--root", str(tmp_path)]) == 0
     llm_out = capsys.readouterr().out
-    assert "style=homelab-16bit" in llm_out
+    assert "style=sweetie-16" in llm_out
     assert "paint(" in llm_out
     assert "emissive(" in llm_out
     assert "bright(" in llm_out
     assert "reflections(" in llm_out
 
     # Strict JSON output
-    assert main(["inspect", "style", "homelab-16bit", "--json", "--root", str(tmp_path)]) == 0
+    assert main(["inspect", "style", "sweetie-16", "--json", "--root", str(tmp_path)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["total"] == 1
     style_obj = payload["styles"][0]
-    assert style_obj["id"] == "homelab-16bit"
+    assert style_obj["id"] == "sweetie-16"
     assert set(style_obj["groups"]) == {"paint", "emissive", "bright", "reflections"}
     assert len(style_obj["groups"]["emissive"]) >= 1
     assert all("emissive" in tok["flags"] for tok in style_obj["groups"]["emissive"])
@@ -76,14 +76,14 @@ def test_inspect_style_formats_and_error(
     # Human output
     assert main(["inspect", "style", "--human", "--root", str(tmp_path)]) == 0
     human_out = capsys.readouterr().out
-    assert "Style: homelab-16bit" in human_out
+    assert "Style: sweetie-16" in human_out
     assert "Emissive (" in human_out
 
     # Unknown style error with fuzzy suggestion
-    assert main(["inspect", "style", "homelab-16bt", "--root", str(tmp_path)]) == 1
+    assert main(["inspect", "style", "sweetie-15", "--root", str(tmp_path)]) == 1
     err = capsys.readouterr().err
     assert "Unknown style" in err
-    assert "homelab-16bit" in err
+    assert "sweetie-16" in err
 
 
 def test_inspect_prefabs_categories_filter_and_json(

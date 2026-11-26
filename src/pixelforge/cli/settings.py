@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from pixelforge.core.types import StylePack
 
 
 class PixelforgeSettings(BaseSettings):
@@ -21,7 +26,7 @@ class PixelforgeSettings(BaseSettings):
     sheets_dir: Path = Path(".pixelforge/sheets")
     previews_dir: Path = Path(".pixelforge/previews")
     diffs_dir: Path = Path(".pixelforge/diffs")
-    default_style: str = "homelab-16bit"
+    default_style: str | None = None
 
 
 class HydraSettings(BaseSettings):
@@ -80,3 +85,40 @@ def load_hydra_settings(root: Path | None = None) -> HydraSettings:
         )
 
     return _ScopedHydraSettings()
+
+
+def resolve_project_style_id(
+    *,
+    explicit_style: str | None,
+    default_style: str | None,
+    styles: Mapping[str, StylePack],
+    styles_dir: Path,
+) -> str:
+    """Resolve the active `StylePack` ID deterministically for a project."""
+    available = ", ".join(sorted(styles)) or "(none)"
+    if explicit_style is not None:
+        if explicit_style in styles:
+            return explicit_style
+        msg = f"unknown style {explicit_style!r}; available in {styles_dir}: {available}"
+        raise ValueError(msg)
+
+    if default_style is not None:
+        if default_style in styles:
+            return default_style
+        msg = f"unknown default style {default_style!r}; available in {styles_dir}: {available}"
+        raise ValueError(msg)
+
+    if len(styles) == 1:
+        return next(iter(styles))
+
+    if not styles:
+        msg = (
+            f"no .style.py files found in {styles_dir}; run 'pixelforge init' or pass --style <id>"
+        )
+        raise ValueError(msg)
+
+    msg = (
+        f"multiple styles found in {styles_dir}: {available}; "
+        "pass --style <id> or set PIXELFORGE_DEFAULT_STYLE"
+    )
+    raise ValueError(msg)

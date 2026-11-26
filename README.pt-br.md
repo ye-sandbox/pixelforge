@@ -86,7 +86,7 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 | `PIXELFORGE_SHEETS_DIR` | Diretório de folhas efêmeras `.contact.png` de crítica visual (ignorado no Git) | `.pixelforge/sheets` | Não |
 | `PIXELFORGE_PREVIEWS_DIR` | Diretório de prévias animadas efêmeras `.gif` (ignorado no Git) | `.pixelforge/previews` | Não |
 | `PIXELFORGE_DIFFS_DIR` | Diretório de PNGs efêmeros de diff de pixels gerados por `pixelforge diff` (ignorado no Git) | `.pixelforge/diffs` | Não |
-| `PIXELFORGE_DEFAULT_STYLE` | Identificador padrão de `StylePack` usado pelo comando `pixelforge init` | `homelab-16bit` | Não |
+| `PIXELFORGE_DEFAULT_STYLE` | Override opcional de `StylePack` para `pixelforge init` (`sweetie-16`) e comandos multi-estilo | _(auto / vazio)_ | Não |
 | `LLM_BASE_URL` | Endpoint opcional de gateway OpenAI v1 (`hydra-llm-router`) para modo crítico automatizado na Fase 3 | `http://127.0.0.1:3000/v1` | Não |
 | `LLM_API_KEY` | Token opcional do gateway quando o modo crítico automatizado da Fase 3 estiver ativo | `sk-replace-with-hydra-tier-token` | Apenas no modo automatizado (Fase 3) |
 | `LLM_MODEL_FAST` | Alias virtual de baixa latência no gateway LLM | `fast` | Não |
@@ -97,7 +97,7 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 
 ```bash
 # Inicializar StylePack inicial, módulo .asset.py de exemplo e .env.example
-uv run pixelforge init [--style homelab-16bit] [--force] [--root .]
+uv run pixelforge init [--style sweetie-16] [--force] [--root .]
 
 # Compilar módulos .asset.py em PNGs, spritesheets, máscaras emissivas, manifestos e diagnósticos
 uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
@@ -121,7 +121,7 @@ uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>]
 uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Inspecionar grupos de tokens de StylePack, assinaturas de prefabs, âncoras/estados de assets e montagens de cenas
-uv run pixelforge inspect {style|prefabs|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge inspect {style|presets|prefabs|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Integração com Svelte 5

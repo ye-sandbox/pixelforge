@@ -298,7 +298,7 @@ def _setup_scene_repo(tmp_path: Path) -> None:
         ")\n\n\n"
         "def render(a: Asset) -> None:\n"
         "    p = a.pal\n"
-        "    a.rect(2, 2, 4, 4, p.ACCENT_CYAN)\n"
+        "    a.rect(2, 2, 4, 4, p.LED_C)\n"
         '    a.anchor("mount_bottom", 4, 6)\n',
         encoding="utf-8",
     )

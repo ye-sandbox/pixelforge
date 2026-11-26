@@ -14,6 +14,7 @@ from pixelforge.cli.diff_cmd import diff_asset
 from pixelforge.cli.inspect_cmd import (
     inspect_assets_workflow,
     inspect_prefabs_workflow,
+    inspect_presets_workflow,
     inspect_scenes_workflow,
     inspect_style_workflow,
 )
@@ -30,6 +31,7 @@ from pixelforge.cli.settings import (
     PixelforgeSettings,
     load_hydra_settings,
     load_pixelforge_settings,
+    resolve_project_style_id,
 )
 from pixelforge.cli.watch_cmd import watch_loop
 from pixelforge.export.analyze_ref import (
@@ -39,6 +41,7 @@ from pixelforge.export.analyze_ref import (
     scaffold_asset_from_analysis,
 )
 from pixelforge.guard.runner import load_all_styles, run_checks, sync_palette_stubs
+from pixelforge.presets import DEFAULT_INIT_PRESET
 
 
 def _out(line: str) -> None:
@@ -76,7 +79,7 @@ def _resolve_format_or_err(args: argparse.Namespace) -> OutputFormat | None:
 
 def _cmd_init(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     root = _resolve_root(args.root)
-    style_id: str = args.style or settings.default_style
+    style_id: str = str(args.style or settings.default_style or DEFAULT_INIT_PRESET)
     created = scaffold_project(root, style_id=style_id, force=bool(args.force))
     for path in created:
         _out(f"created {path}")
@@ -210,11 +213,16 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
         _err(str(exc))
         return 1
 
-    style_id = str(args.style or settings.default_style)
     styles = load_all_styles(root / "styles")
-    if style_id not in styles:
-        available = ", ".join(sorted(styles)) or "(none)"
-        _err(f"unknown style {style_id!r}; available in {root / 'styles'}: {available}")
+    try:
+        style_id = resolve_project_style_id(
+            explicit_style=args.style,
+            default_style=settings.default_style,
+            styles=styles,
+            styles_dir=root / "styles",
+        )
+    except ValueError as exc:
+        _err(str(exc))
         return 1
 
     try:
@@ -330,11 +338,19 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
             out=_out,
             err=_err,
         )
+    if target == "presets":
+        return inspect_presets_workflow(
+            preset_id=args.preset_id,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
     root = _resolve_root(args.root)
     if target == "style":
         return inspect_style_workflow(
             root,
             style_id=args.style_id,
+            presets=bool(getattr(args, "presets", False)),
             output_format=output_format,
             out=_out,
             err=_err,
@@ -372,7 +388,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     init_p = sub.add_parser("init", help="Scaffold starter style, asset, and .env.example")
-    init_p.add_argument("--style", default=None, help="Starter StylePack ID")
+    init_p.add_argument(
+        "--style",
+        default=None,
+        help=f"Starter StylePack preset or custom ID (default: {DEFAULT_INIT_PRESET})",
+    )
     init_p.add_argument("--force", action="store_true", help="Overwrite existing starter files")
     init_p.add_argument("--root", default=None, help="Project root directory")
 
@@ -633,8 +653,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect StylePack palette tokens grouped by paint/emissive/bright/reflections",
     )
     inspect_style_p.add_argument("style_id", nargs="?", default=None, help="Optional StylePack ID")
+    inspect_style_p.add_argument(
+        "--presets",
+        action="store_true",
+        help="List built-in StylePack presets instead of project styles/",
+    )
     add_format_arguments(inspect_style_p)
     inspect_style_p.add_argument("--root", default=None, help="Project root directory")
+
+    inspect_presets_p = inspect_sub.add_parser(
+        "presets",
+        help="Inspect built-in StylePack presets available for `pixelforge init --style`",
+    )
+    inspect_presets_p.add_argument(
+        "preset_id", nargs="?", default=None, help="Optional built-in preset ID"
+    )
+    add_format_arguments(inspect_presets_p)
 
     inspect_prefabs_p = inspect_sub.add_parser(
         "prefabs",
