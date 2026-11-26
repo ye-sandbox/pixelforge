@@ -98,6 +98,9 @@ uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>]
 
 # Score changed assets via internal hydra-llm-router multimodal critic (OpenAI v1, virtual model 'fast')
 uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+
+# Introspect StylePack token groups, prefab signatures, asset anchors/states, and scene mounts
+uv run pixelforge inspect {style|prefabs|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
 ```
 
 ## Svelte 5 Integration

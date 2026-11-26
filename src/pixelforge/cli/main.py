@@ -11,6 +11,12 @@ from pixelforge import __version__
 from pixelforge.cli.compose_cmd import compose_scene_workflow, parse_mount_arg
 from pixelforge.cli.critic_cmd import critic_workflow
 from pixelforge.cli.diff_cmd import diff_asset
+from pixelforge.cli.inspect_cmd import (
+    inspect_assets_workflow,
+    inspect_prefabs_workflow,
+    inspect_scenes_workflow,
+    inspect_style_workflow,
+)
 from pixelforge.cli.output import (
     OutputFormat,
     add_format_arguments,
@@ -256,6 +262,51 @@ def _cmd_critic(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_inspect(args: argparse.Namespace) -> int:
+    target = getattr(args, "inspect_target", None)
+    if target is None:
+        inspect_parser = getattr(args, "_inspect_parser", None)
+        if isinstance(inspect_parser, argparse.ArgumentParser):
+            inspect_parser.print_help()
+        return 0
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
+    if target == "prefabs":
+        return inspect_prefabs_workflow(
+            target=args.target,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
+    root = _resolve_root(args.root)
+    if target == "style":
+        return inspect_style_workflow(
+            root,
+            style_id=args.style_id,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
+    if target == "assets":
+        return inspect_assets_workflow(
+            root,
+            asset_id=args.asset_id,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
+    if target == "scenes":
+        return inspect_scenes_workflow(
+            root,
+            scene_id=args.scene_id,
+            output_format=output_format,
+            out=_out,
+            err=_err,
+        )
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pixelforge CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -445,6 +496,49 @@ def build_parser() -> argparse.ArgumentParser:
     add_format_arguments(critic_p)
     critic_p.add_argument("--root", default=None, help="Project root directory")
 
+    inspect_p = sub.add_parser(
+        "inspect",
+        help="Introspect StylePacks, prefabs, assets, and scenes",
+    )
+    inspect_p.set_defaults(_inspect_parser=inspect_p)
+    inspect_sub = inspect_p.add_subparsers(dest="inspect_target")
+
+    inspect_style_p = inspect_sub.add_parser(
+        "style",
+        help="Inspect StylePack palette tokens grouped by paint/emissive/bright/reflections",
+    )
+    inspect_style_p.add_argument("style_id", nargs="?", default=None, help="Optional StylePack ID")
+    add_format_arguments(inspect_style_p)
+    inspect_style_p.add_argument("--root", default=None, help="Project root directory")
+
+    inspect_prefabs_p = inspect_sub.add_parser(
+        "prefabs",
+        help="Inspect prefab kit signatures and categories",
+    )
+    inspect_prefabs_p.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Optional category (architecture|furniture|details|atmosphere) or name filter",
+    )
+    add_format_arguments(inspect_prefabs_p)
+
+    inspect_assets_p = inspect_sub.add_parser(
+        "assets",
+        help="Inspect asset dimensions, states, anchors, and hitboxes",
+    )
+    inspect_assets_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID")
+    add_format_arguments(inspect_assets_p)
+    inspect_assets_p.add_argument("--root", default=None, help="Project root directory")
+
+    inspect_scenes_p = inspect_sub.add_parser(
+        "scenes",
+        help="Inspect declarative .scene.py mounts, states, and strict flags",
+    )
+    inspect_scenes_p.add_argument("scene_id", nargs="?", default=None, help="Optional scene ID")
+    add_format_arguments(inspect_scenes_p)
+    inspect_scenes_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -473,6 +567,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_compose(args, settings)
     if args.command == "critic":
         return _cmd_critic(args)
+    if args.command == "inspect":
+        return _cmd_inspect(args)
 
     parser.print_help()
     return 2
