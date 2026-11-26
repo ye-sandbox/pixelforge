@@ -17,8 +17,8 @@ type: architecture-design
 
 Inspired by **`build123d`** (where expressive Python CAD compiles to standard `.step`/`.stl`/`.glb` artifacts consumed by external runtimes), `pixelforge` v2 cleanly separates **asset authoring (build-time)** from **game execution (runtime)**:
 
-- **Build-Time (Python Compiler — `pixelforge`):** Multimodal AI agents author concise, parametric `.asset.py` modules, validate them via stdlib `ast` + runtime guards, inspect coordinate-ruled `.contact.png` sheets, and apply surgical edits.
-- **Runtime (Svelte 5 Browser Game):** Consumes zero-overhead compiled artifacts — either standard 1× PNGs / spritesheets / emissive masks / 1D LUTs + `manifest.d.ts`, or direct **`--indexed-ts`** `Uint8Array` buffers (`0..254`, `255 = transparent`) + `palette.generated.ts` (`EMISSIVE`, `BRIGHT`, `REFL`) for CPU-composited indexed framebuffers with real-time reactive palette grading (day/night, weather, overload) and unified WebGL2 post-processing.
+- **Build-Time (Python Compiler — `pixelforge`):** Multimodal AI agents author concise, parametric `.asset.py` and `.scene.py` modules, validate them via stdlib `ast` + runtime/scene guards, inspect coordinate-ruled `.contact.png` sheets (and `watch --serve` Preview Studio), and apply surgical edits.
+- **Runtime (Decoupled Consumers — Svelte 5 / `pixelforge-runtime` / External Engines):** Consumes zero-overhead compiled artifacts — standard 1× PNGs / spritesheets / emissive & surface masks / 1D LUTs + `manifest.d.ts`, engine atlases/tilemaps, or direct **`--indexed-ts`** `Uint8Array` buffers (`0..254`, `255 = transparent`) + `palette.generated.ts` (`EMISSIVE`, `BRIGHT`, `REFL`) for CPU/WebGL2 composited framebuffers with real-time reactive palette grading (day/night, weather, overload) and unified post-processing. Real-time game loops, physics, input, and audio playback/synthesis stay outside `pixelforge` (e.g., in a dedicated `pixelforge-runtime` or `chipforge` companion repository, or adapters for Phaser/Godot).
 
 ```mermaid
 flowchart LR
