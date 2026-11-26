@@ -55,6 +55,27 @@ uv sync --frozen
 uv run pytest
 ```
 
+### Consumo em Repositórios Externos
+
+Instale o `pixelforge` como ferramenta CLI standalone ou adicione-o como dependência em um repositório consumidor externo (por exemplo, um jogo Svelte 5) e aponte para esse repositório com `--root`:
+
+```bash
+# Opção A: Instalar globalmente como ferramenta isolada do uv
+uv tool install git+https://github.com/yegear/pixelforge.git
+pixelforge init --root /caminho/para/repo-consumidor
+pixelforge check --sync-stubs --root /caminho/para/repo-consumidor
+pixelforge render --emissive --lut --indexed-ts --root /caminho/para/repo-consumidor
+
+# Opção B: Executar de forma efêmera sem instalação global
+uvx --from git+https://github.com/yegear/pixelforge.git pixelforge render --root /caminho/para/repo-consumidor
+
+# Opção C: Adicionar ao pyproject.toml do repositório consumidor
+# uv add --dev "pixelforge @ git+https://github.com/yegear/pixelforge.git"
+uv run pixelforge watch --out static/sprites --serve
+```
+
+Quando `--root <caminho>` é informado, o `pixelforge` resolve `styles/`, `assets/`, `.env` (sobrescritas `PIXELFORGE_*`), `dist/` e `.pixelforge/` a partir de `<caminho>`, independentemente do diretório de trabalho atual.
+
 ## Configuração
 
 Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) (carregadas via `pydantic-settings` com prefixo `PIXELFORGE_`):

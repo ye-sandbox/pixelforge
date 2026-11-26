@@ -26,7 +26,11 @@ from pixelforge.cli.output import (
 )
 from pixelforge.cli.render_cmd import render_once
 from pixelforge.cli.scaffold import scaffold_project
-from pixelforge.cli.settings import HydraSettings, PixelforgeSettings
+from pixelforge.cli.settings import (
+    PixelforgeSettings,
+    load_hydra_settings,
+    load_pixelforge_settings,
+)
 from pixelforge.cli.watch_cmd import watch_loop
 from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
 from pixelforge.guard.runner import load_all_styles, run_checks, sync_palette_stubs
@@ -253,7 +257,7 @@ def _cmd_critic(args: argparse.Namespace) -> int:
         return 2
     root = _resolve_root(args.root)
     summary_md = _resolve_dir(root, Path(args.summary_md)) if args.summary_md else None
-    hydra = HydraSettings()
+    hydra = load_hydra_settings(root)
     return critic_workflow(
         root,
         asset_id=args.asset_id,
@@ -595,7 +599,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    settings = PixelforgeSettings()
+    root = _resolve_root(getattr(args, "root", None))
+    settings = load_pixelforge_settings(root)
     if args.command == "init":
         return _cmd_init(args, settings)
     if args.command == "check":
