@@ -993,3 +993,261 @@ def test_room_fill_and_architectural_prefabs_contracts() -> None:
     cat_asset = _make_asset(64, 48)
     prefabs.iso_cable_catenary(cat_asset, (10, 20), (50, 20), color=cat_asset.pal.INK, sag=8)
     assert np.any(cat_asset.root_surface.data[26:30, 25:35] == cat_asset.pal.INK)
+
+
+def test_subroom_and_partition_plane_mount_wall_prefabs() -> None:
+    import pytest
+
+    asset = _make_asset(180, 140)
+    p = asset.pal
+    geom = prefabs.iso_room_shell(
+        asset,
+        90,
+        96,
+        64,
+        32,
+        40,
+        floor=p.FLOOR,
+        left_wall=p.WALL_L,
+        right_wall=p.WALL_R,
+        outline=p.INK,
+    )
+
+    # Rectangular 2-room split preserves exact parent floor corners
+    sub_left = geom.subroom(0.0, 0.0, 0.5, 1.0)
+    assert sub_left.floor_point(0.0, 0.0) == geom.floor_point(0.0, 0.0)
+    assert sub_left.floor_point(1.0, 0.0) == geom.floor_point(0.5, 0.0)
+    assert sub_left.floor_point(0.0, 1.0) == geom.floor_point(0.0, 1.0)
+    assert sub_left.floor_point(1.0, 1.0) == geom.floor_point(0.5, 1.0)
+
+    # partition_plane at=0.0 matches outer wall planes
+    assert geom.partition_plane("left", 0.0) == geom.left_wall_plane()
+    assert geom.partition_plane("right", 0.0) == geom.right_wall_plane()
+
+    # Mount existing wall prefabs onto an interior partition plane
+    part = geom.partition_plane("left", 0.5, u0=0.05, v0=0.0, u1=0.95, v1=1.0)
+    prefabs.iso_partition_wall(
+        asset,
+        geom,
+        "left",
+        0.5,
+        u0=0.05,
+        u1=0.95,
+        face=p.WALL_L,
+        cap=p.METAL_H,
+        side=p.WALL_R,
+        baseboard=(p.WOOD_M, p.WOOD_D),
+        outline=p.INK,
+    )
+    door_plane = geom.partition_plane("left", 0.5, u0=0.15, v0=0.25, u1=0.38, v1=1.0)
+    prefabs.iso_door(
+        asset,
+        *door_plane,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        handle=p.SUN,
+        outline=p.INK,
+    )
+    panel_plane = geom.partition_plane("left", 0.5, u0=0.45, v0=0.22, u1=0.65, v1=0.58)
+    prefabs.wall_panel(
+        asset, *panel_plane, frame=p.METAL_D, recess=p.FLOOR_D, slot=p.METAL_M, status_led=p.LED
+    )
+    poster_plane = geom.partition_plane("left", 0.5, u0=0.70, v0=0.20, u1=0.86, v1=0.55)
+    prefabs.wall_poster(asset, *poster_plane, border=p.INK, fill=p.SKY, accent=p.SUN)
+    outlet_plane = geom.partition_plane("left", 0.5, u0=0.46, v0=0.75, u1=0.54, v1=0.88)
+    prefabs.wall_outlet(asset, *outlet_plane, plate=p.METAL_H, socket=p.INK, outline=p.INK)
+
+    assert len(part) == 3
+    assert np.any(asset.root_surface.data == p.LED)
+    assert np.any(asset.root_surface.data == p.SUN)
+
+    with pytest.raises(ValueError, match="Invalid subroom bounds"):
+        geom.subroom(0.5, 0.0, 0.5, 1.0)
+    with pytest.raises(ValueError, match="Invalid left wall sub-region"):
+        geom.partition_plane("left", 0.5, u0=0.8, u1=0.2)
+
+
+def test_floor_zones_thresholds_partitions_pillars_and_molding() -> None:
+    asset = _make_asset(180, 140)
+    p = asset.pal
+    geom = prefabs.iso_room_shell(
+        asset,
+        90,
+        96,
+        64,
+        32,
+        40,
+        floor=p.FLOOR,
+        left_wall=p.WALL_L,
+        right_wall=p.WALL_R,
+        outline=p.INK,
+    )
+
+    # Multi-zone floors: planks, tiles, grid, carpet, solid
+    prefabs.iso_floor_zone(
+        asset,
+        geom,
+        0.0,
+        0.0,
+        0.5,
+        0.5,
+        fill=p.WOOD_M,
+        alt=p.WOOD_D,
+        pattern_color=p.WOOD_L,
+        mode="planks",
+        step=8,
+    )
+    prefabs.iso_floor_zone(
+        asset,
+        geom,
+        0.5,
+        0.0,
+        1.0,
+        0.5,
+        fill=p.METAL_D,
+        alt=p.FLOOR_D,
+        pattern_color=p.METAL_M,
+        mode="tiles",
+        step=8,
+    )
+    prefabs.iso_floor_zone(
+        asset,
+        geom,
+        0.0,
+        0.5,
+        0.5,
+        1.0,
+        fill=p.FLOOR,
+        pattern_color=p.SKY,
+        mode="carpet",
+        border=p.SUN,
+    )
+    prefabs.iso_floor_zone(
+        asset,
+        geom,
+        0.5,
+        0.5,
+        1.0,
+        1.0,
+        fill=p.FLOOR_D,
+        mode="grid",
+        pattern_color=p.WALL_R,
+        step=8,
+    )
+    prefabs.iso_floor_threshold(
+        asset,
+        geom,
+        "left",
+        0.5,
+        (0.05, 0.95),
+        fill=p.METAL_H,
+        highlight=p.SUN,
+        outline=p.INK,
+    )
+    prefabs.iso_floor_threshold(
+        asset,
+        geom,
+        "right",
+        0.5,
+        (0.05, 0.95),
+        fill=p.WOOD_L,
+        outline=p.INK,
+    )
+
+    # Partition walls with rectangular and arched cutouts + glass partition + pillar + molding
+    prefabs.iso_partition_wall(
+        asset,
+        geom,
+        "left",
+        0.5,
+        u0=0.0,
+        u1=0.6,
+        face=p.WALL_L,
+        cap=p.METAL_H,
+        height=24,
+        doorway=(0.30, 0.70),
+        doorway_style="arch",
+        outline=p.INK,
+    )
+    prefabs.iso_glass_partition(
+        asset,
+        geom,
+        "right",
+        0.5,
+        u0=0.1,
+        u1=0.9,
+        frame=p.METAL_D,
+        glass=p.SKY,
+        glint=p.CLOUD,
+        mullion=p.METAL_H,
+        cols=3,
+        rows=2,
+        kickplate=p.FLOOR_D,
+        outline=p.INK,
+    )
+    px, py = geom.floor_point(0.5, 0.5)
+    prefabs.iso_pillar(
+        asset,
+        px,
+        py - 32,
+        w=8,
+        d=8,
+        h=32,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        cap_color=p.SUN,
+        base_color=p.INK,
+        outline=p.INK,
+    )
+    prefabs.wall_molding(
+        asset,
+        *geom.right_wall_plane(0.05, 0.0, 0.95, 1.0),
+        primary=p.WOOD_L,
+        highlight=p.CLOUD,
+        shadow=p.WOOD_D,
+        style="wainscot",
+    )
+    prefabs.wall_molding(
+        asset,
+        *geom.left_wall_plane(0.05, 0.0, 0.95, 1.0),
+        primary=p.WOOD_M,
+        style="crown",
+    )
+
+    assert np.any(asset.root_surface.data == p.SKY)
+    assert np.any(asset.root_surface.data == p.SUN)
+    assert np.any(asset.root_surface.data == p.WOOD_L)
+
+    # Determinism check across two independent renders
+    second = _make_asset(180, 140)
+    sp = second.pal
+    sgeom = prefabs.iso_room_shell(
+        second,
+        90,
+        96,
+        64,
+        32,
+        40,
+        floor=sp.FLOOR,
+        left_wall=sp.WALL_L,
+        right_wall=sp.WALL_R,
+        outline=sp.INK,
+    )
+    prefabs.iso_floor_zone(second, sgeom, 0.0, 0.0, 0.5, 0.5, fill=sp.WOOD_M, alt=sp.WOOD_D)
+    first_check = _make_asset(180, 140)
+    fp = first_check.pal
+    fgeom = prefabs.iso_room_shell(
+        first_check,
+        90,
+        96,
+        64,
+        32,
+        40,
+        floor=fp.FLOOR,
+        left_wall=fp.WALL_L,
+        right_wall=fp.WALL_R,
+        outline=fp.INK,
+    )
+    prefabs.iso_floor_zone(first_check, fgeom, 0.0, 0.0, 0.5, 0.5, fill=fp.WOOD_M, alt=fp.WOOD_D)
+    assert np.array_equal(second.root_surface.data, first_check.root_surface.data)

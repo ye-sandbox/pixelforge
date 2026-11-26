@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
+
 from pixelforge.core.builder import Asset, Layer
 from pixelforge.core.plane import Point2D
 from pixelforge.core.prefabs.atmosphere import (
@@ -14,11 +16,18 @@ from pixelforge.core.prefabs.atmosphere import (
     RectRegion,
     clipped_pane,
 )
-from pixelforge.core.surface import IndexedSurface
+from pixelforge.core.surface import (
+    DitherPattern,
+    IndexedSurface,
+    compute_dither_thresholds,
+)
 from pixelforge.core.types import LightingAngle
 
 Canvas = Asset | Layer
 FloorPatternMode = Literal["planks", "tiles", "grid"]
+FloorZoneMode = Literal["planks", "tiles", "grid", "carpet", "solid"]
+WallMoldingStyle = Literal["crown", "chair_rail", "wainscot", "baseboard"]
+DoorwayStyle = Literal["rect", "arch"]
 WallSide = Literal["left", "right"]
 
 
@@ -36,6 +45,8 @@ class IsoRoomGeometry:
     hh: int
     wall_h: int
     lighting_angle: LightingAngle = "top-left"
+    u_scale: float = 1.0
+    v_scale: float = 1.0
 
     @property
     def apex_y(self) -> int:
@@ -52,22 +63,64 @@ class IsoRoomGeometry:
         """X coordinate of the rightmost floor corner."""
         return self.cx + self.hw
 
+    def _floor_point_f(self, u: float, v: float) -> tuple[float, float]:
+        du = (float(u) - 0.5) * self.u_scale
+        dv = (float(v) - 0.5) * self.v_scale
+        px = self.cx + (du - dv) * self.hw
+        py = self.cy + (du + dv) * self.hh
+        return (px, py)
+
     def floor_point(self, u: float, v: float) -> tuple[int, int]:
         """Project normalized `(u, v)` floor coords (`(0,0)`=apex, `(1,0)`=right, `(0,1)`=left)."""
-        px = self.cx + (u - v) * self.hw
-        py = self.apex_y + (u + v) * self.hh
+        px, py = self._floor_point_f(u, v)
         return (round(px), round(py))
 
-    def _wall_point(self, wall: WallSide, u: float, v: float) -> tuple[float, float]:
+    def floor_plane(
+        self,
+        u0: float = 0.0,
+        v0: float = 0.0,
+        u1: float = 1.0,
+        v1: float = 1.0,
+    ) -> PlaneRegion:
+        """Return `(p0, p1, p2)` for a clamped `(u0..u1, v0..v1)` floor sub-region."""
+        cu0 = _clamp_unit(u0)
+        cv0 = _clamp_unit(v0)
+        cu1 = _clamp_unit(u1)
+        cv1 = _clamp_unit(v1)
+        if cu1 <= cu0 or cv1 <= cv0:
+            msg = (
+                f"Invalid floor sub-region ({u0}, {v0}, {u1}, {v1}): "
+                "requires 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1"
+            )
+            raise ValueError(msg)
+        return (
+            self._floor_point_f(cu0, cv0),
+            self._floor_point_f(cu1, cv0),
+            self._floor_point_f(cu0, cv1),
+        )
+
+    def _wall_point(
+        self,
+        wall: WallSide,
+        u: float,
+        v: float,
+        *,
+        at: float = 0.0,
+        height: int | None = None,
+    ) -> tuple[float, float]:
         cu = _clamp_unit(u)
         cv = _clamp_unit(v)
+        cat = _clamp_unit(at)
+        eff_h = self.wall_h if height is None else max(1, int(height))
         if wall == "left":
-            x = self.left_x + cu * self.hw
-            top_y = (self.cy - self.wall_h) + cu * (self.apex_y - self.cy)
-            return (x, top_y + cv * self.wall_h)
-        x = self.cx + cu * self.hw
-        top_y = (self.apex_y - self.wall_h) + cu * (self.cy - self.apex_y)
-        return (x, top_y + cv * self.wall_h)
+            p_start = self._floor_point_f(cat, 1.0)
+            p_end = self._floor_point_f(cat, 0.0)
+        else:
+            p_start = self._floor_point_f(0.0, cat)
+            p_end = self._floor_point_f(1.0, cat)
+        bx = p_start[0] + cu * (p_end[0] - p_start[0])
+        by = p_start[1] + cu * (p_end[1] - p_start[1])
+        return (bx, (by - eff_h) + cv * eff_h)
 
     def _wall_plane(
         self,
@@ -76,6 +129,9 @@ class IsoRoomGeometry:
         v0: float,
         u1: float,
         v1: float,
+        *,
+        at: float = 0.0,
+        height: int | None = None,
     ) -> PlaneRegion:
         cu0 = _clamp_unit(u0)
         cv0 = _clamp_unit(v0)
@@ -88,9 +144,9 @@ class IsoRoomGeometry:
             )
             raise ValueError(msg)
         return (
-            self._wall_point(wall, cu0, cv0),
-            self._wall_point(wall, cu1, cv0),
-            self._wall_point(wall, cu0, cv1),
+            self._wall_point(wall, cu0, cv0, at=at, height=height),
+            self._wall_point(wall, cu1, cv0, at=at, height=height),
+            self._wall_point(wall, cu0, cv1, at=at, height=height),
         )
 
     def left_wall_plane(
@@ -112,6 +168,65 @@ class IsoRoomGeometry:
     ) -> PlaneRegion:
         """Return `(p0, p1, p2)` for a clamped `(u0..u1, v0..v1)` region on the right back wall."""
         return self._wall_plane("right", u0, v0, u1, v1)
+
+    def partition_plane(
+        self,
+        wall: WallSide,
+        at: float,
+        u0: float = 0.0,
+        v0: float = 0.0,
+        u1: float = 1.0,
+        v1: float = 1.0,
+        *,
+        height: int | None = None,
+    ) -> PlaneRegion:
+        """Return `(p0, p1, p2)` for an interior dividing wall parallel to `wall` at `at`."""
+        if wall not in ("left", "right"):
+            msg = f"Unsupported wall side: {wall!r}"
+            raise ValueError(msg)
+        return self._wall_plane(wall, u0, v0, u1, v1, at=at, height=height)
+
+    def subroom(
+        self,
+        u0: float,
+        v0: float,
+        u1: float,
+        v1: float,
+        *,
+        wall_h: int | None = None,
+    ) -> IsoRoomGeometry:
+        """Return a derived `IsoRoomGeometry` for the `(u0..u1, v0..v1)` floor sub-region."""
+        cu0 = _clamp_unit(u0)
+        cv0 = _clamp_unit(v0)
+        cu1 = _clamp_unit(u1)
+        cv1 = _clamp_unit(v1)
+        if cu1 <= cu0 or cv1 <= cv0:
+            msg = (
+                f"Invalid subroom bounds ({u0}, {v0}, {u1}, {v1}): "
+                "requires 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1"
+            )
+            raise ValueError(msg)
+
+        u_span = (cu1 - cu0) * self.u_scale
+        v_span = (cv1 - cv0) * self.v_scale
+        avg_span = 0.5 * (u_span + v_span)
+        sub_hw = max(1, round(self.hw * avg_span))
+        sub_hh = max(1, round(self.hh * avg_span))
+        sub_cx, sub_cy = self.floor_point(0.5 * (cu0 + cu1), 0.5 * (cv0 + cv1))
+        # INVARIANT: Scale (u_scale, v_scale) against sub_hw so rectangular subrooms
+        # (e.g. a 0.5x1.0 two-room split) preserve exact parent floor/wall coordinates.
+        next_u_scale = (self.hw * u_span) / float(sub_hw)
+        next_v_scale = (self.hw * v_span) / float(sub_hw)
+        return IsoRoomGeometry(
+            cx=sub_cx,
+            cy=sub_cy,
+            hw=sub_hw,
+            hh=sub_hh,
+            wall_h=self.wall_h if wall_h is None else max(1, int(wall_h)),
+            lighting_angle=self.lighting_angle,
+            u_scale=next_u_scale,
+            v_scale=next_v_scale,
+        )
 
     def window_spill_quad(
         self,
@@ -197,26 +312,27 @@ class IsoRoomGeometry:
         ih = max(0, int(h))
         m = max(0, int(margin))
         cm = max(0, int(corner_margin))
+        hw_u = max(1.0, self.hw * self.u_scale)
+        hw_v = max(1.0, self.hw * self.v_scale)
         t = _clamp_unit(along)
-        hw_eff = max(1, self.hw)
 
         # INVARIANT: In 2:1 iso, `u` moves (+1, +0.5) along the right wall and `v` moves
         # (-1, +0.5) along the left wall, so offsetting `margin` along the perpendicular floor
         # axis yields a `margin` px vertical gap from the baseboard line without trim overlap.
         if wall == "right":
-            cm_eff = min(cm, max(0, (self.hw - iw) // 2))
-            travel = max(0.0, float(self.hw - iw - 2 * cm_eff))
+            cm_eff = min(cm, max(0, (round(hw_u) - iw) // 2))
+            travel = max(0.0, hw_u - iw - 2 * cm_eff)
             u_start = cm_eff + t * travel
             u_center = u_start + iw * 0.5
             v_center = m + id_ * 0.5
         else:
-            cm_eff = min(cm, max(0, (self.hw - id_) // 2))
-            travel = max(0.0, float(self.hw - id_ - 2 * cm_eff))
+            cm_eff = min(cm, max(0, (round(hw_v) - id_) // 2))
+            travel = max(0.0, hw_v - id_ - 2 * cm_eff)
             v_start = cm_eff + t * travel
             u_center = m + iw * 0.5
             v_center = v_start + id_ * 0.5
 
-        fx, fy = self.floor_point(u_center / float(hw_eff), v_center / float(hw_eff))
+        fx, fy = self.floor_point(u_center / hw_u, v_center / hw_v)
         return (fx, fy - ih)
 
 
@@ -792,3 +908,452 @@ def window_curtains(
             curtains.line(1.0 - panel_w * 0.45, 0.06, 1.0 - panel_w * 0.45, 0.98, fold)
         if rod is not None:
             curtains.rect(-0.04, 0.0, 1.08, 0.05, fill=rod)
+
+
+def iso_floor_zone(
+    target: Canvas,
+    geom: IsoRoomGeometry,
+    u0: float,
+    v0: float,
+    u1: float,
+    v1: float,
+    *,
+    fill: int,
+    alt: int | None = None,
+    pattern_color: int | None = None,
+    mode: FloorZoneMode = "tiles",
+    step: int = 12,
+    dither_pattern: DitherPattern = "bayer4",
+    dither_ratio: float = 0.14,
+    border: int | None = None,
+) -> PlaneRegion:
+    """Draw a clipped `(u0..u1, v0..v1)` floor sub-zone with pattern and ordered dithering."""
+    cu0 = _clamp_unit(u0)
+    cv0 = _clamp_unit(v0)
+    cu1 = _clamp_unit(u1)
+    cv1 = _clamp_unit(v1)
+    if cu1 <= cu0 or cv1 <= cv0:
+        msg = (
+            f"Invalid floor zone ({u0}, {v0}, {u1}, {v1}): "
+            "requires 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1"
+        )
+        raise ValueError(msg)
+
+    zone_region = geom.floor_plane(cu0, cv0, cu1, cv1)
+
+    with clipped_pane(target, zone_region) as pane:
+        if not np.any(pane.mask):
+            return zone_region
+        pane.surface.data[pane.mask] = int(fill)
+        if alt is not None and dither_ratio > 0.0:
+            thresholds = compute_dither_thresholds(
+                pane.ox,
+                pane.oy,
+                pane.ox + pane.width,
+                pane.oy + pane.height,
+                pattern=dither_pattern,
+            )
+            pane.surface.data[pane.mask & (thresholds < float(dither_ratio))] = int(alt)
+
+        seam_col = pattern_color if pattern_color is not None else alt
+        u_px = max(1.0, (cu1 - cu0) * geom.hw * geom.u_scale)
+        v_px = max(1.0, (cv1 - cv0) * geom.hw * geom.v_scale)
+        istep = max(2, int(step))
+        cols = max(2, round(u_px / istep))
+        rows = max(2, round(v_px / istep))
+
+        if mode == "planks" and seam_col is not None:
+            for idx in range(1, cols):
+                u = idx / cols
+                a0 = pane.project(u, 0.0)
+                a1 = pane.project(u, 1.0)
+                pane.surface.line(a0[0], a0[1], a1[0], a1[1], seam_col)
+        elif mode in ("tiles", "grid") and seam_col is not None:
+            for idx in range(1, cols):
+                u = idx / cols
+                a0 = pane.project(u, 0.0)
+                a1 = pane.project(u, 1.0)
+                pane.surface.line(a0[0], a0[1], a1[0], a1[1], seam_col)
+            for idx in range(1, rows):
+                v = idx / rows
+                b0 = pane.project(0.0, v)
+                b1 = pane.project(1.0, v)
+                pane.surface.line(b0[0], b0[1], b1[0], b1[1], seam_col)
+        elif mode == "carpet" and pattern_color is not None:
+            c00 = pane.project(0.14, 0.14)
+            c10 = pane.project(0.86, 0.14)
+            c11 = pane.project(0.86, 0.86)
+            c01 = pane.project(0.14, 0.86)
+            for sa, sb in ((c00, c10), (c10, c11), (c11, c01), (c01, c00)):
+                pane.surface.line(sa[0], sa[1], sb[0], sb[1], pattern_color)
+        elif mode not in ("solid", "planks", "tiles", "grid", "carpet"):
+            msg = f"Unsupported floor zone mode: {mode!r}"
+            raise ValueError(msg)
+
+        if border is not None:
+            e00 = pane.project(0.0, 0.0)
+            e10 = pane.project(1.0, 0.0)
+            e11 = pane.project(1.0, 1.0)
+            e01 = pane.project(0.0, 1.0)
+            for sa, sb in ((e00, e10), (e10, e11), (e11, e01), (e01, e00)):
+                pane.surface.line(sa[0], sa[1], sb[0], sb[1], border)
+
+    return zone_region
+
+
+def iso_floor_threshold(
+    target: Canvas,
+    geom: IsoRoomGeometry,
+    wall: WallSide,
+    at: float,
+    span: tuple[float, float] = (0.0, 1.0),
+    *,
+    fill: int,
+    highlight: int | None = None,
+    outline: int | None = None,
+    width: float = 0.04,
+) -> PlaneRegion:
+    """Draw a transition threshold strip between floor zones along `wall` at `at`."""
+    if wall not in ("left", "right"):
+        msg = f"Unsupported wall side: {wall!r}"
+        raise ValueError(msg)
+    s0 = _clamp_unit(span[0])
+    s1 = _clamp_unit(span[1])
+    if s1 <= s0:
+        msg = f"Invalid threshold span {span!r}: requires 0 <= s0 < s1 <= 1"
+        raise ValueError(msg)
+
+    half_w = max(0.005, min(0.25, float(width) * 0.5))
+    if wall == "left":
+        u0, u1 = _clamp_unit(at - half_w), _clamp_unit(at + half_w)
+        v0, v1 = s0, s1
+    else:
+        u0, u1 = s0, s1
+        v0, v1 = _clamp_unit(at - half_w), _clamp_unit(at + half_w)
+
+    strip_region = geom.floor_plane(u0, v0, u1, v1)
+
+    with clipped_pane(target, strip_region) as pane:
+        if not np.any(pane.mask):
+            return strip_region
+        pane.surface.data[pane.mask] = int(fill)
+        if highlight is not None:
+            if wall == "left":
+                h0, h1 = pane.project(0.5, 0.0), pane.project(0.5, 1.0)
+            else:
+                h0, h1 = pane.project(0.0, 0.5), pane.project(1.0, 0.5)
+            pane.surface.line(h0[0], h0[1], h1[0], h1[1], highlight)
+        if outline is not None:
+            if wall == "left":
+                edges = (
+                    (pane.project(0.0, 0.0), pane.project(0.0, 1.0)),
+                    (pane.project(1.0, 0.0), pane.project(1.0, 1.0)),
+                )
+            else:
+                edges = (
+                    (pane.project(0.0, 0.0), pane.project(1.0, 0.0)),
+                    (pane.project(0.0, 1.0), pane.project(1.0, 1.0)),
+                )
+            for ea, eb in edges:
+                pane.surface.line(ea[0], ea[1], eb[0], eb[1], outline)
+
+    return strip_region
+
+
+def _offset_pt(pt: tuple[int, int], dx: int, dy: int) -> tuple[int, int]:
+    return (pt[0] + dx, pt[1] + dy)
+
+
+def _draw_arch_spandrels(
+    target: Canvas,
+    front_plane: PlaneRegion,
+    du0: float,
+    du1: float,
+    lintel_v: float,
+    arch_drop: float,
+    face: int,
+) -> None:
+    steps = 4
+    span = du1 - du0
+    with target.plane(p0=front_plane[0], p1=front_plane[1], p2=front_plane[2]) as wall_p:
+        for i in range(steps):
+            t0 = i / steps
+            t1 = (i + 1) / steps
+            w_frac = 0.22 * (1.0 - t0)
+            h_frac = arch_drop * (t1 - t0)
+            v_top = lintel_v + arch_drop * t0
+            if w_frac > 0.0:
+                wall_p.rect(du0, v_top, span * w_frac, h_frac, fill=face)
+                wall_p.rect(du1 - span * w_frac, v_top, span * w_frac, h_frac, fill=face)
+
+
+def iso_partition_wall(
+    target: Canvas,
+    geom: IsoRoomGeometry,
+    wall: WallSide,
+    at: float,
+    u0: float = 0.0,
+    u1: float = 1.0,
+    *,
+    face: int,
+    cap: int,
+    side: int | None = None,
+    height: int | None = None,
+    thickness: int = 3,
+    doorway: tuple[float, float] | None = None,
+    door_height: float = 0.72,
+    doorway_style: DoorwayStyle = "rect",
+    baseboard: tuple[int, int] | None = None,
+    outline: int | None = None,
+) -> PlaneRegion:
+    """Draw a 2:1 isometric interior partition wall with cap, thickness, and optional cutout."""
+    if wall not in ("left", "right"):
+        msg = f"Unsupported wall side: {wall!r}"
+        raise ValueError(msg)
+    cu0 = _clamp_unit(u0)
+    cu1 = _clamp_unit(u1)
+    if cu1 <= cu0:
+        msg = f"Invalid partition span ({u0}, {u1}): requires 0 <= u0 < u1 <= 1"
+        raise ValueError(msg)
+
+    eff_h = geom.wall_h if height is None else max(2, int(height))
+    t = max(1, int(thickness))
+    dx_b = -t if wall == "left" else t
+    dy_b = -max(1, t // 2)
+    side_col = side if side is not None else cap
+    front_plane = geom.partition_plane(wall, at, cu0, 0.0, cu1, 1.0, height=eff_h)
+
+    with target.plane(p0=front_plane[0], p1=front_plane[1], p2=front_plane[2]) as wp:
+        c00 = wp.project(0.0, 0.0)
+        c10 = wp.project(1.0, 0.0)
+        c11 = wp.project(1.0, 1.0)
+        c01 = wp.project(0.0, 1.0)
+
+        if doorway is None:
+            wp.rect(0.0, 0.0, 1.0, 1.0, fill=face)
+        else:
+            du0 = max(0.04, min(0.92, float(doorway[0])))
+            du1 = max(du0 + 0.04, min(0.96, float(doorway[1])))
+            dh = max(0.25, min(0.92, float(door_height)))
+            lintel_v = 1.0 - dh
+            wp.rect(0.0, 0.0, du0, 1.0, fill=face)
+            wp.rect(du1, 0.0, 1.0 - du1, 1.0, fill=face)
+            wp.rect(du0, 0.0, du1 - du0, lintel_v, fill=face)
+
+    if doorway is not None and doorway_style == "arch":
+        du0 = max(0.04, min(0.92, float(doorway[0])))
+        du1 = max(du0 + 0.04, min(0.96, float(doorway[1])))
+        dh = max(0.25, min(0.92, float(door_height)))
+        lintel_v = 1.0 - dh
+        _draw_arch_spandrels(target, front_plane, du0, du1, lintel_v, min(0.18, dh * 0.3), face)
+
+    # Top cap and visible end-face thickness extruded backward along the perpendicular iso axis.
+    b00 = _offset_pt(c00, dx_b, dy_b)
+    b10 = _offset_pt(c10, dx_b, dy_b)
+    target.polygon((c00, c10, b10, b00), cap)
+    if wall == "left":
+        b01 = _offset_pt(c01, dx_b, dy_b)
+        target.polygon((c00, b00, b01, c01), side_col)
+    else:
+        b11 = _offset_pt(c11, dx_b, dy_b)
+        target.polygon((c10, b10, b11, c11), side_col)
+
+    if doorway is not None:
+        du0 = max(0.04, min(0.92, float(doorway[0])))
+        du1 = max(du0 + 0.04, min(0.96, float(doorway[1])))
+        dh = max(0.25, min(0.92, float(door_height)))
+        lintel_v = 1.0 - dh
+        jamb_u = du1 if wall == "left" else du0
+        with target.plane(p0=front_plane[0], p1=front_plane[1], p2=front_plane[2]) as wp:
+            jt = wp.project(jamb_u, lintel_v)
+            jb = wp.project(jamb_u, 1.0)
+        target.polygon((jt, _offset_pt(jt, dx_b, dy_b), _offset_pt(jb, dx_b, dy_b), jb), side_col)
+
+    if baseboard is not None:
+        bb_top, bb_bot = baseboard
+        with target.plane(p0=front_plane[0], p1=front_plane[1], p2=front_plane[2]) as wp:
+            if doorway is None:
+                wp.line(0.0, 0.96, 1.0, 0.96, bb_top)
+                wp.line(0.0, 1.0, 1.0, 1.0, bb_bot)
+            else:
+                du0 = max(0.04, min(0.92, float(doorway[0])))
+                du1 = max(du0 + 0.04, min(0.96, float(doorway[1])))
+                wp.line(0.0, 0.96, du0, 0.96, bb_top)
+                wp.line(0.0, 1.0, du0, 1.0, bb_bot)
+                wp.line(du1, 0.96, 1.0, 0.96, bb_top)
+                wp.line(du1, 1.0, 1.0, 1.0, bb_bot)
+
+    if outline is not None:
+        target.line(b00[0], b00[1], b10[0], b10[1], outline)
+        target.line(c00[0], c00[1], c10[0], c10[1], outline)
+        target.line(c00[0], c00[1], b00[0], b00[1], outline)
+        target.line(c10[0], c10[1], b10[0], b10[1], outline)
+        target.line(c00[0], c00[1], c01[0], c01[1], outline)
+        target.line(c10[0], c10[1], c11[0], c11[1], outline)
+
+    return front_plane
+
+
+def iso_glass_partition(
+    target: Canvas,
+    geom: IsoRoomGeometry,
+    wall: WallSide,
+    at: float,
+    u0: float = 0.0,
+    u1: float = 1.0,
+    *,
+    frame: int,
+    glass: int,
+    height: int | None = None,
+    glint: int | None = None,
+    mullion: int | None = None,
+    cols: int = 2,
+    rows: int = 1,
+    kickplate: int | None = None,
+    kickplate_ratio: float = 0.18,
+    outline: int | None = None,
+    scene: Callable[[ClippedPane], None] | None = None,
+) -> PlaneRegion:
+    """Draw a framed isometric glass partition divider using `clipped_pane`."""
+    if wall not in ("left", "right"):
+        msg = f"Unsupported wall side: {wall!r}"
+        raise ValueError(msg)
+    cu0 = _clamp_unit(u0)
+    cu1 = _clamp_unit(u1)
+    if cu1 <= cu0:
+        msg = f"Invalid glass partition span ({u0}, {u1}): requires 0 <= u0 < u1 <= 1"
+        raise ValueError(msg)
+
+    eff_h = geom.wall_h if height is None else max(4, int(height))
+    plane = geom.partition_plane(wall, at, cu0, 0.0, cu1, 1.0, height=eff_h)
+    kp = max(0.0, min(0.45, float(kickplate_ratio))) if kickplate is not None else 0.0
+    v_glass_bot = 0.94 - kp
+
+    with target.plane(p0=plane[0], p1=plane[1], p2=plane[2]) as fp:
+        fp.rect(0.0, 0.0, 1.0, 1.0, fill=frame, outline=outline)
+        if kickplate is not None and kp > 0.0:
+            fp.rect(0.04, 0.96 - kp, 0.92, kp, fill=kickplate)
+        gp0 = fp.project(0.06, 0.06)
+        gp1 = fp.project(0.94, 0.06)
+        gp2 = fp.project(0.06, v_glass_bot)
+
+    glass_region: PlaneRegion = (gp0, gp1, gp2)
+    with clipped_pane(target, glass_region) as gp:
+        if np.any(gp.mask):
+            gp.surface.data[gp.mask] = int(glass)
+            if scene is not None:
+                scene(gp)
+            if glint is not None:
+                a0, a1 = gp.project(0.14, 0.14), gp.project(0.28, 0.30)
+                b0, b1 = gp.project(0.24, 0.13), gp.project(0.34, 0.24)
+                gp.surface.line(a0[0], a0[1], a1[0], a1[1], glint)
+                gp.surface.line(b0[0], b0[1], b1[0], b1[1], glint)
+
+    if mullion is not None:
+        icols = max(1, int(cols))
+        irows = max(1, int(rows))
+        with target.plane(p0=plane[0], p1=plane[1], p2=plane[2]) as fp:
+            for c in range(1, icols):
+                uc = 0.06 + (c / float(icols)) * 0.88 - 0.02
+                fp.rect(uc, 0.06, 0.04, v_glass_bot - 0.06, fill=mullion)
+            for r in range(1, irows):
+                vr = 0.06 + (r / float(irows)) * (v_glass_bot - 0.06) - 0.02
+                fp.rect(0.06, vr, 0.88, 0.04, fill=mullion)
+
+    return plane
+
+
+def iso_pillar(
+    target: Canvas,
+    cx: int | float,
+    cy: int | float,
+    w: int = 8,
+    d: int = 8,
+    h: int = 38,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    cap_color: int | None = None,
+    base_color: int | None = None,
+    outline: int | None = None,
+) -> None:
+    """Draw a 2:1 isometric architectural pillar with optional plinth base and top capital."""
+    icx = round(cx)
+    icy = round(cy)
+    iw = max(4, int(w))
+    id_ = max(4, int(d))
+    ih = max(6, int(h))
+
+    target.iso_box(icx, icy, iw, id_, ih, top=top, left=left, right=right, outline=outline)
+    if base_color is not None:
+        base_h = max(2, min(4, ih // 6))
+        target.iso_box(
+            icx,
+            icy + ih - base_h,
+            iw + 2,
+            id_ + 2,
+            base_h,
+            top=base_color,
+            left=base_color,
+            right=base_color,
+            outline=outline,
+        )
+    if cap_color is not None:
+        cap_h = max(2, min(4, ih // 6))
+        target.iso_box(
+            icx,
+            icy,
+            iw + 2,
+            id_ + 2,
+            cap_h,
+            top=cap_color,
+            left=cap_color,
+            right=cap_color,
+            outline=outline,
+        )
+
+
+def wall_molding(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    primary: int,
+    highlight: int | None = None,
+    shadow: int | None = None,
+    style: WallMoldingStyle = "chair_rail",
+    v_pos: float | None = None,
+    thickness: float = 0.06,
+) -> None:
+    """Draw architectural molding (crown, chair rail, wainscot, or baseboard) on a wall plane."""
+    t = max(0.02, min(0.25, float(thickness)))
+    if v_pos is not None:
+        vp = max(0.0, min(1.0 - t, float(v_pos)))
+    elif style == "crown":
+        vp = 0.0
+    elif style in ("chair_rail", "wainscot"):
+        vp = 0.62
+    elif style == "baseboard":
+        vp = 1.0 - t
+    else:
+        msg = f"Unsupported wall molding style: {style!r}"
+        raise ValueError(msg)
+
+    with target.plane(p0=p0, p1=p1, p2=p2) as mold:
+        mold.rect(0.0, vp, 1.0, t, fill=primary)
+        if highlight is not None:
+            mold.line(0.0, vp, 1.0, vp, highlight)
+        if shadow is not None:
+            mold.line(0.0, min(1.0, vp + t), 1.0, min(1.0, vp + t), shadow)
+        if style == "wainscot":
+            panel_top = min(0.90, vp + t + 0.04)
+            panel_h = max(0.04, 0.94 - panel_top)
+            for idx in range(3):
+                u_start = 0.06 + idx * 0.31
+                mold.rect(u_start, panel_top, 0.25, panel_h, outline=primary)
+                if shadow is not None:
+                    mold.rect(
+                        u_start + 0.02, panel_top + 0.02, 0.21, panel_h - 0.04, outline=shadow
+                    )
