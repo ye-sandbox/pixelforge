@@ -12,20 +12,16 @@ SPEC = AssetSpec(
     perspective="iso-2:1",
     states=("day", "cycle", "starry_night", "full_moon", "rain", "snow"),
     frames=6,
-    fps=4,
+    fps=2,
     seed=1601,
 )
 
-_WIN_P0 = (14, 24)
-_WIN_P1 = (44, 9)
-_WIN_P2 = (14, 49)
 
-
-def _draw_room(a: Asset, p: PaletteLookup) -> None:
+def _draw_room(a: Asset, p: PaletteLookup) -> prefabs.IsoRoomGeometry:
     is_dark = a.state in ("starry_night", "full_moon", "rain")
     is_cycle_night = a.state == "cycle" and (a.frame / float(a.frames)) >= 0.50
     dim = is_dark or is_cycle_night
-    prefabs.iso_room_shell(
+    room = prefabs.iso_room_shell(
         a,
         48,
         56,
@@ -42,19 +38,21 @@ def _draw_room(a: Asset, p: PaletteLookup) -> None:
         outline=p.INK,
     )
     prefabs.iso_floor_pattern(a, 48, 56, 40, 20, color=p.FLOOR_D, step=18, mode="planks")
+    vent_p0, vent_p1, vent_p2 = room.right_wall_plane(0.25, 0.525, 0.60, 0.85)
     prefabs.wall_vent(
         a,
-        p0=(58, 22),
-        p1=(72, 29),
-        p2=(58, 35),
+        p0=vent_p0,
+        p1=vent_p1,
+        p2=vent_p2,
         frame=p.METAL_M,
         slat=p.VOID,
         outline=p.INK,
         slats=3,
     )
+    return room
 
 
-def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
+def _draw_window_and_spill(a: Asset, p: PaletteLookup, room: prefabs.IsoRoomGeometry) -> None:
     phase = a.frame / float(a.frames)
     spill_near = 0.65
     spill_far = 0.16
@@ -204,7 +202,7 @@ def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
                 color=p.GLASS_L,
                 splash_color=p.WHITE,
                 count=18,
-                phase=phase,
+                phase=phase * 2.0,
                 slant=-0.16,
                 length=0.18,
                 seed=a.seed,
@@ -240,7 +238,7 @@ def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
             color=p.WHITE,
             alt_color=p.SMOKE,
             count=20,
-            phase=phase,
+            phase=phase * 2.0,
             drift=0.09,
             seed=a.seed,
         )
@@ -249,11 +247,12 @@ def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
         spill_near = 0.52
         spill_far = 0.14
 
+    win_p0, win_p1, win_p2 = room.left_wall_plane(0.15, 0.275, 0.90, 0.90)
     prefabs.iso_window(
         a,
-        p0=_WIN_P0,
-        p1=_WIN_P1,
-        p2=_WIN_P2,
+        p0=win_p0,
+        p1=win_p1,
+        p2=win_p2,
         frame=p.METAL_M,
         sky=p.WINDOW_SKY,
         outline=p.INK,
@@ -267,7 +266,7 @@ def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
 
     prefabs.window_light_spill(
         a,
-        points=((16, 53), (44, 39), (74, 54), (46, 68)),
+        points=room.window_spill_quad(0.15, 0.90, wall="left", depth=0.75, inset=0.025),
         color=spill_color,
         secondary_color=spill_alt,
         pattern="bayer4",
@@ -280,8 +279,9 @@ def _draw_window_and_spill(a: Asset, p: PaletteLookup) -> None:
 def render(a: Asset) -> None:
     """Render the `window_cycles_iso` multi-state animated atmospheric showcase."""
     p = a.pal
-    _draw_room(a, p)
-    _draw_window_and_spill(a, p)
+    room = _draw_room(a, p)
+    _draw_window_and_spill(a, p, room)
     a.anchor("window", 29, 29)
-    a.anchor("floor_spill", 45, 53)
+    spill_ax, spill_ay = room.floor_point(0.39, 0.46)
+    a.anchor("floor_spill", spill_ax, spill_ay)
     a.hitbox("window", 14, 9, 31, 41)

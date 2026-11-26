@@ -210,7 +210,7 @@ def render(a: Asset) -> None:
 Import `from pixelforge import prefabs`. Every prefab is `StylePack`-agnostic (accepting explicit palette indices via `P = a.pal`), 100% deterministic, and compatible with both `Asset` and `Layer` targets.
 
 ### Architecture (`prefabs.architecture`)
-- `iso_room_shell(target, cx, cy, hw, hh, wall_h, *, floor, left_wall, right_wall, floor_alt=None, floor_dither_ratio=0.12, baseboard=None, wall_seam=None, outline=None)` — 2:1 isometric room diamond, two back walls, baseboard trim, corner seam, and outer ink contour.
+- `iso_room_shell(target, cx, cy, hw, hh, wall_h, *, floor, left_wall, right_wall, floor_alt=None, floor_dither_ratio=0.12, baseboard=None, wall_seam=None, outline=None, lighting_angle=None) -> IsoRoomGeometry` — 2:1 isometric room diamond, two back walls, baseboard trim, corner seam, and outer ink contour. Returns `IsoRoomGeometry` with `left_wall_plane(u0, v0, u1, v1)`, `right_wall_plane(u0, v0, u1, v1)`, `floor_point(u, v)`, and `window_spill_quad(u0, u1, *, wall="left", depth=0.35, inset=0.025)` aligned to `StylePack.lighting_angle`.
 - `iso_floor_pattern(target, cx, cy, hw, hh, *, color, step=16, mode="planks")` — Bounded `"planks"`, `"tiles"`, or `"grid"` floor lines.
 - `iso_window(target, p0, p1, p2, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, scene=None)` — Skewed isometric wall window with multi-pane mullions, glass glint, sill, and optional clipped `scene(pane)` callback.
 - `front_window(target, x, y, w, h, *, frame, sky, outline=None, sky_alt=None, mullion=None, sill=None, cols=1, rows=2, glint=None, frame_thickness=2, scene=None)` — `front-2.5d` rectangular window with clipped glass `scene(pane)`, mullions, glint, and sill.
@@ -218,9 +218,9 @@ Import `from pixelforge import prefabs`. Every prefab is `StylePack`-agnostic (a
 - `wall_vent(target, p0, p1, p2, *, frame, slat, outline=None, slats=3)` — Louvered isometric wall vent.
 
 ### Furniture (`prefabs.furniture`)
-- `iso_desk(target, x, y, w, d, *, leg_h=18, top_h=5, top, left, right, leg_top, leg_left, leg_right, outline=None, highlight=None, mat_color=None, mat_w=None)` — 2:1 isometric desk with legs, beveled top, and optional desk mat.
-- `iso_rack(target, x, y, w, d, h, *, top, left, right, outline=None, highlight=None, bay_color=None, led_color=None, bays=3, anchor="center")` — Isometric equipment/server rack with optional front-left drive bays and status LEDs.
-- `iso_shelf(target, x, y, w, d, h, *, shelves=2, top, left, right, post, outline=None, anchor="center")` — Open corner-post shelving unit.
+- `iso_desk(target, x, y, w, d, *, leg_h=18, top_h=5, top, left, right, leg_top, leg_left, leg_right, outline=None, highlight=None, mat_color=None, mat_w=None) -> IsoDeskSlots` — 2:1 isometric desk with legs, beveled top, optional desk mat, and `IsoDeskSlots` (`center`, `top_plane()`, `top_point(u, v)`, `slots(count)`).
+- `iso_rack(target, x, y, w, d, h, *, top, left, right, outline=None, highlight=None, bay_color=None, led_color=None, bays=3, anchor="center", front_style="bays", door_color=None) -> IsoRackSlots` — Isometric equipment/server rack with `"bays"`, `"grille"`, or `"glass_door"` front styling, status LEDs, and `IsoRackSlots` (`top_center`, `top_point(u, v)`, `front_mounts`, `front_plane()`).
+- `iso_shelf(target, x, y, w, d, h, *, shelves=2, top, left, right, post, outline=None, anchor="center") -> IsoShelfSlots` — Open corner-post shelving unit returning `IsoShelfSlots` (`tiers`, `top_center`, `tier_point(tier, u, v)`).
 
 ### Details (`prefabs.details`)
 - `contact_shadow(target, cx, cy, rx, ry, *, color, dither_ratio=0.5)` — Grounded elliptical checker/Bayer contact shadow.

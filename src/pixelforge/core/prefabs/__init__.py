@@ -2,6 +2,8 @@
 
 from pixelforge.core.prefabs.architecture import (
     FloorPatternMode,
+    IsoRoomGeometry,
+    WallSide,
     front_window,
     front_window_glass_region,
     iso_floor_pattern,
@@ -40,6 +42,10 @@ from pixelforge.core.prefabs.details import (
     wall_poster,
 )
 from pixelforge.core.prefabs.furniture import (
+    IsoDeskSlots,
+    IsoRackSlots,
+    IsoShelfSlots,
+    RackFrontStyle,
     iso_desk,
     iso_rack,
     iso_shelf,
@@ -50,11 +56,17 @@ __all__ = [
     "CycleStep",
     "FloorPatternMode",
     "HorizonMode",
+    "IsoDeskSlots",
+    "IsoRackSlots",
+    "IsoRoomGeometry",
+    "IsoShelfSlots",
     "PaneRegion",
     "PlaneRegion",
+    "RackFrontStyle",
     "RectRegion",
     "SkyPreset",
     "TargetCanvas",
+    "WallSide",
     "clipped_pane",
     "clouds",
     "contact_shadow",

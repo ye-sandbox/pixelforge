@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal
 
 from pixelforge.core.builder import Asset, Layer
@@ -14,9 +15,154 @@ from pixelforge.core.prefabs.atmosphere import (
     clipped_pane,
 )
 from pixelforge.core.surface import IndexedSurface
+from pixelforge.core.types import LightingAngle
 
 Canvas = Asset | Layer
 FloorPatternMode = Literal["planks", "tiles", "grid"]
+WallSide = Literal["left", "right"]
+
+
+def _clamp_unit(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+@dataclass(frozen=True)
+class IsoRoomGeometry:
+    """Spatial coordinates and projection helpers derived from `iso_room_shell` bounds."""
+
+    cx: int
+    cy: int
+    hw: int
+    hh: int
+    wall_h: int
+    lighting_angle: LightingAngle = "top-left"
+
+    @property
+    def apex_y(self) -> int:
+        """Y coordinate of the back-center floor corner."""
+        return self.cy - self.hh
+
+    @property
+    def left_x(self) -> int:
+        """X coordinate of the leftmost floor corner."""
+        return self.cx - self.hw
+
+    @property
+    def right_x(self) -> int:
+        """X coordinate of the rightmost floor corner."""
+        return self.cx + self.hw
+
+    def floor_point(self, u: float, v: float) -> tuple[int, int]:
+        """Project normalized `(u, v)` floor coords (`(0,0)`=apex, `(1,0)`=right, `(0,1)`=left)."""
+        px = self.cx + (u - v) * self.hw
+        py = self.apex_y + (u + v) * self.hh
+        return (round(px), round(py))
+
+    def _wall_point(self, wall: WallSide, u: float, v: float) -> tuple[float, float]:
+        cu = _clamp_unit(u)
+        cv = _clamp_unit(v)
+        if wall == "left":
+            x = self.left_x + cu * self.hw
+            top_y = (self.cy - self.wall_h) + cu * (self.apex_y - self.cy)
+            return (x, top_y + cv * self.wall_h)
+        x = self.cx + cu * self.hw
+        top_y = (self.apex_y - self.wall_h) + cu * (self.cy - self.apex_y)
+        return (x, top_y + cv * self.wall_h)
+
+    def _wall_plane(
+        self,
+        wall: WallSide,
+        u0: float,
+        v0: float,
+        u1: float,
+        v1: float,
+    ) -> PlaneRegion:
+        cu0 = _clamp_unit(u0)
+        cv0 = _clamp_unit(v0)
+        cu1 = _clamp_unit(u1)
+        cv1 = _clamp_unit(v1)
+        if cu1 <= cu0 or cv1 <= cv0:
+            msg = (
+                f"Invalid {wall} wall sub-region ({u0}, {v0}, {u1}, {v1}): "
+                "requires 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1"
+            )
+            raise ValueError(msg)
+        return (
+            self._wall_point(wall, cu0, cv0),
+            self._wall_point(wall, cu1, cv0),
+            self._wall_point(wall, cu0, cv1),
+        )
+
+    def left_wall_plane(
+        self,
+        u0: float = 0.0,
+        v0: float = 0.0,
+        u1: float = 1.0,
+        v1: float = 1.0,
+    ) -> PlaneRegion:
+        """Return `(p0, p1, p2)` for a clamped `(u0..u1, v0..v1)` region on the left back wall."""
+        return self._wall_plane("left", u0, v0, u1, v1)
+
+    def right_wall_plane(
+        self,
+        u0: float = 0.0,
+        v0: float = 0.0,
+        u1: float = 1.0,
+        v1: float = 1.0,
+    ) -> PlaneRegion:
+        """Return `(p0, p1, p2)` for a clamped `(u0..u1, v0..v1)` region on the right back wall."""
+        return self._wall_plane("right", u0, v0, u1, v1)
+
+    def window_spill_quad(
+        self,
+        u0: float,
+        u1: float,
+        *,
+        wall: WallSide = "left",
+        depth: float = 0.35,
+        inset: float = 0.025,
+    ) -> tuple[Point2D, Point2D, Point2D, Point2D]:
+        """Return a 4-vertex floor light-spill quad aligned to `wall` and `lighting_angle`."""
+        cu0 = _clamp_unit(u0)
+        cu1 = _clamp_unit(u1)
+        if cu1 <= cu0:
+            msg = f"window_spill_quad requires u0 < u1, got ({u0}, {u1})"
+            raise ValueError(msg)
+        pad = min(max(0.0, float(inset)), (cu1 - cu0) * 0.4)
+        span_a = cu0 + pad
+        span_b = cu1 - pad
+        d = max(0.05, min(0.95, float(depth)))
+
+        if wall == "left":
+            va = 1.0 - span_a
+            vb = 1.0 - span_b
+            skew = 0.0
+            if self.lighting_angle == "top-right":
+                skew = 0.18 * d
+            elif self.lighting_angle == "top":
+                skew = 0.08 * d
+            near_u = 0.025
+            far_u = min(0.98, near_u + d)
+            return (
+                self.floor_point(near_u, va),
+                self.floor_point(near_u, vb),
+                self.floor_point(far_u, _clamp_unit(vb + skew)),
+                self.floor_point(far_u, _clamp_unit(va + skew)),
+            )
+
+        skew = 0.0
+        if self.lighting_angle == "top-left":
+            skew = 0.18 * d
+        elif self.lighting_angle == "top":
+            skew = 0.08 * d
+        near_v = 0.025
+        far_v = min(0.98, near_v + d)
+        return (
+            self.floor_point(span_a, near_v),
+            self.floor_point(span_b, near_v),
+            self.floor_point(_clamp_unit(span_b + skew), far_v),
+            self.floor_point(_clamp_unit(span_a + skew), far_v),
+        )
 
 
 def iso_room_shell(
@@ -35,8 +181,9 @@ def iso_room_shell(
     baseboard: tuple[int, int] | None = None,
     wall_seam: int | None = None,
     outline: int | None = None,
-) -> None:
-    """Draw a 2:1 isometric room shell with floor diamond, two back walls, and trim."""
+    lighting_angle: LightingAngle | None = None,
+) -> IsoRoomGeometry:
+    """Draw a 2:1 isometric room shell and return its `IsoRoomGeometry` spatial context."""
     icx = round(cx)
     icy = round(cy)
     ihw = max(1, int(hw))
@@ -97,6 +244,20 @@ def iso_room_shell(
         target.line(right_x, icy, right_x, icy - iwall_h, outline)
         target.line(left_x, icy, icx, icy + ihh, outline)
         target.line(icx, icy + ihh, right_x, icy, outline)
+
+    resolved_lighting: LightingAngle = (
+        lighting_angle
+        if lighting_angle is not None
+        else (target.style.lighting_angle if isinstance(target, Asset) else "top-left")
+    )
+    return IsoRoomGeometry(
+        cx=icx,
+        cy=icy,
+        hw=ihw,
+        hh=ihh,
+        wall_h=iwall_h,
+        lighting_angle=resolved_lighting,
+    )
 
 
 def iso_floor_pattern(

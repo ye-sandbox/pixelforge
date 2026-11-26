@@ -8,7 +8,9 @@
 
 ## Active Task
 
-_None currently queued — all roadmap tasks completed. Awaiting next task or explicit human instruction for `[99.1]` release._
+### `[18.1]` Local Lighting, Cast Shadows & Internal Atmospheric Prefabs
+- [ ] `point_light_spill` (non-emissive radial/conical dithered pool for lamps/monitors), directional `cast_shadow` aligned to `StylePack.lighting_angle`, and optional `floor_reflection` preview helper using `StylePack.reflections` (`REFL_*`).
+- [ ] `dust_motes` (looping particles clipped to light beams/spills), `rising_steam` (looping vapor for mugs/vents/faulty hardware), `weather_lightning`, `window_condensation`, `screen_telemetry` (charts/waveforms inside `Plane`/`ClippedPane`), and `"industrial"`/`"mountains"` modes in `horizon_silhouette`.
 
 ---
 
@@ -41,12 +43,19 @@ _None currently queued — all roadmap tasks completed. Awaiting next task or ex
 | `[14.1]` | Environment & Detail Prefab Kits (`src/pixelforge/core/prefabs/`) | `0a7f4fb` | 2026-11-25 |
 | `[15.1]` | Reusable Micro-Props Library (`assets/props/*.asset.py`) & Scene Composition Pack | `c426ed1` | 2026-11-25 |
 | `[16.1]` | Rich Atmospheric Prefabs, Clipped Window Scenes & Authoring Instructions | `3070848` | 2026-11-25 |
+| `[17.1]` | Spatial Room Context (`IsoRoomGeometry`) & Furniture Surface Slots (`IsoDeskSlots`, `IsoRackSlots`, `IsoShelfSlots`) | `pending` | 2026-11-25 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-_None currently queued (all items promoted to the active cycle above)._
+1. **`[19.1]` Room Fill & Architectural Prefab Expansion**
+   - `prefabs.architecture`: `iso_door` / `front_door`, `iso_raised_floor`, `iso_rug`, `iso_cable_tray`, `window_blinds` / `window_curtains`.
+   - `prefabs.furniture`: `iso_chair`, `iso_wall_shelf`, `iso_bed` / `iso_workbench`, `iso_drawer_unit`.
+   - `prefabs.details`: `wall_ac_unit`, `wall_whiteboard`, `power_strip` / `wall_outlet`, `iso_cable_catenary`.
+3. **`[20.1]` Declarative & Animated Multi-Frame Scene Composition (`compose_scene` v2)**
+   - Declarative scene composition specs integrating with `pixelforge render`, `pixelforge watch`, `manifest.json`, `manifest.d.ts`, and `--indexed-ts`.
+   - Synchronized multi-frame animation across parent scenes and mounted props (`frame % prop.frames` / looping cycle + `--animate` GIF output) plus automatic isometric `y` depth-sorting alongside explicit `z_index`.
 
 ---
 

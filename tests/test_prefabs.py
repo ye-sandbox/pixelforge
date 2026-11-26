@@ -341,6 +341,26 @@ def test_atmosphere_weather_loops_and_day_night_cycle() -> None:
         assert np.array_equal(a0.root_surface.data, a1.root_surface.data)
         assert not np.array_equal(a0.root_surface.data, a_mid.root_surface.data)
 
+    # Multi-cloud vistas must span distinct vertical bands rather than collapsing to one height
+    cloud_probe = _make_asset(width=64, height=48)
+    cp = cloud_probe.pal
+    with prefabs.clipped_pane(cloud_probe, (2, 2, 60, 44)) as pane:
+        prefabs.clouds(
+            pane,
+            color=cp.CLOUD,
+            shade_color=cp.METAL_H,
+            count=3,
+            phase=0.15,
+            min_v=0.12,
+            max_v=0.68,
+            seed=1601,
+        )
+    cloud_ys, _ = np.nonzero(
+        (cloud_probe.root_surface.data == cp.CLOUD) | (cloud_probe.root_surface.data == cp.METAL_H)
+    )
+    assert cloud_ys.size > 0
+    assert int(cloud_ys.max() - cloud_ys.min()) >= 14
+
     # Day-night cycle progression across phases
     steps = [
         prefabs.eval_day_night_cycle(
@@ -415,3 +435,156 @@ def test_iso_window_legacy_compatibility() -> None:
     assert np.any(asset.root_surface.data == p.SKY)
     assert np.any(asset.root_surface.data == p.METAL_D)
     assert np.any(asset.root_surface.data == p.WOOD_M)
+
+
+def test_iso_room_geometry_projections_and_spill() -> None:
+    """Verify `IsoRoomGeometry` wall planes, floor points, non-clipping bounds, and spill."""
+    import pytest
+
+    asset = _make_asset(width=120, height=100)
+    p = asset.pal
+    room = prefabs.iso_room_shell(
+        asset,
+        60,
+        70,
+        40,
+        20,
+        36,
+        floor=p.FLOOR,
+        left_wall=p.WALL_L,
+        right_wall=p.WALL_R,
+        outline=p.INK,
+    )
+    assert room.lighting_angle == "top-left"
+    assert room.floor_point(0.0, 0.0) == (60, 50)
+    assert room.floor_point(1.0, 0.0) == (100, 70)
+    assert room.floor_point(0.0, 1.0) == (20, 70)
+    assert room.floor_point(0.5, 0.5) == (60, 70)
+
+    lp0, lp1, lp2 = room.left_wall_plane(0.25, 0.25, 0.75, 0.75)
+    assert lp0[0] >= room.left_x and lp1[0] <= room.cx
+    assert lp2[1] <= room.cy
+
+    rp0, rp1, rp2 = room.right_wall_plane(0.2, 0.2, 0.8, 0.8)
+    assert rp0[0] >= room.cx and rp1[0] <= room.right_x
+    assert rp2[1] <= room.cy
+
+    # Out-of-range coordinates clamp safely to [0, 1] without exceeding wall bounds.
+    clamped_l = room.left_wall_plane(-0.5, -0.5, 1.5, 1.5)
+    assert clamped_l == room.left_wall_plane(0.0, 0.0, 1.0, 1.0)
+
+    with pytest.raises(ValueError, match="Invalid left wall sub-region"):
+        room.left_wall_plane(0.5, 0.2, 0.5, 0.8)
+
+    spill_tl = room.window_spill_quad(0.2, 0.8, wall="left", depth=0.4)
+    spill_tr = prefabs.IsoRoomGeometry(
+        cx=60, cy=70, hw=40, hh=20, wall_h=36, lighting_angle="top-right"
+    ).window_spill_quad(0.2, 0.8, wall="left", depth=0.4)
+    assert spill_tl[2] != spill_tr[2]
+
+    right_spill = room.window_spill_quad(0.2, 0.8, wall="right", depth=0.4)
+    assert all(0 <= pt[0] < 120 and 0 <= pt[1] < 100 for pt in right_spill)
+
+
+def test_furniture_slots_and_rack_front_styles() -> None:
+    """Verify `iso_desk`, `iso_rack`, and `iso_shelf` slot helpers and rack front styles."""
+    asset = _make_asset(width=160, height=120)
+    p = asset.pal
+
+    desk_slots = prefabs.iso_desk(
+        asset,
+        50,
+        60,
+        36,
+        36,
+        top=p.WOOD_L,
+        left=p.WOOD_M,
+        right=p.WOOD_D,
+        leg_top=p.METAL_M,
+        leg_left=p.METAL_D,
+        leg_right=p.INK,
+        outline=p.INK,
+    )
+    assert desk_slots.center == (50, 60)
+    assert desk_slots.top_point(0.5, 0.5) == (50, 60)
+    pair = desk_slots.slots(2)
+    assert len(pair) == 2
+    assert pair[0][0] < desk_slots.center[0] < pair[1][0]
+
+    rack_bays = prefabs.iso_rack(
+        asset,
+        100,
+        70,
+        16,
+        16,
+        24,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        outline=p.INK,
+        bay_color=p.INK,
+        led_color=p.LED,
+        bays=3,
+        front_style="bays",
+    )
+    assert rack_bays.top_center == (100, 70)
+    assert len(rack_bays.front_mounts) == 3
+
+    rack_grille = prefabs.iso_rack(
+        asset,
+        125,
+        70,
+        16,
+        16,
+        24,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        outline=p.INK,
+        bay_color=p.INK,
+        led_color=p.LED,
+        front_style="grille",
+    )
+    assert rack_grille.top_center == (125, 70)
+
+    rack_door = prefabs.iso_rack(
+        asset,
+        145,
+        70,
+        16,
+        16,
+        24,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        outline=p.INK,
+        highlight=p.METAL_H,
+        bay_color=p.SKY_DARK,
+        door_color=p.METAL_D,
+        led_color=p.LED,
+        bays=2,
+        front_style="glass_door",
+    )
+    assert len(rack_door.front_mounts) == 2
+
+    shelf_slots = prefabs.iso_shelf(
+        asset,
+        30,
+        90,
+        16,
+        16,
+        24,
+        shelves=3,
+        top=p.WOOD_L,
+        left=p.WOOD_M,
+        right=p.WOOD_D,
+        post=p.METAL_D,
+        outline=p.INK,
+    )
+    assert len(shelf_slots.tiers) == 3
+    assert shelf_slots.tiers[0][1] < shelf_slots.tiers[1][1] < shelf_slots.tiers[2][1]
+    assert shelf_slots.tier_point(0, 0.5, 0.5) == shelf_slots.top_center
+
+    unique_indices = set(np.unique(asset.root_surface.data).tolist())
+    allowed = {c.index for c in asset.style.palette} | {TRANSPARENT_INDEX}
+    assert unique_indices <= allowed
