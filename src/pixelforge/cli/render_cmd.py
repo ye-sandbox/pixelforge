@@ -17,6 +17,7 @@ from pixelforge.export.bundle import (
     LoadedAsset,
     export_asset_bundle,
     export_rendered_frames_bundle,
+    render_asset_frames,
     write_export_bundle,
     write_manifest,
 )
@@ -26,6 +27,12 @@ from pixelforge.export.contact_sheet import (
     generate_contact_sheet_from_frames,
 )
 from pixelforge.export.indexed_ts import export_indexed_ts, write_indexed_ts_bundle
+from pixelforge.export.pack_sheet import (
+    PackConsistencyMetrics,
+    PackSheetEntry,
+    PackSheetOptions,
+    generate_pack_sheet,
+)
 from pixelforge.export.scene import (
     LoadedScene,
     SceneCompositionError,
@@ -209,6 +216,43 @@ def compile_and_write_scene(
     return (style, bundle)
 
 
+def _resolve_filter_dir(root: Path, dir_filter: str | None) -> Path | None:
+    if not dir_filter:
+        return None
+    candidate = Path(dir_filter)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    if candidate.parts and candidate.parts[0] == "assets":
+        return (root / candidate).resolve()
+    return (root / "assets" / candidate).resolve()
+
+
+def _parse_ids_filter(ids_filter: str | None) -> set[str] | None:
+    if not ids_filter:
+        return None
+    parsed = {part.strip() for part in ids_filter.split(",") if part.strip()}
+    return parsed or None
+
+
+def _matches_render_filters(
+    source_path: Path,
+    spec_id: str,
+    style_id: str,
+    *,
+    asset_id: str | None,
+    filter_dir: Path | None,
+    pack_filter: str | None,
+    ids_filter: set[str] | None,
+) -> bool:
+    if asset_id is not None and spec_id != asset_id:
+        return False
+    if ids_filter is not None and spec_id not in ids_filter:
+        return False
+    if pack_filter is not None and style_id != pack_filter:
+        return False
+    return filter_dir is None or source_path.resolve().is_relative_to(filter_dir)
+
+
 def _render_asset_targets(
     asset_files: Sequence[Path],
     styles: dict[str, StylePack],
@@ -218,7 +262,12 @@ def _render_asset_targets(
     previews_dir: Path | None,
     *,
     asset_id: str | None,
+    filter_dir: Path | None,
+    pack_filter: str | None,
+    ids_filter: set[str] | None,
+    filtered: bool,
     sheet: bool,
+    pack_entries: list[PackSheetEntry] | None,
     err: OutputFn,
 ) -> (
     tuple[
@@ -247,7 +296,15 @@ def _render_asset_targets(
         seen_ids[loaded.SPEC.id] = asset_path
         all_loaded.append(loaded)
         loaded_by_id[loaded.SPEC.id] = loaded
-        if asset_id is not None and loaded.SPEC.id != asset_id:
+        if not _matches_render_filters(
+            asset_path,
+            loaded.SPEC.id,
+            loaded.SPEC.style_id,
+            asset_id=asset_id,
+            filter_dir=filter_dir,
+            pack_filter=pack_filter,
+            ids_filter=ids_filter,
+        ):
             continue
 
         compiled = compile_and_write_asset(
@@ -259,13 +316,23 @@ def _render_asset_targets(
             sheets_dir,
             previews_dir,
             sheet=sheet,
-            update_manifest=asset_id is not None,
+            update_manifest=filtered,
             err=err,
         )
         if compiled is None:
             return None
         style, bundle = compiled
         bundles_by_style.setdefault(style.id, (style, []))[1].append(bundle)
+        if pack_entries is not None:
+            primary_frame = render_asset_frames(loaded, style, variant=options.variant)[0]
+            pack_entries.append(
+                PackSheetEntry(
+                    spec=loaded.SPEC,
+                    style=style,
+                    surface=primary_frame.surface,
+                    source_path=asset_path,
+                )
+            )
         rendered_count += 1
 
     return (all_loaded, loaded_by_id, seen_ids, bundles_by_style, rendered_count)
@@ -283,8 +350,13 @@ def _render_scene_targets(
     previews_dir: Path,
     *,
     asset_id: str | None,
+    filter_dir: Path | None,
+    pack_filter: str | None,
+    ids_filter: set[str] | None,
+    filtered: bool,
     sheet: bool,
     animate: bool,
+    pack_entries: list[PackSheetEntry] | None,
     err: OutputFn,
 ) -> tuple[list[LoadedScene], int] | None:
     all_scenes: list[LoadedScene] = []
@@ -299,7 +371,17 @@ def _render_scene_targets(
             return None
         seen_ids[loaded_scene.SCENE.id] = scene_path
         all_scenes.append(loaded_scene)
-        if asset_id is not None and loaded_scene.SCENE.id != asset_id:
+        parent = loaded_by_id.get(loaded_scene.SCENE.parent_id)
+        scene_style_id = loaded_scene.SCENE.style_id or (parent.SPEC.style_id if parent else "")
+        if not _matches_render_filters(
+            scene_path,
+            loaded_scene.SCENE.id,
+            scene_style_id,
+            asset_id=asset_id,
+            filter_dir=filter_dir,
+            pack_filter=pack_filter,
+            ids_filter=ids_filter,
+        ):
             continue
 
         compiled = compile_and_write_scene(
@@ -313,13 +395,29 @@ def _render_scene_targets(
             previews_dir,
             sheet=sheet,
             animate=animate,
-            update_manifest=asset_id is not None,
+            update_manifest=filtered,
             err=err,
         )
         if compiled is None:
             return None
         style, bundle = compiled
         bundles_by_style.setdefault(style.id, (style, []))[1].append(bundle)
+        if pack_entries is not None and parent is not None:
+            asset_spec, rendered_frames, _ = compose_scene_frames(
+                loaded_scene.SCENE,
+                parent,
+                loaded_by_id,
+                style,
+                variant=options.variant,
+            )
+            pack_entries.append(
+                PackSheetEntry(
+                    spec=asset_spec,
+                    style=style,
+                    surface=rendered_frames[0].surface,
+                    source_path=scene_path,
+                )
+            )
         rendered_count += 1
 
     return (all_scenes, rendered_count)
@@ -333,11 +431,11 @@ def _finalize_render_outputs(
     options: ExportBundleOptions,
     out_dir: Path,
     *,
-    asset_id: str | None,
+    filtered: bool,
     indexed_ts: bool,
     indexed_ts_lazy: bool,
 ) -> None:
-    if asset_id is None:
+    if not filtered:
         all_manifests: dict[str, ExportedAssetManifestEntry] = {
             bundle.manifest.id: bundle.manifest
             for _, style_bundles in bundles_by_style.values()
@@ -351,11 +449,33 @@ def _finalize_render_outputs(
             all_loaded,
             options,
             out_dir,
-            filtered=asset_id is not None,
+            filtered=filtered,
             lazy=indexed_ts_lazy,
             all_scenes=all_scenes,
             loaded_by_id=loaded_by_id,
         )
+
+
+def _pack_metrics_payload(metrics: PackConsistencyMetrics) -> dict[str, object]:
+    return {
+        "asset_count": metrics.asset_count,
+        "style_ids": list(metrics.style_ids),
+        "perspectives": list(metrics.perspectives),
+        "lighting_angles": list(metrics.lighting_angles),
+        "min_size": list(metrics.min_size),
+        "max_size": list(metrics.max_size),
+        "bbox_height_range": list(metrics.bbox_height_range),
+        "luminance_range": list(metrics.luminance_range),
+        "luminance_spread": metrics.luminance_spread,
+        "light_bias_range": list(metrics.light_bias_range),
+        "outline_coverage_range": list(metrics.outline_coverage_range),
+        "outline_spread_pct": metrics.outline_spread_pct,
+        "orphan_total": metrics.orphan_total,
+        "scale_consistent": metrics.scale_consistent,
+        "lighting_consistent": metrics.lighting_consistent,
+        "outline_consistent": metrics.outline_consistent,
+        "warnings": list(metrics.warnings),
+    }
 
 
 def _emit_render_summary(
@@ -363,6 +483,8 @@ def _emit_render_summary(
     *,
     out_dir: Path,
     indexed_ts: bool,
+    pack_sheet_path: Path | None = None,
+    pack_metrics: PackConsistencyMetrics | None = None,
     output_format: OutputFormat,
     out: OutputFn,
 ) -> None:
@@ -372,7 +494,7 @@ def _emit_render_summary(
         for bundle in style_bundles
     ]
     if output_format == "json":
-        payload = {
+        payload: dict[str, object] = {
             "count": len(entries),
             "out_dir": str(out_dir),
             "manifest": str(out_dir / "manifest.json"),
@@ -389,12 +511,17 @@ def _emit_render_summary(
                 for e in entries
             ],
         }
+        if pack_sheet_path is not None and pack_metrics is not None:
+            payload["pack_sheet"] = str(pack_sheet_path)
+            payload["pack_metrics"] = _pack_metrics_payload(pack_metrics)
         out(json.dumps(payload, indent=2))
         return
 
     if output_format == "human":
         for entry in entries:
             out(f"rendered {entry.id} -> {out_dir}")
+        if pack_sheet_path is not None and pack_metrics is not None:
+            out(f"pack_sheet {pack_sheet_path} ({pack_metrics.asset_count} assets)")
         return
 
     for entry in entries:
@@ -403,11 +530,36 @@ def _emit_render_summary(
             f"asset={entry.id} style={entry.styleId} size={entry.width}x{entry.height} "
             f"states={states_csv} frames={entry.frames} out={out_dir}"
         )
+    if pack_sheet_path is not None and pack_metrics is not None:
+        out(
+            f"pack_sheet={pack_sheet_path} assets={pack_metrics.asset_count} "
+            f"scale_ok={str(pack_metrics.scale_consistent).lower()} "
+            f"lighting_ok={str(pack_metrics.lighting_consistent).lower()} "
+            f"outline_ok={str(pack_metrics.outline_consistent).lower()} "
+            f"lum_spread={pack_metrics.luminance_spread:.3f} "
+            f"outline_spread={pack_metrics.outline_spread_pct:.1f}% "
+            f"orphans={pack_metrics.orphan_total}"
+        )
+        if pack_metrics.warnings:
+            out(f"pack_warnings={'; '.join(pack_metrics.warnings)}")
     ts_flag = " indexed_ts=true" if indexed_ts else ""
     out(
         f"summary rendered={len(entries)} out={out_dir} "
         f"manifest={out_dir / 'manifest.json'}{ts_flag}"
     )
+
+
+def _resolve_pack_sheet_name(
+    pack_filter: str | None,
+    dir_filter: str | None,
+) -> str:
+    if pack_filter:
+        return pack_filter
+    if dir_filter:
+        name = Path(dir_filter.rstrip("/")).name
+        if name:
+            return name
+    return "pack"
 
 
 def render_once(
@@ -429,6 +581,10 @@ def render_once(
     atlas: AtlasFormat | None = None,
     scale: int,
     variant: str | None,
+    pack_sheet: bool = False,
+    dir_filter: str | None = None,
+    pack_filter: str | None = None,
+    ids_filter: str | None = None,
     output_format: OutputFormat = "llm",
     out: OutputFn,
     err: OutputFn,
@@ -444,6 +600,11 @@ def render_once(
     if not asset_files:
         err("No .asset.py files found under assets/")
         return 1
+
+    resolved_dir = _resolve_filter_dir(root, dir_filter)
+    parsed_ids = _parse_ids_filter(ids_filter)
+    filtered = any(val is not None for val in (asset_id, resolved_dir, pack_filter, parsed_ids))
+    pack_entries: list[PackSheetEntry] | None = [] if pack_sheet else None
 
     options = ExportBundleOptions(
         variant=variant,
@@ -464,7 +625,12 @@ def render_once(
         sheets_dir,
         previews_dir if animate else None,
         asset_id=asset_id,
+        filter_dir=resolved_dir,
+        pack_filter=pack_filter,
+        ids_filter=parsed_ids,
+        filtered=filtered,
         sheet=sheet,
+        pack_entries=pack_entries,
         err=err,
     )
     if asset_result is None:
@@ -482,8 +648,13 @@ def render_once(
         sheets_dir,
         previews_dir,
         asset_id=asset_id,
+        filter_dir=resolved_dir,
+        pack_filter=pack_filter,
+        ids_filter=parsed_ids,
+        filtered=filtered,
         sheet=sheet,
         animate=animate,
+        pack_entries=pack_entries,
         err=err,
     )
     if scene_result is None:
@@ -491,7 +662,7 @@ def render_once(
     all_scenes, scene_count = scene_result
 
     if asset_count + scene_count == 0:
-        err(f"Asset {asset_id!r} not found under assets/")
+        err("No matching assets found under assets/")
         return 1
 
     _finalize_render_outputs(
@@ -501,14 +672,30 @@ def render_once(
         loaded_by_id,
         options,
         out_dir,
-        asset_id=asset_id,
+        filtered=filtered,
         indexed_ts=indexed_ts,
         indexed_ts_lazy=indexed_ts_lazy,
     )
+
+    pack_sheet_path: Path | None = None
+    pack_metrics: PackConsistencyMetrics | None = None
+    if pack_entries:
+        sheets_dir.mkdir(parents=True, exist_ok=True)
+        pack_name = _resolve_pack_sheet_name(pack_filter, dir_filter)
+        pack_res = generate_pack_sheet(
+            pack_entries,
+            PackSheetOptions(variant=variant, title=f"PACK: {pack_name.upper()}"),
+        )
+        pack_sheet_path = sheets_dir / f"{pack_name}.contact.png"
+        pack_sheet_path.write_bytes(pack_res.png)
+        pack_metrics = pack_res.metrics
+
     _emit_render_summary(
         bundles_by_style,
         out_dir=out_dir,
         indexed_ts=indexed_ts,
+        pack_sheet_path=pack_sheet_path,
+        pack_metrics=pack_metrics,
         output_format=output_format,
         out=out,
     )

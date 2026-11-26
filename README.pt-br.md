@@ -100,7 +100,7 @@ Sobrescritas opcionais de ambiente declaradas em [`.env.example`](.env.example) 
 uv run pixelforge init [--style sweetie-16] [--force] [--root .]
 
 # Compilar módulos .asset.py em PNGs, spritesheets, máscaras emissivas, manifestos e diagnósticos
-uv run pixelforge render [asset_id] [--out dist] [--sheet] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge render [asset_id] [--out dist] [--sheet] [--pack-sheet] [--dir <subdir>] [--pack <style_id>] [--ids <a,b>] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Executar guard tests estáticos (AST) e de runtime (código de saída 0 se aprovado)
 uv run pixelforge check [asset_id] [--strict-orphans] [--format llm|json|human] [--json] [--human] [--root .]

@@ -136,6 +136,10 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         atlas=args.atlas,
         scale=int(args.scale),
         variant=args.variant,
+        pack_sheet=bool(args.pack_sheet),
+        dir_filter=args.dir,
+        pack_filter=args.pack,
+        ids_filter=args.ids,
         output_format=output_format,
         out=_out,
         err=_err,
@@ -532,6 +536,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
     render_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    render_p.add_argument(
+        "--pack-sheet",
+        action="store_true",
+        help="Compile a comparative 1x + 2x grid .contact.png across matching assets",
+    )
+    render_p.add_argument(
+        "--dir",
+        default=None,
+        help="Filter rendered assets by subdirectory under assets/",
+    )
+    render_p.add_argument(
+        "--pack",
+        default=None,
+        help="Filter rendered assets by StylePack ID",
+    )
+    render_p.add_argument(
+        "--ids",
+        default=None,
+        help="Filter rendered assets by comma-separated asset IDs",
+    )
     add_format_arguments(render_p)
     render_p.add_argument("--root", default=None, help="Project root directory")
 
