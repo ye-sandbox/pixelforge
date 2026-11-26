@@ -86,14 +86,25 @@ class PaletteLookup:
         object.__setattr__(instance, "_indices", dict(resolved))
         return instance
 
-    def with_overrides(self, overrides: Mapping[str, str | int]) -> PaletteLookup:
+    def with_overrides(
+        self,
+        overrides: Mapping[str, str | int] | None = None,
+        /,
+        **kw_overrides: str | int,
+    ) -> PaletteLookup:
         """Return a new `PaletteLookup` with selected semantic token names remapped."""
+        merged: dict[str, str | int] = {}
+        if overrides is not None:
+            merged.update(overrides)
+        if kw_overrides:
+            merged.update(kw_overrides)
+
         resolved = dict(self._indices)
-        for src_token, dst_value in overrides.items():
+        for src_token, dst_value in merged.items():
             if src_token not in resolved:
                 suggestion = _format_close_matches(src_token, resolved.keys())
                 msg = f"Unknown source token {src_token!r} for palette override{suggestion}"
-                raise KeyError(msg)
+                raise PaletteLookupError(msg)
             if isinstance(dst_value, str):
                 resolved[src_token] = self[dst_value]
             else:

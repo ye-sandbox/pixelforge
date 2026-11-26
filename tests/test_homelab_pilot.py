@@ -73,6 +73,11 @@ EXPECTED_PROPS_IDS = (
     "trash_bin_iso",
     "ups_battery_iso",
 )
+EXPECTED_CHARACTER_IDS = (
+    "avatar_variants",
+    "cyber_operator_iso",
+    "sysadmin_avatar",
+)
 
 
 def test_homelab_style_pack_64_color_canonical_alignment() -> None:
@@ -129,6 +134,7 @@ def test_pilot_pack_passes_all_guards_strict_orphans() -> None:
         len(EXPECTED_HOMELAB_IDS)
         + len(EXPECTED_THINKPAD_IDS)
         + len(EXPECTED_PROPS_IDS)
+        + len(EXPECTED_CHARACTER_IDS)
         + len(EXPECTED_SCENE_IDS)
     )
 
@@ -143,7 +149,14 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
     }
 
     assert tuple(sorted(loaded_by_id.keys())) == tuple(
-        sorted((*EXPECTED_HOMELAB_IDS, *EXPECTED_THINKPAD_IDS, *EXPECTED_PROPS_IDS))
+        sorted(
+            (
+                *EXPECTED_HOMELAB_IDS,
+                *EXPECTED_THINKPAD_IDS,
+                *EXPECTED_PROPS_IDS,
+                *EXPECTED_CHARACTER_IDS,
+            )
+        )
     )
 
     bundles: list[ExportBundleResult] = []

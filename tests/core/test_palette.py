@@ -119,8 +119,12 @@ def test_palette_lookup_fuzzy_suggestions() -> None:
     with pytest.raises(PaletteLookupError, match="did you mean 'OUTLINE'"):
         PaletteLookup(style, tokens=("OUTLIN",))
 
-    with pytest.raises(KeyError, match="did you mean 'CYAN_GLOW'"):
+    with pytest.raises(PaletteLookupError, match="did you mean 'CYAN_GLOW'"):
         pal.with_overrides({"CYAN_GLW": "CYAN_REFL"})
+
+    kw_swapped = pal.with_overrides(CYAN_GLOW="CYAN_REFL")
+    assert kw_swapped.CYAN_GLOW == pal.CYAN_REFL
+    assert pal.CYAN_GLOW == 2
 
     with pytest.raises(PaletteLookupError, match="did you mean 'overload'"):
         build_rgba_lut(style, variant="overlod")

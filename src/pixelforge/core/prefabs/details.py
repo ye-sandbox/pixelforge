@@ -17,7 +17,7 @@ from pixelforge.core.surface import (
 )
 from pixelforge.core.types import TRANSPARENT_INDEX, LightingAngle, StylePack
 
-Canvas = Asset | Layer
+Canvas = Asset[object] | Layer
 
 
 def iso_cable_run(

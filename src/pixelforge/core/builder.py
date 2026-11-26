@@ -670,10 +670,18 @@ class Asset[PalT = PaletteLookup](_DrawingMixin):
         return hashf(x, y, (self.spec.seed + self.frame + salt) & 0xFFFFFFFF)
 
     @contextmanager
-    def palette_override(self, overrides: Mapping[str, str | int]) -> Generator[PalT]:
+    def palette_override(
+        self,
+        overrides: Mapping[str, str | int] | None = None,
+        /,
+        **kw_overrides: str | int,
+    ) -> Generator[PalT]:
         """Temporarily remap palette token names inside a `with` scope (e.g., avatar swaps)."""
         prev_pal = self._pal
-        self._pal = cast(PalT, cast(PaletteLookup, prev_pal).with_overrides(overrides))
+        self._pal = cast(
+            PalT,
+            cast(PaletteLookup, prev_pal).with_overrides(overrides, **kw_overrides),
+        )
         try:
             yield self._pal
         finally:

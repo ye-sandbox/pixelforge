@@ -92,10 +92,12 @@ def test_inspect_prefabs_categories_filter_and_json(
     """Verify `inspect prefabs` exposes categories, signatures, and filters."""
     assert main(["inspect", "prefabs"]) == 0
     llm_out = capsys.readouterr().out
-    assert "categories=architecture,furniture,details,atmosphere" in llm_out
+    assert "categories=architecture,furniture,details,atmosphere,characters" in llm_out
     assert "[architecture]" in llm_out
     assert "[furniture]" in llm_out
+    assert "[characters]" in llm_out
     assert "iso_room_shell(" in llm_out
+    assert "avatar_character(" in llm_out
 
     assert main(["inspect", "prefabs", "iso_desk", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)

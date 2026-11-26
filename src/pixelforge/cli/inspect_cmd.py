@@ -28,6 +28,7 @@ _PREFAB_CATEGORIES: Final[tuple[str, ...]] = (
     "furniture",
     "details",
     "atmosphere",
+    "characters",
 )
 
 

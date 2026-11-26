@@ -100,3 +100,11 @@ prefabs.iso_window(
 ### Emissive vs. Non-Emissive Token Discipline (`homelab-16bit`)
 - **NEVER emissive:** sky bands (`WINDOW_SKY`, `SOLAR_B`, `SCREEN_D`, `GLASS_D`, `GLASS_L`), clouds (`WHITE`, `SMOKE`), daytime sun (`HAIR_Y`), moon body (`WHITE`), rain/snow (`GLASS_L`, `WHITE`, `SMOKE`), horizon silhouettes (`WALL_D`, `WALL_M`), and interior `window_light_spill` / `light_beam` (`FLOOR_L`, `FLOOR_M`, `TILE_L`).
 - **Intentionally emissive:** night `starfield` (`STAR`), optional distant lit city windows (`WARM_LAMP`), and powered interior LEDs/lamps (`LED_*`, `WARM_LAMP`).
+
+---
+
+## 5. Modular Characters & Avatars (`prefabs.characters`)
+
+- **Pose & Cycles:** `eval_character_cycle(state, frame, frames, *, seed=0, seated=False) -> CharacterPose` (`"idle"`, `"walk"`, `"typing"`, `"alert"`).
+- **Parts:** `avatar_legs(...) -> LegsAnchors`, `avatar_torso(...) -> TorsoAnchors`, `avatar_head(...) -> HeadAnchors`, `avatar_hair(..., style="short"|"parted"|"spiky"|"bob"|"ponytail"|"buzz")`, `avatar_accessory(..., kind="none"|"glasses"|"visor"|"headphones"|"headset"|"cap"|"badge")`.
+- **Assembler & Palette Binding:** `CharacterPalette.from_lookup(pal, ...)` + `avatar_character(target, cx, foot_y, pal, *, state="idle", frame=0, frames=4, facing="front"|"iso-se"|"iso-sw", hair_style="parted", accessory="none")` (supports `PaletteLookup.with_overrides(...)` / `a.palette_override(...)` for skin/hair/outfit swaps).

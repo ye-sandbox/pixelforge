@@ -186,6 +186,13 @@ def test_avatar_token_overrides_and_atomic_recolor() -> None:
     assert swapped.get(5, 3) == style.palette[12].index  # HAIR_A
     assert swapped.get(5, 7) == style.palette[10].index  # SHIRT_A
 
+    # Keyword override syntax works identically to mapping syntax
+    kw_swapped = Asset(spec, style)
+    with kw_swapped.palette_override(HAIR_A="HAIR_B", SHIRT_A="SHIRT_B"):
+        draw_avatar(kw_swapped)
+    assert kw_swapped.get(5, 3) == style.palette[13].index  # HAIR_B
+    assert kw_swapped.get(5, 7) == style.palette[11].index  # SHIRT_B
+
 
 def test_multi_anchor_scene_and_coupled_hitboxes() -> None:
     """Verify scene slot anchors (`hw_slot_*`, `window`, `solar`, `breaker`) and `anchor_hitbox`."""
