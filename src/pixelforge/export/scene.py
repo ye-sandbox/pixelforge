@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Literal, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,10 +13,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pixelforge.core.builder import Asset
 from pixelforge.core.surface import IndexedSurface
-from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, StylePack
+from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, AssetSpec, HitboxRect, StylePack
 from pixelforge.export._canvas import Rgb, composite_rgba, draw_checkerboard
 from pixelforge.export._font import draw_bitmap_text, fill_rgba_rect, measure_text
-from pixelforge.export.bundle import AssetModule, RenderedFrame
+from pixelforge.export.bundle import (
+    AssetModule,
+    ExportBundleOptions,
+    ExportBundleResult,
+    RenderedFrame,
+    export_rendered_frames_bundle,
+)
 from pixelforge.export.contact_sheet import choose_zoom
 from pixelforge.export.png import rgba_to_png, surface_to_rgba
 
@@ -35,6 +42,9 @@ _CHECK_LIGHT_A: Final[Rgb] = (230, 237, 243)
 _CHECK_LIGHT_B: Final[Rgb] = (208, 215, 222)
 
 
+DepthSortMode = Literal["z_index", "iso_y"]
+
+
 class SceneCompositionError(ValueError):
     """Raised when scene composition fails style, anchor, state, or strict bounds checks."""
 
@@ -48,7 +58,8 @@ class SceneMountSpec(BaseModel):
     anchor: str = Field(min_length=1)
     prop_anchor: str | None = None
     state: str | None = None
-    frame: int = Field(default=0, ge=0)
+    state_map: dict[str, str] | None = None
+    frame: int | None = Field(default=None, ge=0)
     offset_x: int = 0
     offset_y: int = 0
     z_index: int = 0
@@ -64,6 +75,40 @@ class SceneCompositionSpec(BaseModel):
     parent_frame: int = Field(default=0, ge=0)
     mounts: tuple[SceneMountSpec, ...] = ()
     variant: str | None = None
+    depth_sort: DepthSortMode = "z_index"
+
+
+class SceneSpec(BaseModel):
+    """Declarative `.scene.py` module specification compiled alongside `.asset.py`."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(min_length=1)
+    parent_id: str = Field(min_length=1)
+    style_id: str | None = None
+    states: tuple[str, ...] | None = None
+    frames: int | None = Field(default=None, ge=1)
+    fps: int | None = Field(default=None, ge=1, le=60)
+    mounts: tuple[SceneMountSpec, ...] = ()
+    depth_sort: DepthSortMode = "iso_y"
+    variant: str | None = None
+    strict_bounds: bool = False
+    strict_perspective: bool = False
+
+
+@runtime_checkable
+class SceneModule(Protocol):
+    """Protocol satisfied by any `.scene.py` module or wrapper object."""
+
+    @property
+    def SCENE(self) -> SceneSpec: ...
+
+
+@dataclass(frozen=True)
+class LoadedScene:
+    """In-memory `SceneModule` container holding `SCENE`."""
+
+    SCENE: SceneSpec
 
 
 class MountedPropPlacement(BaseModel):
@@ -102,6 +147,7 @@ class SceneCompositionResult:
     parent_anchors: tuple[AnchorPoint, ...]
     placements: tuple[MountedPropPlacement, ...]
     warnings: tuple[str, ...]
+    parent_hitboxes: tuple[HitboxRect, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -142,9 +188,11 @@ def _render_single_frame(
     )
 
 
-def _resolve_prop_state(prop: AssetModule, requested: str | None, parent_state: str) -> str:
-    if requested is not None:
-        return requested
+def _resolve_prop_state(prop: AssetModule, mount: SceneMountSpec, parent_state: str) -> str:
+    if mount.state_map is not None and parent_state in mount.state_map:
+        return mount.state_map[parent_state]
+    if mount.state is not None:
+        return mount.state
     if parent_state in prop.SPEC.states:
         return parent_state
     return prop.SPEC.states[0]
@@ -231,9 +279,23 @@ def compose_scene(
     )
     composite = parent_rendered.surface.clone()
 
-    # INVARIANT: Sort mounts deterministically by (z_index, declaration_index) so
-    # painter's-algorithm compositing and occlusion checks never depend on dict order.
-    ordered_mounts = sorted(enumerate(spec.mounts), key=lambda item: (item[1].z_index, item[0]))
+    # INVARIANT: Sort mounts deterministically before blitting so painter's-algorithm
+    # compositing and occlusion checks never depend on dict order. `iso_y` sorts by
+    # (z_index, anchor_y + offset_y, decl_index) for back-to-front isometric layering.
+    resolved_anchors = [
+        _resolve_anchor_point(parent_rendered.anchors, m.anchor, owner_id=parent.SPEC.id)
+        for m in spec.mounts
+    ]
+    if spec.depth_sort == "iso_y":
+        ordered_mounts = sorted(
+            enumerate(zip(spec.mounts, resolved_anchors, strict=True)),
+            key=lambda item: (item[1][0].z_index, item[1][1].y + item[1][0].offset_y, item[0]),
+        )
+    else:
+        ordered_mounts = sorted(
+            enumerate(zip(spec.mounts, resolved_anchors, strict=True)),
+            key=lambda item: (item[1][0].z_index, item[0]),
+        )
 
     staged: list[
         tuple[
@@ -241,6 +303,7 @@ def compose_scene(
             str,
             bool,
             str,
+            int,
             int,
             int,
             int,
@@ -253,7 +316,7 @@ def compose_scene(
     ] = []
     warnings: list[str] = []
 
-    for _, mount in ordered_mounts:
+    for _, (mount, parent_anchor) in ordered_mounts:
         prop = props_by_id.get(mount.prop_id)
         if prop is None:
             msg = f"Mounted prop asset {mount.prop_id!r} not found"
@@ -275,17 +338,13 @@ def compose_scene(
                 raise SceneCompositionError(persp_detail)
             warnings.append(persp_detail)
 
-        parent_anchor = _resolve_anchor_point(
-            parent_rendered.anchors,
-            mount.anchor,
-            owner_id=parent.SPEC.id,
-        )
-        prop_state = _resolve_prop_state(prop, mount.state, parent_state)
+        prop_state = _resolve_prop_state(prop, mount, parent_state)
+        prop_frame = mount.frame if mount.frame is not None else 0
         prop_rendered = _render_single_frame(
             prop,
             style,
             state=prop_state,
-            frame=mount.frame,
+            frame=prop_frame,
             variant=spec.variant,
         )
 
@@ -326,6 +385,7 @@ def compose_scene(
                 prop.SPEC.perspective,
                 perspective_match,
                 prop_state,
+                prop_frame,
                 dest_x,
                 dest_y,
                 prop_rendered.surface.width,
@@ -344,6 +404,7 @@ def compose_scene(
             prop_perspective,
             perspective_match,
             prop_state,
+            prop_frame,
             dest_x,
             dest_y,
             prop_w,
@@ -376,7 +437,7 @@ def compose_scene(
                 perspective=prop_perspective,
                 perspective_match=perspective_match,
                 state=prop_state,
-                frame=mount.frame,
+                frame=prop_frame,
                 z_index=mount.z_index,
                 dest_x=dest_x,
                 dest_y=dest_y,
@@ -399,7 +460,128 @@ def compose_scene(
         parent_anchors=parent_rendered.anchors,
         placements=tuple(placements),
         warnings=tuple(warnings),
+        parent_hitboxes=parent_rendered.hitboxes,
     )
+
+
+def resolve_scene_asset_spec(
+    scene_spec: SceneSpec,
+    parent: AssetModule,
+    props_by_id: Mapping[str, AssetModule],
+) -> AssetSpec:
+    """Resolve the effective `AssetSpec` (states, looping frame cycle, fps) for a `SceneSpec`."""
+    if parent.SPEC.id != scene_spec.parent_id:
+        msg = f"Expected parent asset {scene_spec.parent_id!r}, got {parent.SPEC.id!r}"
+        raise SceneCompositionError(msg)
+    if scene_spec.style_id is not None and scene_spec.style_id != parent.SPEC.style_id:
+        msg = (
+            f"Scene {scene_spec.id!r} specifies style {scene_spec.style_id!r}, "
+            f"but parent {parent.SPEC.id!r} uses {parent.SPEC.style_id!r}"
+        )
+        raise SceneCompositionError(msg)
+
+    frame_counts = [parent.SPEC.frames]
+    for mount in scene_spec.mounts:
+        prop = props_by_id.get(mount.prop_id)
+        if prop is None:
+            msg = f"Mounted prop asset {mount.prop_id!r} not found"
+            raise SceneCompositionError(msg)
+        if mount.frame is None:
+            frame_counts.append(prop.SPEC.frames)
+
+    frames = scene_spec.frames if scene_spec.frames is not None else math.lcm(*frame_counts)
+    states = scene_spec.states if scene_spec.states is not None else parent.SPEC.states
+    fps = scene_spec.fps if scene_spec.fps is not None else parent.SPEC.fps
+    return AssetSpec(
+        id=scene_spec.id,
+        style_id=parent.SPEC.style_id,
+        perspective=parent.SPEC.perspective,
+        width=parent.SPEC.width,
+        height=parent.SPEC.height,
+        states=states,
+        frames=frames,
+        fps=fps,
+    )
+
+
+def compose_scene_frames(
+    scene_spec: SceneSpec,
+    parent: AssetModule,
+    props_by_id: Mapping[str, AssetModule],
+    style: StylePack,
+    *,
+    variant: str | None = None,
+) -> tuple[AssetSpec, tuple[RenderedFrame, ...], tuple[str, ...]]:
+    """Synchronously compose all `(state, frame)` pairs for a declarative `SceneSpec`."""
+    asset_spec = resolve_scene_asset_spec(scene_spec, parent, props_by_id)
+    effective_variant = variant if variant is not None else scene_spec.variant
+    rendered_frames: list[RenderedFrame] = []
+    seen_warnings: dict[str, None] = {}
+
+    for state in asset_spec.states:
+        for frame_idx in range(asset_spec.frames):
+            # INVARIANT: Unpinned mounts cycle via `frame_idx % prop.SPEC.frames` so
+            # multi-frame scenes stay synchronized across parent and child animations.
+            sync_mounts = tuple(
+                mount.model_copy(
+                    update={
+                        "frame": (
+                            mount.frame
+                            if mount.frame is not None
+                            else frame_idx % props_by_id[mount.prop_id].SPEC.frames
+                        ),
+                    }
+                )
+                for mount in scene_spec.mounts
+            )
+            comp_spec = SceneCompositionSpec(
+                parent_id=scene_spec.parent_id,
+                parent_state=state,
+                parent_frame=frame_idx % parent.SPEC.frames,
+                mounts=sync_mounts,
+                variant=effective_variant,
+                depth_sort=scene_spec.depth_sort,
+            )
+            res = compose_scene(
+                parent,
+                props_by_id,
+                style,
+                comp_spec,
+                strict_bounds=scene_spec.strict_bounds,
+                strict_perspective=scene_spec.strict_perspective,
+            )
+            for warning in res.warnings:
+                seen_warnings.setdefault(warning, None)
+            rendered_frames.append(
+                RenderedFrame(
+                    state=state,
+                    frame=frame_idx,
+                    surface=res.surface,
+                    anchors=res.parent_anchors,
+                    hitboxes=res.parent_hitboxes,
+                )
+            )
+
+    return asset_spec, tuple(rendered_frames), tuple(seen_warnings.keys())
+
+
+def export_scene_bundle(
+    scene_spec: SceneSpec,
+    parent: AssetModule,
+    props_by_id: Mapping[str, AssetModule],
+    style: StylePack,
+    options: ExportBundleOptions | None = None,
+) -> ExportBundleResult:
+    """Compile a declarative `SceneSpec` into a full `ExportBundleResult`."""
+    opts = options or ExportBundleOptions()
+    asset_spec, rendered_frames, _ = compose_scene_frames(
+        scene_spec,
+        parent,
+        props_by_id,
+        style,
+        variant=opts.variant,
+    )
+    return export_rendered_frames_bundle(asset_spec, rendered_frames, style, opts)
 
 
 def _draw_rect_outline(

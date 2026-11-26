@@ -14,7 +14,7 @@ from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, AssetSpec, Hit
 from pixelforge.export._canvas import Rgb, composite_rgba, draw_checkerboard
 from pixelforge.export._font import draw_bitmap_text, fill_rgba_rect, measure_text
 from pixelforge.export.bundle import AssetModule, RenderedFrame, render_asset_frames
-from pixelforge.export.png import rgba_to_png, surface_to_rgba
+from pixelforge.export.png import frames_to_apng, rgba_to_png, surface_to_rgba
 
 _BG_MAIN: Final[Rgb] = (18, 22, 29)
 _BG_HEADER: Final[Rgb] = (28, 34, 45)
@@ -216,6 +216,7 @@ class _ContactSheetLayout:
     right_x: int
     right_y: int
     has_emissive: bool
+    has_anim: bool
     cell_scale: int
     cell_w: int
     cell_h: int
@@ -257,15 +258,18 @@ def _compute_contact_sheet_layout(
     preview_1x_w = max(spec.width * 2 + 12, 120)
 
     has_emissive = any("emissive" in entry.flags for entry in style.palette)
+    has_anim = spec.frames > 1
     cell_scale = 2 if max(spec.width, spec.height) <= 32 else 1
     cell_w, cell_h, cell_gap = spec.width * cell_scale, spec.height * cell_scale, 6
     state_label_w = max((measure_text(s)[0] for s in spec.states), default=24) + 10
     matrix_title = "states x frames (+emissive)" if has_emissive else "states x frames"
+    anim_col_w = max(cell_w, measure_text("anim")[0]) if has_anim else 0
     emissive_col_w = max(cell_w, measure_text("emissive")[0]) if has_emissive else 0
     matrix_row_offset = 20 if has_emissive else 12
     matrix_cells_w = (
         state_label_w
         + spec.frames * (cell_w + cell_gap)
+        + (anim_col_w + cell_gap if has_anim else 0)
         + (emissive_col_w + cell_gap if has_emissive else 0)
     )
     matrix_w = max(matrix_cells_w, measure_text(matrix_title)[0])
@@ -327,6 +331,7 @@ def _compute_contact_sheet_layout(
         right_x=pad + left_col_w + 24,
         right_y=header_h + pad,
         has_emissive=has_emissive,
+        has_anim=has_anim,
         cell_scale=cell_scale,
         cell_w=cell_w,
         cell_h=cell_h,
@@ -445,6 +450,8 @@ def _render_state_matrix(
     cell_step = layout.cell_w + layout.cell_gap
     row_step = layout.cell_h + layout.cell_gap
     emit_x = grid_x0 + spec.frames * cell_step
+    emit_step = max(layout.cell_w, measure_text("emissive")[0]) + layout.cell_gap
+    anim_x = emit_x + (emit_step if layout.has_emissive else 0)
 
     if layout.has_emissive:
         col_hdr_y = layout.matrix_y + 10
@@ -453,6 +460,10 @@ def _render_state_matrix(
                 canvas, f"f{frame_idx}", grid_x0 + frame_idx * cell_step, col_hdr_y, _TEXT_MUTED
             )
         draw_bitmap_text(canvas, "emissive", emit_x, col_hdr_y, _TEXT_MUTED)
+        if layout.has_anim:
+            draw_bitmap_text(canvas, "anim", anim_x, col_hdr_y, _TEXT_MUTED)
+    elif layout.has_anim:
+        draw_bitmap_text(canvas, "anim", anim_x, layout.matrix_y, _TEXT_MUTED)
 
     by_key = {(f.state, f.frame): f for f in frames}
     for s_idx, state in enumerate(spec.states):
@@ -526,32 +537,119 @@ def _render_swatches(canvas: NDArray[np.uint8], layout: _ContactSheetLayout) -> 
         draw_bitmap_text(canvas, label, sx + 16, sy + 3, _TEXT_LIGHT)
 
 
+def _render_state_matrix_anim(
+    canvas: NDArray[np.uint8],
+    layout: _ContactSheetLayout,
+    spec: AssetSpec,
+    by_key: dict[tuple[str, int], RenderedFrame],
+    frame_idx: int,
+    style: StylePack,
+    opts: ContactSheetOptions,
+) -> None:
+    if not layout.has_anim:
+        return
+    grid_x0 = layout.right_x + layout.state_label_w
+    cell_step = layout.cell_w + layout.cell_gap
+    row_step = layout.cell_h + layout.cell_gap
+    emit_x = grid_x0 + spec.frames * cell_step
+    emit_step = max(layout.cell_w, measure_text("emissive")[0]) + layout.cell_gap
+    anim_x = emit_x + (emit_step if layout.has_emissive else 0)
+    for s_idx, state in enumerate(spec.states):
+        row_y = layout.matrix_y + layout.matrix_row_offset + s_idx * row_step
+        draw_checkerboard(
+            canvas, anim_x, row_y, layout.cell_w, layout.cell_h, _CHECK_DARK_A, _CHECK_DARK_B, 4
+        )
+        anim_rgba = surface_to_rgba(
+            by_key[(state, frame_idx)].surface,
+            style,
+            variant=opts.variant,
+            scale=layout.cell_scale,
+        )
+        composite_rgba(canvas, anim_rgba, anim_x, row_y)
+
+
+def _render_dynamic_panels(
+    canvas: NDArray[np.uint8],
+    layout: _ContactSheetLayout,
+    spec: AssetSpec,
+    frame_item: RenderedFrame,
+    style: StylePack,
+    opts: ContactSheetOptions,
+) -> None:
+    _render_zoom_panel(canvas, layout, spec, frame_item, style, opts)
+    _render_1x_previews(canvas, layout, spec, frame_item, style, opts)
+    _render_variant_strip(canvas, layout, frame_item, style)
+
+
+def generate_contact_sheet_from_frames(
+    spec: AssetSpec,
+    frames: tuple[RenderedFrame, ...],
+    style: StylePack,
+    options: ContactSheetOptions | None = None,
+) -> ContactSheetResult:
+    """Render `.contact.png` from pre-rendered frames (static PNG or looping APNG)."""
+    opts = options or ContactSheetOptions()
+    primary = frames[0]
+    metrics = compute_surface_metrics(primary.surface)
+    layout = _compute_contact_sheet_layout(spec, style, primary, frames, metrics, opts)
+
+    base_canvas = np.empty((layout.canvas_h, layout.canvas_w, 4), dtype=np.uint8)
+    base_canvas[:, :] = (*_BG_MAIN, 255)
+    _render_header(base_canvas, layout, metrics)
+    _render_state_matrix(base_canvas, layout, spec, frames, style, opts)
+    _render_swatches(base_canvas, layout)
+
+    if spec.frames <= 1:
+        _render_dynamic_panels(base_canvas, layout, spec, primary, style, opts)
+        return ContactSheetResult(
+            width=layout.canvas_w,
+            height=layout.canvas_h,
+            rgba=base_canvas,
+            png=rgba_to_png(base_canvas),
+            metrics=metrics,
+        )
+
+    # INVARIANT: Frame 0 of the APNG must match `ContactSheetResult.rgba` so callers that
+    # decode `.contact.png` as a single RGBA frame still observe the primary frame.
+    by_key = {(f.state, f.frame): f for f in frames}
+    primary_state = spec.states[0]
+    apng_frames: list[NDArray[np.uint8]] = []
+    for frame_idx in range(spec.frames):
+        frame_canvas = base_canvas.copy()
+        _render_dynamic_panels(
+            frame_canvas,
+            layout,
+            spec,
+            by_key[(primary_state, frame_idx)],
+            style,
+            opts,
+        )
+        _render_state_matrix_anim(
+            frame_canvas,
+            layout,
+            spec,
+            by_key,
+            frame_idx,
+            style,
+            opts,
+        )
+        apng_frames.append(frame_canvas)
+
+    return ContactSheetResult(
+        width=layout.canvas_w,
+        height=layout.canvas_h,
+        rgba=apng_frames[0],
+        png=frames_to_apng(apng_frames, fps=spec.fps),
+        metrics=metrics,
+    )
+
+
 def generate_contact_sheet(
     asset: AssetModule,
     style: StylePack,
     options: ContactSheetOptions | None = None,
 ) -> ContactSheetResult:
-    """Render an informative `.contact.png` with rulers, hitboxes, anchors, matrix, and swatches."""
+    """Render `.contact.png` (static PNG for 1 frame, looping APNG when `spec.frames > 1`)."""
     opts = options or ContactSheetOptions()
-    spec = asset.SPEC
     frames = render_asset_frames(asset, style, variant=opts.variant)
-    primary = frames[0]
-    metrics = compute_surface_metrics(primary.surface)
-    layout = _compute_contact_sheet_layout(spec, style, primary, frames, metrics, opts)
-
-    canvas = np.empty((layout.canvas_h, layout.canvas_w, 4), dtype=np.uint8)
-    canvas[:, :] = (*_BG_MAIN, 255)
-    _render_header(canvas, layout, metrics)
-    _render_zoom_panel(canvas, layout, spec, primary, style, opts)
-    _render_1x_previews(canvas, layout, spec, primary, style, opts)
-    _render_state_matrix(canvas, layout, spec, frames, style, opts)
-    _render_variant_strip(canvas, layout, primary, style)
-    _render_swatches(canvas, layout)
-
-    return ContactSheetResult(
-        width=layout.canvas_w,
-        height=layout.canvas_h,
-        rgba=canvas,
-        png=rgba_to_png(canvas),
-        metrics=metrics,
-    )
+    return generate_contact_sheet_from_frames(asset.SPEC, frames, style, opts)

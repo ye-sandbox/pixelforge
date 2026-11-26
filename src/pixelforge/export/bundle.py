@@ -397,21 +397,14 @@ def _export_atlas_outputs(
     return files
 
 
-def export_asset_bundle(
-    asset: AssetModule,
+def export_rendered_frames_bundle(
+    spec: AssetSpec,
+    rendered_frames: tuple[RenderedFrame, ...],
     style: StylePack,
     options: ExportBundleOptions | None = None,
 ) -> ExportBundleResult:
-    """Compile an asset into PNGs, spritesheets, emissive masks, LUTs, previews, and manifest."""
+    """Package pre-rendered frames into PNGs, spritesheets, masks, LUTs, and manifest."""
     opts = options or ExportBundleOptions()
-    spec = asset.SPEC
-    rendered_frames = render_asset_frames(
-        asset,
-        style,
-        variant=opts.variant,
-        token_overrides=opts.token_overrides,
-    )
-
     include_emissive = _has_emissive_colors(style) if opts.emissive is None else opts.emissive
     by_key = {(item.state, item.frame): item for item in rendered_frames}
 
@@ -489,6 +482,22 @@ def export_asset_bundle(
         preview_files=state_out.preview_files,
         rendered_frames=rendered_frames,
     )
+
+
+def export_asset_bundle(
+    asset: AssetModule,
+    style: StylePack,
+    options: ExportBundleOptions | None = None,
+) -> ExportBundleResult:
+    """Compile an asset into PNGs, spritesheets, emissive masks, LUTs, previews, and manifest."""
+    opts = options or ExportBundleOptions()
+    rendered_frames = render_asset_frames(
+        asset,
+        style,
+        variant=opts.variant,
+        token_overrides=opts.token_overrides,
+    )
+    return export_rendered_frames_bundle(asset.SPEC, rendered_frames, style, opts)
 
 
 def build_manifest_document(

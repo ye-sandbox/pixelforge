@@ -42,6 +42,7 @@ EXPECTED_HOMELAB_IDS = (
     "window_cycles_iso",
     "window_vistas_front",
 )
+EXPECTED_SCENE_IDS = ("homelab_desk_scene",)
 EXPECTED_THINKPAD_IDS = (
     "thinkpad_r51_front",
     "thinkpad_r51_iso",
@@ -107,8 +108,11 @@ def test_pilot_pack_passes_all_guards_strict_orphans() -> None:
     assert report.violations == ()
     assert report.passed
     assert report.styles_checked == 1
-    assert report.assets_checked == len(EXPECTED_HOMELAB_IDS) + len(EXPECTED_THINKPAD_IDS) + len(
-        EXPECTED_PROPS_IDS
+    assert report.assets_checked == (
+        len(EXPECTED_HOMELAB_IDS)
+        + len(EXPECTED_THINKPAD_IDS)
+        + len(EXPECTED_PROPS_IDS)
+        + len(EXPECTED_SCENE_IDS)
     )
 
 

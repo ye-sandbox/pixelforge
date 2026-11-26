@@ -740,3 +740,124 @@ def test_cli_watch_incremental_dependency_invalidation(
     )
     assert '"example_crate"' in homelab_sprites
     assert '"sibling_crate"' not in homelab_sprites
+
+
+def test_cli_declarative_scene_render_check_compose_and_watch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `.scene.py` integrates with `check`, `render`, `watch`, and `compose --animate`."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    _add_sibling_asset(tmp_path, "lamp_prop")
+    lamp_path = tmp_path / "assets" / "lamp_prop.asset.py"
+    lamp_src = (
+        lamp_path.read_text(encoding="utf-8")
+        .replace(
+            "frames=1,",
+            "frames=2,",
+        )
+        .replace(
+            "a.put(12, 11, p.ACCENT_CYAN)",
+            "a.put(12, 11, p.ACCENT_CYAN if a.frame == 0 else p.CHASSIS_LIGHT)",
+        )
+    )
+    lamp_path.write_text(lamp_src, encoding="utf-8")
+
+    scene_path = tmp_path / "assets" / "crate_scene.scene.py"
+    scene_path.write_text(
+        '"""Declarative test scene."""\n'
+        "from __future__ import annotations\n"
+        "from pixelforge.export.scene import SceneMountSpec, SceneSpec\n"
+        "SCENE = SceneSpec(\n"
+        '    id="crate_scene",\n'
+        '    parent_id="example_crate",\n'
+        '    depth_sort="iso_y",\n'
+        "    mounts=(\n"
+        '        SceneMountSpec(prop_id="lamp_prop", anchor="foot", prop_anchor="foot"),\n'
+        "    ),\n"
+        ")\n",
+        encoding="utf-8",
+    )
+
+    assert main(["check", "--root", str(tmp_path)]) == 0
+
+    out_dir = tmp_path / "dist"
+    assert (
+        main(
+            [
+                "render",
+                "--root",
+                str(tmp_path),
+                "--out",
+                str(out_dir),
+                "--animate",
+                "--sheet",
+                "--indexed-ts",
+            ]
+        )
+        == 0
+    )
+    assert (out_dir / "sprites" / "crate_scene_idle.png").is_file()
+    assert (out_dir / "sprites" / "crate_scene_sheet.png").is_file()
+    assert (tmp_path / ".pixelforge" / "previews" / "crate_scene_idle.gif").is_file()
+    assert (tmp_path / ".pixelforge" / "sheets" / "crate_scene.contact.png").is_file()
+
+    manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert "crate_scene" in manifest
+    assert manifest["crate_scene"]["frames"] == 2
+    dts = (out_dir / "manifest.d.ts").read_text(encoding="utf-8")
+    assert '"crate_scene"' in dts
+    sprites_ts = (out_dir / "indexed" / "sprites.generated.ts").read_text(encoding="utf-8")
+    assert '"crate_scene"' in sprites_ts
+
+    # Verify `compose --depth-sort iso_y --animate` emits animated GIF
+    assert (
+        main(
+            [
+                "compose",
+                "example_crate",
+                "--mount",
+                "lamp_prop@foot:foot",
+                "--depth-sort",
+                "iso_y",
+                "--animate",
+                "--root",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
+    assert (tmp_path / ".pixelforge" / "previews" / "example_crate_idle_composed.gif").is_file()
+
+    # Verify `watch` rebuilds dependent scene when prop asset changes
+    capsys.readouterr()
+    cycle_logs: list[str] = []
+
+    def fake_sleep(_interval: float) -> None:
+        cycle_logs.append(capsys.readouterr().out)
+        if len(cycle_logs) == 1:
+            lamp_path.write_text(lamp_src.replace("fps=4,", "fps=6,"), encoding="utf-8")
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+    assert (
+        main(
+            [
+                "watch",
+                "--root",
+                str(tmp_path),
+                "--out",
+                str(out_dir),
+                "--indexed-ts",
+                "--interval",
+                "0.01",
+                "--max-cycles",
+                "1",
+            ]
+        )
+        == 0
+    )
+    cycle_logs.append(capsys.readouterr().out)
+    assert "rendered lamp_prop" in cycle_logs[1]
+    assert "rendered crate_scene" in cycle_logs[1]
+    assert "rendered example_crate" not in cycle_logs[1]

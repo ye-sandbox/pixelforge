@@ -11,15 +11,20 @@ from PIL import Image
 
 from pixelforge import Asset, AssetSpec, PaletteColor, StylePack
 from pixelforge.core.types import PerspectiveMode
-from pixelforge.export.bundle import LoadedAsset
+from pixelforge.export.bundle import ExportBundleOptions, LoadedAsset
+from pixelforge.export.indexed_ts import export_indexed_ts
 from pixelforge.export.scene import (
     SceneCompositionError,
     SceneCompositionSpec,
     SceneMountSpec,
+    SceneSpec,
     compose_scene,
+    compose_scene_frames,
+    export_scene_bundle,
     generate_scene_sheet,
+    resolve_scene_asset_spec,
 )
-from pixelforge.guard.runner import load_asset_module, load_style_module
+from pixelforge.guard.runner import load_asset_module, load_scene_module, load_style_module
 
 
 def _test_style(style_id: str = "test-style") -> StylePack:
@@ -264,3 +269,214 @@ def test_compose_homelab_bedroom_desk_iso_and_sheet() -> None:
     assert sheet.height > 200
     with Image.open(io.BytesIO(sheet.png)) as img:
         assert img.size == (sheet.width, sheet.height)
+
+
+def test_compose_scene_iso_y_depth_sort_with_z_index() -> None:
+    """Verify `iso_y` sorts mounts back-to-front by anchor_y + offset_y, with z_index primary."""
+    style = _test_style()
+
+    def render_parent(a: Asset) -> None:
+        a.rect(0, 0, 24, 24, a.pal.WALL)
+        a.anchor("back_slot", 10, 10)
+        a.anchor("front_slot", 10, 12)
+
+    def render_prop_back(a: Asset) -> None:
+        a.rect(0, 0, 6, 6, a.pal.ACCENT)
+        a.anchor("foot", 3, 5)
+
+    def render_prop_front(a: Asset) -> None:
+        a.rect(0, 0, 6, 6, a.pal.WARN)
+        a.anchor("foot", 3, 5)
+
+    parent = LoadedAsset(
+        SPEC=AssetSpec(
+            id="room",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=24,
+            height=24,
+        ),
+        render=render_parent,
+    )
+    prop_back = LoadedAsset(
+        SPEC=AssetSpec(
+            id="prop_back",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=6,
+            height=6,
+        ),
+        render=render_prop_back,
+    )
+    prop_front = LoadedAsset(
+        SPEC=AssetSpec(
+            id="prop_front",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=6,
+            height=6,
+        ),
+        render=render_prop_front,
+    )
+
+    # Declare front_slot BEFORE back_slot; iso_y must still draw front_slot on top.
+    iso_spec = SceneCompositionSpec(
+        parent_id="room",
+        depth_sort="iso_y",
+        mounts=(
+            SceneMountSpec(prop_id="prop_front", anchor="front_slot", prop_anchor="foot"),
+            SceneMountSpec(prop_id="prop_back", anchor="back_slot", prop_anchor="foot"),
+        ),
+    )
+    iso_res = compose_scene(
+        parent,
+        {"prop_back": prop_back, "prop_front": prop_front},
+        style,
+        iso_spec,
+    )
+    assert [p.prop_id for p in iso_res.placements] == ["prop_back", "prop_front"]
+    assert iso_res.surface.get(10, 10) == 3  # WARN
+
+    # Explicit z_index overrides iso_y ordering.
+    z_override_spec = SceneCompositionSpec(
+        parent_id="room",
+        depth_sort="iso_y",
+        mounts=(
+            SceneMountSpec(prop_id="prop_front", anchor="front_slot", prop_anchor="foot"),
+            SceneMountSpec(prop_id="prop_back", anchor="back_slot", prop_anchor="foot", z_index=1),
+        ),
+    )
+    z_res = compose_scene(
+        parent,
+        {"prop_back": prop_back, "prop_front": prop_front},
+        style,
+        z_override_spec,
+    )
+    assert [p.prop_id for p in z_res.placements] == ["prop_front", "prop_back"]
+    assert z_res.surface.get(10, 10) == 2  # ACCENT
+
+
+def test_compose_scene_frames_synchronized_lcm_and_state_map() -> None:
+    """Verify multi-frame LCM cycle synchronization, state_map, and bundle/indexed-ts export."""
+    style = _test_style()
+
+    def render_parent(a: Asset) -> None:
+        a.rect(0, 0, 24, 24, a.pal.WALL)
+        a.put(0, 0, a.pal.ACCENT if a.frame == 0 else a.pal.WARN)
+        a.anchor("slot_a", 8, 12)
+        a.anchor("slot_b", 18, 12)
+
+    def render_prop_cycle(a: Asset) -> None:
+        tok = (a.pal.ACCENT, a.pal.WARN, a.pal.INK)[a.frame]
+        a.rect(0, 0, 4, 4, tok if a.state == "active" else a.pal.WALL)
+        a.anchor("foot", 2, 3)
+
+    def render_prop_pinned(a: Asset) -> None:
+        a.rect(0, 0, 4, 4, a.pal.INK if a.frame == 1 else a.pal.ACCENT)
+        a.anchor("foot", 2, 3)
+
+    parent = LoadedAsset(
+        SPEC=AssetSpec(
+            id="room",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=24,
+            height=24,
+            states=("day", "night"),
+            frames=2,
+            fps=6,
+        ),
+        render=render_parent,
+    )
+    prop_cycle = LoadedAsset(
+        SPEC=AssetSpec(
+            id="prop_cycle",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=4,
+            height=4,
+            states=("idle", "active"),
+            frames=3,
+            fps=6,
+        ),
+        render=render_prop_cycle,
+    )
+    prop_pinned = LoadedAsset(
+        SPEC=AssetSpec(
+            id="prop_pinned",
+            style_id="test-style",
+            perspective="iso-2:1",
+            width=4,
+            height=4,
+            states=("day", "night"),
+            frames=2,
+        ),
+        render=render_prop_pinned,
+    )
+
+    scene_spec = SceneSpec(
+        id="room_scene",
+        parent_id="room",
+        mounts=(
+            SceneMountSpec(
+                prop_id="prop_cycle",
+                anchor="slot_a",
+                prop_anchor="foot",
+                state_map={"day": "idle", "night": "active"},
+            ),
+            SceneMountSpec(
+                prop_id="prop_pinned",
+                anchor="slot_b",
+                prop_anchor="foot",
+                frame=1,
+            ),
+        ),
+    )
+    props = {"prop_cycle": prop_cycle, "prop_pinned": prop_pinned}
+    resolved = resolve_scene_asset_spec(scene_spec, parent, props)
+    assert resolved.frames == 6  # lcm(2, 3) ignoring pinned frame=1
+    assert resolved.states == ("day", "night")
+
+    _, frames, warnings = compose_scene_frames(scene_spec, parent, props, style)
+    assert warnings == ()
+    assert len(frames) == 12
+    night_frames = [f for f in frames if f.state == "night"]
+    # prop_cycle cycles 0, 1, 2, 0, 1, 2 -> ACCENT(2), WARN(3), INK(0)
+    assert night_frames[0].surface.get(8, 12) == 2
+    assert night_frames[1].surface.get(8, 12) == 3
+    assert night_frames[2].surface.get(8, 12) == 0
+    assert night_frames[3].surface.get(8, 12) == 2
+    # prop_pinned stays on frame 1 -> INK(0)
+    assert all(f.surface.get(18, 12) == 0 for f in night_frames)
+
+    bundle = export_scene_bundle(
+        scene_spec,
+        parent,
+        props,
+        style,
+        ExportBundleOptions(animate=True),
+    )
+    assert bundle.manifest.id == "room_scene"
+    assert bundle.manifest.frames == 6
+    assert "room_scene_sheet.png" in bundle.files
+    assert "room_scene_night.gif" in bundle.preview_files
+    ts_out = export_indexed_ts([bundle], style)
+    assert '"room_scene"' in ts_out.sprites_ts
+    assert '"room_scene"' in ts_out.manifest_ts
+
+
+def test_homelab_desk_scene_module_compiles_cleanly() -> None:
+    """Verify `assets/homelab/homelab_desk_scene.scene.py` compiles with synchronized frames."""
+    repo_root = Path(__file__).resolve().parents[2]
+    style = load_style_module(repo_root / "styles" / "homelab_16bit.style.py")
+    scene = load_scene_module(repo_root / "assets" / "homelab" / "homelab_desk_scene.scene.py")
+    parent = load_asset_module(repo_root / "assets" / "homelab" / "bedroom_desk_iso.asset.py")
+    props = {
+        pid: load_asset_module(repo_root / "assets" / "props" / f"{pid}.asset.py")
+        for pid in ("monitor_iso", "desk_lamp_iso", "network_switch_iso")
+    }
+    bundle = export_scene_bundle(scene.SCENE, parent, props, style)
+    assert bundle.manifest.id == "homelab_desk_scene"
+    assert bundle.manifest.states == ("day", "night")
+    assert bundle.manifest.frames == 2
+    assert "homelab_desk_scene_sheet.png" in bundle.files

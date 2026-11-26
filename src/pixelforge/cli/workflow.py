@@ -22,7 +22,11 @@ from pixelforge.export.bundle import (
     write_export_bundle,
     write_manifest,
 )
-from pixelforge.export.contact_sheet import ContactSheetOptions, generate_contact_sheet
+from pixelforge.export.contact_sheet import (
+    ContactSheetOptions,
+    generate_contact_sheet,
+    generate_contact_sheet_from_frames,
+)
 from pixelforge.export.diff import (
     AssetDiffReport,
     FrameDiffEntry,
@@ -33,13 +37,19 @@ from pixelforge.export.diff import (
     generate_surface_diff,
 )
 from pixelforge.export.indexed_ts import export_indexed_ts, write_indexed_ts_bundle
-from pixelforge.export.png import surface_to_png
+from pixelforge.export.png import frames_to_apng, frames_to_gif, surface_to_png, surface_to_rgba
 from pixelforge.export.scene import (
+    DepthSortMode,
+    LoadedScene,
     SceneCompositionError,
     SceneCompositionSpec,
     SceneMountSpec,
+    SceneSpec,
     compose_scene,
+    compose_scene_frames,
+    export_scene_bundle,
     generate_scene_sheet,
+    resolve_scene_asset_spec,
 )
 from pixelforge.guard.critic import (
     CriticAssetInput,
@@ -50,10 +60,12 @@ from pixelforge.guard.critic import (
 )
 from pixelforge.guard.runner import (
     discover_asset_files,
+    discover_scene_files,
     discover_style_files,
     load_all_styles,
     load_asset_from_git,
     load_asset_module,
+    load_scene_module,
     load_style_from_git,
     load_style_module,
     run_checks,
@@ -67,12 +79,16 @@ def compile_style_indexed_bundles(
     rendered_bundles: list[ExportBundleResult],
     all_loaded: Sequence[LoadedAsset],
     options: ExportBundleOptions,
+    *,
+    all_scenes: Sequence[LoadedScene] = (),
+    loaded_by_id: dict[str, LoadedAsset] | None = None,
 ) -> list[ExportBundleResult]:
-    """Return full `StylePack` asset bundles in discovery order for `--indexed-ts`."""
+    """Return full `StylePack` asset and scene bundles in discovery order for `--indexed-ts`."""
     # INVARIANT: `dist/indexed/` is a single-bundle TypeScript module per StylePack;
-    # filtered `render`/`watch <asset_id>` must still include sibling assets of that style
-    # so `sprites.generated.ts` and `manifest.generated.ts` are never silently truncated.
+    # filtered `render`/`watch <asset_id>` must still include sibling assets and scenes
+    # of that style so `sprites.generated.ts` and `manifest.generated.ts` are never truncated.
     by_id = {bundle.manifest.id: bundle for bundle in rendered_bundles}
+    assets_map = loaded_by_id if loaded_by_id is not None else {a.SPEC.id: a for a in all_loaded}
     full_bundles: list[ExportBundleResult] = []
     for loaded in all_loaded:
         if loaded.SPEC.style_id != style.id:
@@ -80,6 +96,19 @@ def compile_style_indexed_bundles(
         existing = by_id.get(loaded.SPEC.id)
         full_bundles.append(
             existing if existing is not None else export_asset_bundle(loaded, style, options)
+        )
+    for scene in all_scenes:
+        parent = assets_map.get(scene.SCENE.parent_id)
+        if parent is None:
+            continue
+        scene_style_id = scene.SCENE.style_id or parent.SPEC.style_id
+        if scene_style_id != style.id:
+            continue
+        existing = by_id.get(scene.SCENE.id)
+        full_bundles.append(
+            existing
+            if existing is not None
+            else export_scene_bundle(scene.SCENE, parent, assets_map, style, options)
         )
     return full_bundles
 
@@ -92,11 +121,20 @@ def _emit_indexed_ts_bundles(
     *,
     filtered: bool,
     lazy: bool = False,
+    all_scenes: Sequence[LoadedScene] = (),
+    loaded_by_id: dict[str, LoadedAsset] | None = None,
 ) -> None:
     multi_style = len(bundles_by_style) > 1
     for style, style_bundles in bundles_by_style.values():
         full_bundles = (
-            compile_style_indexed_bundles(style, style_bundles, all_loaded, options)
+            compile_style_indexed_bundles(
+                style,
+                style_bundles,
+                all_loaded,
+                options,
+                all_scenes=all_scenes,
+                loaded_by_id=loaded_by_id,
+            )
             if filtered
             else style_bundles
         )
@@ -105,6 +143,63 @@ def _emit_indexed_ts_bundles(
             out_dir / "indexed" / style.id.replace("-", "_") if multi_style else out_dir / "indexed"
         )
         write_indexed_ts_bundle(ts_result, indexed_out)
+
+
+def _compile_and_write_scene(
+    scene_path: Path,
+    scene: LoadedScene,
+    loaded_by_id: dict[str, LoadedAsset],
+    styles: dict[str, StylePack],
+    options: ExportBundleOptions,
+    out_dir: Path,
+    sheets_dir: Path,
+    previews_dir: Path,
+    *,
+    sheet: bool,
+    animate: bool,
+    update_manifest: bool,
+    err: OutputFn,
+) -> tuple[StylePack, ExportBundleResult] | None:
+    parent = loaded_by_id.get(scene.SCENE.parent_id)
+    if parent is None:
+        err(f"{scene_path}:1 [missing-parent] Parent asset {scene.SCENE.parent_id!r} not found")
+        return None
+    style_id = scene.SCENE.style_id or parent.SPEC.style_id
+    style = styles.get(style_id)
+    if style is None:
+        err(f"{scene_path}:1 [missing-style] Referenced style {style_id!r} not found in styles/")
+        return None
+    try:
+        asset_spec, rendered_frames, _ = compose_scene_frames(
+            scene.SCENE,
+            parent,
+            loaded_by_id,
+            style,
+            variant=options.variant,
+        )
+    except SceneCompositionError as exc:
+        err(f"{scene_path}:1 [scene-error] {exc}")
+        return None
+
+    from pixelforge.export.bundle import export_rendered_frames_bundle
+
+    bundle = export_rendered_frames_bundle(asset_spec, rendered_frames, style, options)
+    write_export_bundle(
+        bundle,
+        out_dir,
+        previews_dir=previews_dir if animate else None,
+        update_manifest=update_manifest,
+    )
+    if sheet:
+        sheets_dir.mkdir(parents=True, exist_ok=True)
+        contact = generate_contact_sheet_from_frames(
+            asset_spec,
+            rendered_frames,
+            style,
+            ContactSheetOptions(variant=options.variant),
+        )
+        (sheets_dir / f"{scene.SCENE.id}.contact.png").write_bytes(contact.png)
+    return (style, bundle)
 
 
 def render_once(
@@ -150,6 +245,8 @@ def render_once(
     )
 
     all_loaded: list[LoadedAsset] = []
+    loaded_by_id: dict[str, LoadedAsset] = {}
+    all_scenes: list[tuple[Path, LoadedScene]] = []
     seen_asset_ids: dict[str, Path] = {}
     bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
     rendered_count = 0
@@ -164,6 +261,7 @@ def render_once(
             return 1
         seen_asset_ids[loaded.SPEC.id] = asset_path
         all_loaded.append(loaded)
+        loaded_by_id[loaded.SPEC.id] = loaded
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
 
@@ -193,6 +291,42 @@ def render_once(
         rendered_count += 1
         out(f"rendered {loaded.SPEC.id} -> {out_dir}")
 
+    for scene_path in discover_scene_files(root / "assets"):
+        loaded_scene = load_scene_module(scene_path)
+        if loaded_scene.SCENE.id in seen_asset_ids:
+            err(
+                f"{scene_path}:1 [duplicate-id] Duplicate asset ID {loaded_scene.SCENE.id!r} "
+                f"(already declared in {seen_asset_ids[loaded_scene.SCENE.id]})"
+            )
+            return 1
+        seen_asset_ids[loaded_scene.SCENE.id] = scene_path
+        all_scenes.append((scene_path, loaded_scene))
+        if asset_id is not None and loaded_scene.SCENE.id != asset_id:
+            continue
+
+        compiled = _compile_and_write_scene(
+            scene_path,
+            loaded_scene,
+            loaded_by_id,
+            styles,
+            options,
+            out_dir,
+            sheets_dir,
+            previews_dir,
+            sheet=sheet,
+            animate=animate,
+            update_manifest=asset_id is not None,
+            err=err,
+        )
+        if compiled is None:
+            return 1
+        style, bundle = compiled
+        if style.id not in bundles_by_style:
+            bundles_by_style[style.id] = (style, [])
+        bundles_by_style[style.id][1].append(bundle)
+        rendered_count += 1
+        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
+
     if rendered_count == 0:
         err(f"Asset {asset_id!r} not found under assets/")
         return 1
@@ -213,6 +347,8 @@ def render_once(
             out_dir,
             filtered=asset_id is not None,
             lazy=indexed_ts_lazy,
+            all_scenes=[s for _, s in all_scenes],
+            loaded_by_id=loaded_by_id,
         )
 
     return 0
@@ -403,10 +539,15 @@ class _WatchGraph:
 
     style_mtimes: dict[Path, int] = field(default_factory=dict[Path, int])
     asset_mtimes: dict[Path, int] = field(default_factory=dict[Path, int])
+    scene_mtimes: dict[Path, int] = field(default_factory=dict[Path, int])
     style_ids_by_path: dict[Path, str] = field(default_factory=dict[Path, str])
     asset_meta_by_path: dict[Path, tuple[str, str]] = field(
         default_factory=dict[Path, tuple[str, str]]
     )
+    scene_meta_by_path: dict[Path, tuple[str, str | None, tuple[str, ...]]] = field(
+        default_factory=dict[Path, tuple[str, str | None, tuple[str, ...]]]
+    )
+    assets_by_id: dict[str, LoadedAsset] = field(default_factory=dict[str, LoadedAsset])
     bundles_by_id: dict[str, ExportBundleResult] = field(
         default_factory=dict[str, ExportBundleResult]
     )
@@ -416,14 +557,24 @@ class _WatchGraph:
     initial_render_done: bool = False
 
 
-def _snapshot_watch_mtimes(root: Path) -> tuple[dict[Path, int], dict[Path, int]]:
+def _snapshot_watch_mtimes(
+    root: Path,
+) -> tuple[dict[Path, int], dict[Path, int], dict[Path, int]]:
     style_mtimes = {
         p: p.stat().st_mtime_ns for p in discover_style_files(root / "styles") if p.exists()
     }
     asset_mtimes = {
         p: p.stat().st_mtime_ns for p in discover_asset_files(root / "assets") if p.exists()
     }
-    return (style_mtimes, asset_mtimes)
+    scene_mtimes = {
+        p: p.stat().st_mtime_ns for p in discover_scene_files(root / "assets") if p.exists()
+    }
+    return (style_mtimes, asset_mtimes, scene_mtimes)
+
+
+def _scene_deps(scene: LoadedScene) -> tuple[str, str | None, tuple[str, ...]]:
+    deps = (scene.SCENE.parent_id, *(m.prop_id for m in scene.SCENE.mounts))
+    return (scene.SCENE.id, scene.SCENE.style_id, deps)
 
 
 def _seed_watch_graph_metadata(graph: _WatchGraph) -> None:
@@ -434,17 +585,25 @@ def _seed_watch_graph_metadata(graph: _WatchGraph) -> None:
             graph.style_ids_by_path.pop(style_path, None)
     for asset_path in graph.asset_mtimes:
         try:
-            spec = load_asset_module(asset_path).SPEC
-            graph.asset_meta_by_path[asset_path] = (spec.id, spec.style_id)
+            loaded = load_asset_module(asset_path)
+            graph.asset_meta_by_path[asset_path] = (loaded.SPEC.id, loaded.SPEC.style_id)
+            graph.assets_by_id[loaded.SPEC.id] = loaded
         except ImportError, SyntaxError, TypeError, ValueError, OSError:
             graph.asset_meta_by_path.pop(asset_path, None)
+    for scene_path in graph.scene_mtimes:
+        try:
+            loaded_scene = load_scene_module(scene_path)
+            graph.scene_meta_by_path[scene_path] = _scene_deps(loaded_scene)
+        except ImportError, SyntaxError, TypeError, ValueError, OSError:
+            graph.scene_meta_by_path.pop(scene_path, None)
 
 
 def _diff_watch_graph(
     graph: _WatchGraph,
     cur_styles: dict[Path, int],
     cur_assets: dict[Path, int],
-) -> tuple[set[Path], set[str], set[str]]:
+    cur_scenes: dict[Path, int],
+) -> tuple[set[Path], set[Path], set[str], set[str]]:
     changed_styles = {
         p
         for p in set(cur_styles) | set(graph.style_mtimes)
@@ -455,8 +614,14 @@ def _diff_watch_graph(
         for p in set(cur_assets) | set(graph.asset_mtimes)
         if cur_assets.get(p) != graph.asset_mtimes.get(p)
     }
+    changed_scenes = {
+        p
+        for p in set(cur_scenes) | set(graph.scene_mtimes)
+        if cur_scenes.get(p) != graph.scene_mtimes.get(p)
+    }
     graph.style_mtimes = cur_styles
     graph.asset_mtimes = cur_assets
+    graph.scene_mtimes = cur_scenes
 
     changed_style_ids: set[str] = set()
     for style_path in changed_styles:
@@ -474,38 +639,78 @@ def _diff_watch_graph(
             graph.style_ids_by_path.pop(style_path, None)
 
     affected_asset_paths: set[Path] = set()
+    affected_scene_paths: set[Path] = set()
     affected_style_ids: set[str] = set(changed_style_ids)
-    deleted_asset_ids: set[str] = set()
+    deleted_ids: set[str] = set()
+    changed_asset_ids: set[str] = set()
+
     for asset_path in changed_assets:
         old_meta = graph.asset_meta_by_path.get(asset_path)
         if asset_path.exists():
             affected_asset_paths.add(asset_path)
             try:
-                spec = load_asset_module(asset_path).SPEC
+                loaded = load_asset_module(asset_path)
             except ImportError, SyntaxError, TypeError, ValueError, OSError:
                 if old_meta is not None:
                     affected_style_ids.add(old_meta[1])
+                    changed_asset_ids.add(old_meta[0])
             else:
-                graph.asset_meta_by_path[asset_path] = (spec.id, spec.style_id)
-                affected_style_ids.add(spec.style_id)
+                graph.asset_meta_by_path[asset_path] = (loaded.SPEC.id, loaded.SPEC.style_id)
+                graph.assets_by_id[loaded.SPEC.id] = loaded
+                affected_style_ids.add(loaded.SPEC.style_id)
+                changed_asset_ids.add(loaded.SPEC.id)
                 if old_meta is not None:
-                    if old_meta[0] != spec.id:
-                        deleted_asset_ids.add(old_meta[0])
-                    if old_meta[1] != spec.style_id:
+                    changed_asset_ids.add(old_meta[0])
+                    if old_meta[0] != loaded.SPEC.id:
+                        deleted_ids.add(old_meta[0])
+                        graph.assets_by_id.pop(old_meta[0], None)
+                    if old_meta[1] != loaded.SPEC.style_id:
                         affected_style_ids.add(old_meta[1])
         else:
             graph.asset_meta_by_path.pop(asset_path, None)
             if old_meta is not None:
-                deleted_asset_ids.add(old_meta[0])
+                deleted_ids.add(old_meta[0])
+                changed_asset_ids.add(old_meta[0])
+                graph.assets_by_id.pop(old_meta[0], None)
                 affected_style_ids.add(old_meta[1])
 
+    for scene_path in changed_scenes:
+        old_scene_meta = graph.scene_meta_by_path.get(scene_path)
+        if scene_path.exists():
+            affected_scene_paths.add(scene_path)
+            try:
+                loaded_scene = load_scene_module(scene_path)
+            except ImportError, SyntaxError, TypeError, ValueError, OSError:
+                if old_scene_meta is not None and old_scene_meta[1] is not None:
+                    affected_style_ids.add(old_scene_meta[1])
+            else:
+                graph.scene_meta_by_path[scene_path] = _scene_deps(loaded_scene)
+                if loaded_scene.SCENE.style_id is not None:
+                    affected_style_ids.add(loaded_scene.SCENE.style_id)
+                if old_scene_meta is not None and old_scene_meta[0] != loaded_scene.SCENE.id:
+                    deleted_ids.add(old_scene_meta[0])
+        else:
+            graph.scene_meta_by_path.pop(scene_path, None)
+            if old_scene_meta is not None:
+                deleted_ids.add(old_scene_meta[0])
+
     # INVARIANT: Only `.style.py` edits invalidate sibling assets sharing that style;
-    # single `.asset.py` edits only invalidate that asset (plus `--indexed-ts` for its style).
-    for asset_path, (_, style_id) in graph.asset_meta_by_path.items():
+    # single `.asset.py` edits only invalidate that asset, dependent scenes, and `--indexed-ts`.
+    for asset_path, (aid, style_id) in graph.asset_meta_by_path.items():
         if style_id in changed_style_ids:
             affected_asset_paths.add(asset_path)
+            changed_asset_ids.add(aid)
 
-    return (affected_asset_paths, affected_style_ids, deleted_asset_ids)
+    for scene_path, (_, scene_style_id, deps) in graph.scene_meta_by_path.items():
+        parent_style = (
+            graph.assets_by_id[deps[0]].SPEC.style_id
+            if deps and deps[0] in graph.assets_by_id
+            else scene_style_id
+        )
+        if (parent_style in changed_style_ids) or any(d in changed_asset_ids for d in deps):
+            affected_scene_paths.add(scene_path)
+
+    return (affected_asset_paths, affected_scene_paths, affected_style_ids, deleted_ids)
 
 
 def _render_watch_full(
@@ -535,13 +740,16 @@ def _render_watch_full(
 
     graph.bundles_by_id.clear()
     graph.manifests_by_id.clear()
+    graph.assets_by_id.clear()
     all_loaded: list[LoadedAsset] = []
+    all_scenes: list[LoadedScene] = []
     bundles_by_style: dict[str, tuple[StylePack, list[ExportBundleResult]]] = {}
     rendered_count = 0
 
     for asset_path in asset_files:
         loaded = load_asset_module(asset_path)
         all_loaded.append(loaded)
+        graph.assets_by_id[loaded.SPEC.id] = loaded
         graph.asset_meta_by_path[asset_path] = (loaded.SPEC.id, loaded.SPEC.style_id)
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
@@ -573,6 +781,38 @@ def _render_watch_full(
         rendered_count += 1
         out(f"rendered {loaded.SPEC.id} -> {out_dir}")
 
+    for scene_path in discover_scene_files(root / "assets"):
+        loaded_scene = load_scene_module(scene_path)
+        all_scenes.append(loaded_scene)
+        graph.scene_meta_by_path[scene_path] = _scene_deps(loaded_scene)
+        if asset_id is not None and loaded_scene.SCENE.id != asset_id:
+            continue
+
+        compiled = _compile_and_write_scene(
+            scene_path,
+            loaded_scene,
+            graph.assets_by_id,
+            styles,
+            options,
+            out_dir,
+            sheets_dir,
+            out_dir,
+            sheet=sheet,
+            animate=False,
+            update_manifest=asset_id is not None,
+            err=err,
+        )
+        if compiled is None:
+            return False
+        style, bundle = compiled
+        graph.bundles_by_id[bundle.manifest.id] = bundle
+        graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
+        if style.id not in bundles_by_style:
+            bundles_by_style[style.id] = (style, [])
+        bundles_by_style[style.id][1].append(bundle)
+        rendered_count += 1
+        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
+
     if rendered_count == 0:
         err(f"Asset {asset_id!r} not found under assets/")
         return False
@@ -583,7 +823,14 @@ def _render_watch_full(
     if indexed_ts:
         for style, style_bundles in bundles_by_style.values():
             full_bundles = (
-                compile_style_indexed_bundles(style, style_bundles, all_loaded, options)
+                compile_style_indexed_bundles(
+                    style,
+                    style_bundles,
+                    all_loaded,
+                    options,
+                    all_scenes=all_scenes,
+                    loaded_by_id=graph.assets_by_id,
+                )
                 if asset_id is not None
                 else style_bundles
             )
@@ -596,6 +843,8 @@ def _render_watch_full(
             out_dir,
             filtered=asset_id is not None,
             lazy=indexed_ts_lazy,
+            all_scenes=all_scenes,
+            loaded_by_id=graph.assets_by_id,
         )
 
     graph.initial_render_done = True
@@ -607,6 +856,7 @@ def _render_watch_incremental(
     graph: _WatchGraph,
     *,
     affected_asset_paths: set[Path],
+    affected_scene_paths: set[Path],
     affected_style_ids: set[str],
     deleted_asset_ids: set[str],
     asset_id: str | None,
@@ -628,10 +878,12 @@ def _render_watch_incremental(
     for dead_id in deleted_asset_ids:
         graph.bundles_by_id.pop(dead_id, None)
         graph.manifests_by_id.pop(dead_id, None)
+        graph.assets_by_id.pop(dead_id, None)
 
     rendered_any = False
     for asset_path in sorted(affected_asset_paths):
         loaded = load_asset_module(asset_path)
+        graph.assets_by_id[loaded.SPEC.id] = loaded
         if asset_id is not None and loaded.SPEC.id != asset_id:
             continue
         style = styles.get(loaded.SPEC.style_id)
@@ -658,6 +910,35 @@ def _render_watch_incremental(
         affected_style_ids.add(style.id)
         rendered_any = True
         out(f"rendered {loaded.SPEC.id} -> {out_dir}")
+
+    for scene_path in sorted(affected_scene_paths):
+        if not scene_path.exists():
+            continue
+        loaded_scene = load_scene_module(scene_path)
+        if asset_id is not None and loaded_scene.SCENE.id != asset_id:
+            continue
+        compiled = _compile_and_write_scene(
+            scene_path,
+            loaded_scene,
+            graph.assets_by_id,
+            styles,
+            options,
+            out_dir,
+            sheets_dir,
+            out_dir,
+            sheet=sheet,
+            animate=False,
+            update_manifest=asset_id is not None,
+            err=err,
+        )
+        if compiled is None:
+            return False
+        style, bundle = compiled
+        graph.bundles_by_id[bundle.manifest.id] = bundle
+        graph.manifests_by_id[bundle.manifest.id] = bundle.manifest
+        affected_style_ids.add(style.id)
+        rendered_any = True
+        out(f"rendered {loaded_scene.SCENE.id} -> {out_dir}")
 
     if asset_id is None and (rendered_any or deleted_asset_ids):
         write_manifest(graph.manifests_by_id, out_dir)
@@ -719,8 +1000,12 @@ def watch_loop(
         animate=False,
         atlas=atlas,
     )
-    style_mtimes, asset_mtimes = _snapshot_watch_mtimes(root)
-    graph = _WatchGraph(style_mtimes=style_mtimes, asset_mtimes=asset_mtimes)
+    style_mtimes, asset_mtimes, scene_mtimes = _snapshot_watch_mtimes(root)
+    graph = _WatchGraph(
+        style_mtimes=style_mtimes,
+        asset_mtimes=asset_mtimes,
+        scene_mtimes=scene_mtimes,
+    )
     _seed_watch_graph_metadata(graph)
 
     report = run_checks(root, asset_id=asset_id)
@@ -746,14 +1031,19 @@ def watch_loop(
         while max_cycles is None or cycles < max_cycles:
             time.sleep(interval)
             cycles += 1
-            cur_styles, cur_assets = _snapshot_watch_mtimes(root)
-            if cur_styles == graph.style_mtimes and cur_assets == graph.asset_mtimes:
+            cur_styles, cur_assets, cur_scenes = _snapshot_watch_mtimes(root)
+            if (
+                cur_styles == graph.style_mtimes
+                and cur_assets == graph.asset_mtimes
+                and cur_scenes == graph.scene_mtimes
+            ):
                 continue
 
-            affected_paths, affected_styles, deleted_ids = _diff_watch_graph(
+            affected_paths, affected_scene_paths, affected_styles, deleted_ids = _diff_watch_graph(
                 graph,
                 cur_styles,
                 cur_assets,
+                cur_scenes,
             )
             if not graph.initial_render_done:
                 report = run_checks(root, asset_id=asset_id)
@@ -781,12 +1071,20 @@ def watch_loop(
                     if graph.asset_meta_by_path.get(p, (None, None))[0] == asset_id
                     or (p in cur_assets and graph.asset_meta_by_path.get(p) is None)
                 }
-                if not target_paths and asset_id not in deleted_ids:
+                target_scenes = {
+                    p
+                    for p in affected_scene_paths
+                    if graph.scene_meta_by_path.get(p, (None, None, ()))[0] == asset_id
+                    or (p in cur_scenes and graph.scene_meta_by_path.get(p) is None)
+                }
+                if not target_paths and not target_scenes and asset_id not in deleted_ids:
                     continue
                 affected_paths = target_paths
+                affected_scene_paths = target_scenes
 
-            if affected_paths:
-                report = run_checks(root, asset_id=asset_id, asset_paths=affected_paths)
+            check_paths = affected_paths | affected_scene_paths
+            if check_paths:
+                report = run_checks(root, asset_id=asset_id, asset_paths=check_paths)
                 _emit_check_violations(report.violations, out, err)
                 if not report.passed:
                     continue
@@ -795,6 +1093,7 @@ def watch_loop(
                 root,
                 graph,
                 affected_asset_paths=affected_paths,
+                affected_scene_paths=affected_scene_paths,
                 affected_style_ids=affected_styles,
                 deleted_asset_ids=deleted_ids,
                 asset_id=asset_id,
@@ -836,8 +1135,11 @@ def compose_scene_workflow(
     state: str | None,
     frame: int,
     variant: str | None,
+    depth_sort: DepthSortMode = "z_index",
     strict_bounds: bool,
     strict_perspective: bool = False,
+    animate: bool = False,
+    animate_format: Literal["gif", "apng"] = "gif",
     scale: int,
     out_dir: Path,
     sheets_dir: Path,
@@ -845,7 +1147,7 @@ def compose_scene_workflow(
     out: OutputFn,
     err: OutputFn,
 ) -> int:
-    """Compose child props onto a parent scene and emit PNG + optional `.contact.png`."""
+    """Compose child props onto a parent scene and emit PNG + optional animated/contact sheet."""
     try:
         styles = load_all_styles(root / "styles")
     except ValueError as exc:
@@ -881,6 +1183,7 @@ def compose_scene_workflow(
         parent_frame=frame,
         mounts=tuple(mounts),
         variant=variant,
+        depth_sort=depth_sort,
     )
     try:
         result = compose_scene(
@@ -902,6 +1205,44 @@ def compose_scene_workflow(
 
     for warning in result.warnings:
         out(f"warning: {warning}")
+
+    if animate:
+        anim_spec = SceneSpec(
+            id=f"{parent_id}_composed",
+            parent_id=parent_id,
+            states=(result.parent_state,),
+            mounts=tuple(mounts),
+            depth_sort=depth_sort,
+            variant=variant,
+            strict_bounds=strict_bounds,
+            strict_perspective=strict_perspective,
+        )
+        try:
+            resolved_spec = resolve_scene_asset_spec(anim_spec, parent, loaded_by_id)
+            _, anim_frames, _ = compose_scene_frames(
+                anim_spec,
+                parent,
+                loaded_by_id,
+                style,
+                variant=variant,
+            )
+        except SceneCompositionError as exc:
+            err(str(exc))
+            return 1
+
+        rgba_frames = [
+            surface_to_rgba(item.surface, style, variant=variant, scale=scale)
+            for item in anim_frames
+        ]
+        ext = "apng" if animate_format == "apng" else "gif"
+        anim_bytes = (
+            frames_to_apng(rgba_frames, fps=resolved_spec.fps)
+            if animate_format == "apng"
+            else frames_to_gif(rgba_frames, fps=resolved_spec.fps)
+        )
+        anim_path = out_dir / f"{parent_id}_{result.parent_state}_composed.{ext}"
+        anim_path.write_bytes(anim_bytes)
+        out(f"animated {anim_path} ({len(rgba_frames)} frame(s) @ {resolved_spec.fps} fps)")
 
     if sheet:
         sheets_dir.mkdir(parents=True, exist_ok=True)

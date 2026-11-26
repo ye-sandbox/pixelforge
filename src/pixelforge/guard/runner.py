@@ -16,6 +16,12 @@ from typing import cast
 from pixelforge.core.builder import Asset
 from pixelforge.core.types import AssetSpec, StylePack
 from pixelforge.export.bundle import LoadedAsset
+from pixelforge.export.scene import (
+    LoadedScene,
+    SceneCompositionError,
+    SceneSpec,
+    compose_scene_frames,
+)
 from pixelforge.guard.ast_rules import check_ast_file
 from pixelforge.guard.runtime_rules import check_asset_runtime
 from pixelforge.guard.types import GuardViolation
@@ -49,6 +55,13 @@ def discover_asset_files(assets_dir: Path) -> list[Path]:
     if not assets_dir.is_dir():
         return []
     return sorted(assets_dir.rglob("*.asset.py"))
+
+
+def discover_scene_files(assets_dir: Path) -> list[Path]:
+    """Return sorted `*.scene.py` files under `assets_dir`."""
+    if not assets_dir.is_dir():
+        return []
+    return sorted(assets_dir.rglob("*.scene.py"))
 
 
 def _exec_module_from_path(path: Path) -> ModuleType:
@@ -90,6 +103,14 @@ def _extract_asset(module: ModuleType, origin: str) -> LoadedAsset:
     return LoadedAsset(SPEC=spec, render=typed_render)
 
 
+def _extract_scene(module: ModuleType, origin: str) -> LoadedScene:
+    scene = getattr(module, "SCENE", None)
+    if not isinstance(scene, SceneSpec):
+        msg = f"Scene module {origin} must export `SCENE: SceneSpec`"
+        raise TypeError(msg)
+    return LoadedScene(SCENE=scene)
+
+
 def load_style_module(path: Path) -> StylePack:
     """Load a `StylePack` from a `*.style.py` file."""
     return _extract_style(_exec_module_from_path(path), str(path))
@@ -98,6 +119,11 @@ def load_style_module(path: Path) -> StylePack:
 def load_asset_module(path: Path) -> LoadedAsset:
     """Load a `LoadedAsset` (`SPEC` + `render`) from a `*.asset.py` file."""
     return _extract_asset(_exec_module_from_path(path), str(path))
+
+
+def load_scene_module(path: Path) -> LoadedScene:
+    """Load a `LoadedScene` (`SCENE: SceneSpec`) from a `*.scene.py` file."""
+    return _extract_scene(_exec_module_from_path(path), str(path))
 
 
 def read_git_file(repo_root: Path, file_path: Path, ref: str = "HEAD") -> str | None:
@@ -243,6 +269,7 @@ def run_checks(
 
     asset_files = discover_asset_files(root / "assets")
     asset_origins: dict[str, Path] = {}
+    loaded_assets_by_id: dict[str, LoadedAsset] = {}
     assets_checked = 0
     for asset_path in asset_files:
         in_target_paths = target_paths is None or asset_path.resolve() in target_paths
@@ -290,6 +317,7 @@ def run_checks(
                 assets_checked += 1
             continue
         asset_origins[loaded.SPEC.id] = asset_path
+        loaded_assets_by_id[loaded.SPEC.id] = loaded
 
         if not in_target_paths:
             continue
@@ -318,6 +346,100 @@ def run_checks(
                 strict_orphans=strict_orphans,
             )
         )
+
+    for scene_path in discover_scene_files(root / "assets"):
+        in_target_paths = target_paths is None or scene_path.resolve() in target_paths
+        ast_issues = check_ast_file(scene_path, scope="asset")
+        if ast_issues:
+            if in_target_paths and (
+                asset_id is None or scene_path.stem.removesuffix(".scene") == asset_id
+            ):
+                violations.extend(ast_issues)
+                assets_checked += 1
+            continue
+
+        try:
+            loaded_scene = load_scene_module(scene_path)
+        except Exception as exc:
+            if in_target_paths and (
+                asset_id is None or scene_path.stem.removesuffix(".scene") == asset_id
+            ):
+                violations.append(
+                    GuardViolation(
+                        file=str(scene_path),
+                        line=1,
+                        col=0,
+                        rule="load-error",
+                        detail=str(exc),
+                    )
+                )
+                assets_checked += 1
+            continue
+
+        scene_spec = loaded_scene.SCENE
+        if scene_spec.id in asset_origins:
+            if in_target_paths and (asset_id is None or scene_spec.id == asset_id):
+                violations.append(
+                    GuardViolation(
+                        file=str(scene_path),
+                        line=1,
+                        col=0,
+                        rule="duplicate-id",
+                        detail=(
+                            f"Duplicate asset ID {scene_spec.id!r} "
+                            f"(already declared in {asset_origins[scene_spec.id]})"
+                        ),
+                    )
+                )
+                assets_checked += 1
+            continue
+        asset_origins[scene_spec.id] = scene_path
+
+        if not in_target_paths:
+            continue
+        if asset_id is not None and scene_spec.id != asset_id:
+            continue
+
+        assets_checked += 1
+        parent = loaded_assets_by_id.get(scene_spec.parent_id)
+        if parent is None:
+            violations.append(
+                GuardViolation(
+                    file=str(scene_path),
+                    line=1,
+                    col=0,
+                    rule="missing-parent",
+                    detail=f"Parent asset {scene_spec.parent_id!r} not found under assets/",
+                )
+            )
+            continue
+
+        missing_style = scene_spec.style_id or parent.SPEC.style_id
+        style = styles.get(missing_style)
+        if style is None:
+            violations.append(
+                GuardViolation(
+                    file=str(scene_path),
+                    line=1,
+                    col=0,
+                    rule="missing-style",
+                    detail=f"Referenced style {missing_style!r} not found in styles/",
+                )
+            )
+            continue
+
+        try:
+            compose_scene_frames(scene_spec, parent, loaded_assets_by_id, style)
+        except SceneCompositionError as exc:
+            violations.append(
+                GuardViolation(
+                    file=str(scene_path),
+                    line=1,
+                    col=0,
+                    rule="scene-error",
+                    detail=str(exc),
+                )
+            )
 
     if asset_id is not None and assets_checked == 0:
         violations.append(

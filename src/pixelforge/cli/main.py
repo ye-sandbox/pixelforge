@@ -193,8 +193,11 @@ def _cmd_compose(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         state=args.state,
         frame=int(args.frame),
         variant=args.variant,
+        depth_sort=args.depth_sort,
         strict_bounds=bool(args.strict_bounds),
         strict_perspective=bool(args.strict_perspective),
+        animate=bool(args.animate),
+        animate_format=args.animate_format,
         scale=int(args.scale),
         out_dir=_resolve_dir(root, settings.previews_dir, args.out),
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
@@ -355,6 +358,23 @@ def build_parser() -> argparse.ArgumentParser:
     compose_p.add_argument("--state", default=None, help="Parent scene state")
     compose_p.add_argument("--frame", type=int, default=0, help="Parent scene frame (default: 0)")
     compose_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    compose_p.add_argument(
+        "--depth-sort",
+        choices=("z_index", "iso_y"),
+        default="z_index",
+        help="Mount ordering: explicit z_index (default) or isometric Y + z_index",
+    )
+    compose_p.add_argument(
+        "--animate",
+        action="store_true",
+        help="Emit synchronized multi-frame animated GIF/APNG preview",
+    )
+    compose_p.add_argument(
+        "--animate-format",
+        choices=("gif", "apng"),
+        default="gif",
+        help="Animated preview format when --animate is set (default: gif)",
+    )
     compose_p.add_argument(
         "--strict-bounds",
         action="store_true",
