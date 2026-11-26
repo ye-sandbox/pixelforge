@@ -23,6 +23,7 @@ from pixelforge.core.iso import IsoAnchor, iso_box, iso_project, iso_tile
 from pixelforge.core.palette import (
     PaletteLookup,
     PaletteLookupError,
+    UniversalPalette,
     build_reflection_lut,
     build_rgba_lut,
     hex_to_rgb,
@@ -151,6 +152,7 @@ __all__ = [
     "SemanticZone",
     "StylePack",
     "TilemapSpec",
+    "UniversalPalette",
     "autotile_cables",
     "autotile_floors",
     "autotile_sheet",

@@ -43,11 +43,25 @@ def generate_palette_stub(style: StylePack) -> str:
         "",
     ]
 
+    emitted: set[str] = set()
     for entry in style.palette:
+        emitted.add(entry.name)
         lines.extend(
             [
                 "    @property",
                 f"    def {entry.name}(self) -> int: ...",
+                "",
+            ]
+        )
+
+    for alias_name in style.aliases:
+        if alias_name in emitted:
+            continue
+        emitted.add(alias_name)
+        lines.extend(
+            [
+                "    @property",
+                f"    def {alias_name}(self) -> int: ...",
                 "",
             ]
         )

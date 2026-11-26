@@ -13,6 +13,18 @@ STYLE = StylePack(
         PaletteColor(index=0, name="INK", hex="#111111", flags=("outline", "shadow")),
         PaletteColor(index=1, name="PAPER", hex="#f4f1ea", flags=("surface", "bright")),
     ),
+    aliases={
+        "BG_D": "INK",
+        "BG_M": "INK",
+        "BG_L": "PAPER",
+        "SURFACE_D": "INK",
+        "SURFACE_M": "PAPER",
+        "SURFACE_L": "PAPER",
+        "ACCENT_1": "PAPER",
+        "ACCENT_2": "PAPER",
+        "EMISSIVE_1": "PAPER",
+        "EMISSIVE_2": "PAPER",
+    },
     variants={
         "amber": {
             "INK": "#140e07",

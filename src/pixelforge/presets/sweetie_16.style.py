@@ -29,6 +29,18 @@ STYLE = StylePack(
         PaletteColor(index=14, name="SLATE_M", hex="#566c86", flags=("metal", "surface")),
         PaletteColor(index=15, name="SLATE_D", hex="#333c57", flags=("metal", "shadow")),
     ),
+    aliases={
+        "BG_D": "NAVY",
+        "BG_M": "TEAL",
+        "BG_L": "GREEN",
+        "SURFACE_D": "SLATE_D",
+        "SURFACE_M": "SLATE_M",
+        "SURFACE_L": "SLATE_L",
+        "ACCENT_1": "CRIMSON",
+        "ACCENT_2": "GOLD",
+        "EMISSIVE_1": "CYAN",
+        "EMISSIVE_2": "CYAN",
+    },
     reflections={
         "CYAN": "SKY",
         "WHITE": "SLATE_L",

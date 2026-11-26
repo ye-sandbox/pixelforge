@@ -15,6 +15,18 @@ STYLE = StylePack(
         PaletteColor(index=2, name="SHADE_L", hex="#8bac0f", flags=("surface",)),
         PaletteColor(index=3, name="HIGHLIGHT", hex="#9bbc0f", flags=("bright", "surface")),
     ),
+    aliases={
+        "BG_D": "INK",
+        "BG_M": "SHADE_D",
+        "BG_L": "SHADE_L",
+        "SURFACE_D": "SHADE_D",
+        "SURFACE_M": "SHADE_L",
+        "SURFACE_L": "HIGHLIGHT",
+        "ACCENT_1": "SHADE_L",
+        "ACCENT_2": "HIGHLIGHT",
+        "EMISSIVE_1": "HIGHLIGHT",
+        "EMISSIVE_2": "HIGHLIGHT",
+    },
     variants={
         "pocket": {
             "INK": "#1e1b18",

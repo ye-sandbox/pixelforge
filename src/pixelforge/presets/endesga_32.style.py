@@ -47,6 +47,18 @@ STYLE = StylePack(
         ),
         PaletteColor(index=31, name="ASH", hex="#4c5368", flags=("metal", "surface")),
     ),
+    aliases={
+        "BG_D": "SLATE",
+        "BG_M": "PINE",
+        "BG_L": "FOREST",
+        "SURFACE_D": "STEEL_D",
+        "SURFACE_M": "STEEL_M",
+        "SURFACE_L": "STEEL_L",
+        "ACCENT_1": "RED",
+        "ACCENT_2": "GOLD",
+        "EMISSIVE_1": "GLOW_CYAN",
+        "EMISSIVE_2": "GLOW_GOLD",
+    },
     reflections={
         "GLOW_CYAN": "BLUE",
         "GLOW_GOLD": "GOLD",

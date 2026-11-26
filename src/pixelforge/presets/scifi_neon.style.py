@@ -37,6 +37,18 @@ STYLE = StylePack(
         PaletteColor(index=14, name="CORE_WHITE", hex="#f0fbff", flags=("emissive", "bright")),
         PaletteColor(index=15, name="RUST_D", hex="#4f2234", flags=("surface", "shadow")),
     ),
+    aliases={
+        "BG_D": "VOID",
+        "BG_M": "GLASS_D",
+        "BG_L": "GLASS_L",
+        "SURFACE_D": "HULL_D",
+        "SURFACE_M": "HULL_M",
+        "SURFACE_L": "HULL_L",
+        "ACCENT_1": "TRIM_BLUE",
+        "ACCENT_2": "TRIM_PURPLE",
+        "EMISSIVE_1": "NEON_CYAN",
+        "EMISSIVE_2": "NEON_MAGENTA",
+    },
     reflections={
         "NEON_CYAN": "GLASS_L",
         "NEON_MAGENTA": "TRIM_PURPLE",

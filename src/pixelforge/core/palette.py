@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import Protocol, Self
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,6 +24,63 @@ def _format_close_matches(name: str, candidates: Iterable[str]) -> str:
     return f"; did you mean {joined}?"
 
 
+class UniversalPalette(Protocol):
+    """Cross-style semantic palette protocol for portable `Asset[UniversalPalette]` modules."""
+
+    @property
+    def style_id(self) -> str: ...
+
+    @property
+    def INK(self) -> int: ...
+
+    @property
+    def BG_D(self) -> int: ...
+
+    @property
+    def BG_M(self) -> int: ...
+
+    @property
+    def BG_L(self) -> int: ...
+
+    @property
+    def SURFACE_D(self) -> int: ...
+
+    @property
+    def SURFACE_M(self) -> int: ...
+
+    @property
+    def SURFACE_L(self) -> int: ...
+
+    @property
+    def ACCENT_1(self) -> int: ...
+
+    @property
+    def ACCENT_2(self) -> int: ...
+
+    @property
+    def EMISSIVE_1(self) -> int: ...
+
+    @property
+    def EMISSIVE_2(self) -> int: ...
+
+    def __getitem__(self, name: str) -> int: ...
+
+    def __contains__(self, name: object) -> bool: ...
+
+    def __len__(self) -> int: ...
+
+    def __iter__(self) -> Iterator[str]: ...
+
+    def with_overrides(
+        self,
+        overrides: Mapping[str, str | int] | None = None,
+        /,
+        **kw_overrides: str | int,
+    ) -> Self: ...
+
+    def to_dict(self) -> dict[str, int]: ...
+
+
 class PaletteLookup:
     """Typed, fail-loud mapping from semantic palette token names to uint8 indices."""
 
@@ -31,6 +89,8 @@ class PaletteLookup:
 
     def __init__(self, style: StylePack, tokens: Sequence[str] | None = None) -> None:
         by_name = {entry.name: entry.index for entry in style.palette}
+        for alias_name, target_token in style.aliases.items():
+            by_name[alias_name] = by_name[target_token]
         if tokens is None:
             resolved = dict(by_name)
         else:

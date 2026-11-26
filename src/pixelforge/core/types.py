@@ -57,6 +57,7 @@ class StylePack(BaseModel):
     lighting_angle: LightingAngle
     outline_index: int = Field(ge=0, le=MAX_PALETTE_INDEX)
     palette: tuple[PaletteColor, ...] = Field(min_length=1)
+    aliases: dict[str, str] = Field(default_factory=dict)
     reflections: dict[str, str] = Field(default_factory=dict)
     variants: dict[str, dict[str, str]] = Field(default_factory=dict)
 
@@ -77,6 +78,23 @@ class StylePack(BaseModel):
         if self.outline_index not in indices:
             msg = f"outline_index {self.outline_index} is not defined in style {self.id!r}"
             raise ValueError(msg)
+
+        for alias_name, target_token in self.aliases.items():
+            if not alias_name:
+                msg = f"Alias name must be non-empty in style {self.id!r}"
+                raise ValueError(msg)
+            if alias_name in names:
+                msg = (
+                    f"Alias {alias_name!r} collides with existing palette token "
+                    f"in style {self.id!r}"
+                )
+                raise ValueError(msg)
+            if target_token not in names:
+                msg = (
+                    f"Alias {alias_name!r} targets unknown token {target_token!r} "
+                    f"in style {self.id!r}"
+                )
+                raise ValueError(msg)
 
         for src, dst in self.reflections.items():
             if src not in names:

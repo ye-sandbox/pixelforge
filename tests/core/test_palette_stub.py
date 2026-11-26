@@ -38,6 +38,7 @@ def test_generate_and_write_palette_stub(tmp_path: Path) -> None:
             PaletteColor(index=0, name="INK", hex="#0d1117", flags=("outline",)),
             PaletteColor(index=1, name="LED_C", hex="#58a6ff", flags=("emissive",)),
         ),
+        aliases={"EMISSIVE_1": "LED_C"},
     )
     source = generate_palette_stub(style)
     tree = ast.parse(source)
@@ -45,7 +46,15 @@ def test_generate_and_write_palette_stub(tmp_path: Path) -> None:
     assert cls.name == "DemoPackPalette"
 
     methods = {node.name for node in cls.body if isinstance(node, ast.FunctionDef)}
-    assert {"style_id", "INK", "LED_C", "__getitem__", "with_overrides", "to_dict"} <= methods
+    assert {
+        "style_id",
+        "INK",
+        "LED_C",
+        "EMISSIVE_1",
+        "__getitem__",
+        "with_overrides",
+        "to_dict",
+    } <= methods
     assert "__getattr__" not in methods
 
     style_path = tmp_path / "demo_pack.style.py"
