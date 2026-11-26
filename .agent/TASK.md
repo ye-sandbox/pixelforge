@@ -8,11 +8,7 @@
 
 ## Active Task
 
-### `[90.4]` Subdivide Oversized Prefab Modules & `tests/test_prefabs.py`
-
-- [ ] Split `src/pixelforge/core/prefabs/furniture.py`, `atmosphere.py`, and `architecture.py` into focused sub-modules while preserving `pixelforge.core.prefabs` re-exports and breaking >100 LOC drawing helpers (`_draw_upholstered_seat`, `horizon_silhouette`, `iso_chair`, `iso_rack`, `iso_partition_wall`, `iso_l_desk`).
-- [ ] Split `tests/test_prefabs.py` into focused test modules matching the prefab sub-module boundaries.
-- [ ] Verify all checks pass (`uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest`).
+_No active task queued. Awaiting next roadmap item or human instruction._
 
 ---
 
@@ -55,6 +51,7 @@
 | `[24.1]` | Wall Decor, Emissive Accents & Shelf/Corner Micro-Props (`prefabs.details` + `assets/props/`) | `8beec76` | 2026-11-26 |
 | `[90.2]` | Modularize `src/pixelforge/cli/workflow.py` by Subcommand Domain (`render_cmd`, `diff_cmd`, `watch_cmd`, `compose_cmd`, `critic_cmd`, facade `workflow.py`) | `f6a4bcd` | 2026-11-26 |
 | `[90.3]` | Decompose `guard/runner.py:run_checks` & `export/scene.py` (`compose_scene`, `generate_scene_sheet`) | `3a82e2c` | 2026-11-26 |
+| `[90.4]` | Subdivide Oversized Prefab Modules (`furniture/`, `atmosphere/`, `architecture/`) & `tests/core/prefabs/` | `a7d414c` | 2026-11-26 |
 
 ---
 
