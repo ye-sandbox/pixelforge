@@ -125,6 +125,9 @@ uv run pixelforge inspect {style|presets|prefabs|api|assets|scenes} [target] [--
 
 # Inspecionar fatias ASCII mapeadas por token, bboxes de camadas, histogramas de uso e coordenadas exatas de pixels órfãos
 uv run pixelforge probe <asset_id> [--region x,y,w,h] [--state <name>] [--frame 0] [--layers] [--format llm|json|human] [--json] [--human] [--root .]
+
+# Criar esqueletos tipados de assets, cenas ou estilos sem imagem de referência (com sync automático de stubs)
+uv run pixelforge new {asset|scene|style} <name> [--kind iso-prop|front-prop|character|tile-blob47|9slice|font] [--parent <asset_id>] [--from-preset <preset_id>] [--style <id>] [--out PATH] [--force] [--format llm|json|human] [--root .]
 ```
 
 ## Integração com Svelte 5

@@ -104,7 +104,7 @@ def _hex_luma(hex_color: str) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def _pick_starter_tokens(pack: StylePack) -> tuple[str, str, str, str, str | None]:
+def pick_starter_tokens(pack: StylePack) -> tuple[str, str, str, str, str | None]:
     outline_entry = next(
         (c for c in pack.palette if c.index == pack.outline_index),
         pack.palette[0],
@@ -138,7 +138,7 @@ def _pick_starter_tokens(pack: StylePack) -> tuple[str, str, str, str, str | Non
 
 def starter_asset_source_for_style(pack: StylePack) -> str:
     """Return a starter `.asset.py` module tailored to `pack`'s tokens and perspective."""
-    outline_tok, light_tok, mid_tok, dark_tok, accent_tok = _pick_starter_tokens(pack)
+    outline_tok, light_tok, mid_tok, dark_tok, accent_tok = pick_starter_tokens(pack)
     accent_lines = ""
     if accent_tok is not None:
         accent_lines = f"    a.put(12, 11, p.{accent_tok})\n    a.put(13, 11, p.{accent_tok})\n"

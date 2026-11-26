@@ -125,6 +125,9 @@ uv run pixelforge inspect {style|presets|prefabs|api|assets|scenes} [target] [--
 
 # Probe exact token-mapped ASCII slices, layer bboxes, token histograms, and orphan-pixel coordinates
 uv run pixelforge probe <asset_id> [--region x,y,w,h] [--state <name>] [--frame 0] [--layers] [--format llm|json|human] [--json] [--human] [--root .]
+
+# Scaffold zero-reference typed assets, scenes, or styles (with automatic palette stub sync)
+uv run pixelforge new {asset|scene|style} <name> [--kind iso-prop|front-prop|character|tile-blob47|9slice|font] [--parent <asset_id>] [--from-preset <preset_id>] [--style <id>] [--out PATH] [--force] [--format llm|json|human] [--root .]
 ```
 
 ## Svelte 5 Integration

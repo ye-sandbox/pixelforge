@@ -19,6 +19,13 @@ from pixelforge.cli.inspect_cmd import (
     inspect_scenes_workflow,
     inspect_style_workflow,
 )
+from pixelforge.cli.new_cmd import (
+    ASSET_KINDS,
+    emit_new_result,
+    scaffold_new_asset,
+    scaffold_new_scene,
+    scaffold_new_style,
+)
 from pixelforge.cli.output import (
     OutputFormat,
     add_format_arguments,
@@ -401,6 +408,58 @@ def _cmd_probe(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_new(
+    args: argparse.Namespace,
+    settings: PixelforgeSettings,
+    new_parser: argparse.ArgumentParser,
+) -> int:
+    target: str | None = getattr(args, "new_target", None)
+    if target is None:
+        new_parser.print_help()
+        return 0
+    output_format = _resolve_format_or_err(args)
+    if output_format is None:
+        return 2
+    root = _resolve_root(args.root)
+    try:
+        if target == "asset":
+            result = scaffold_new_asset(
+                root,
+                name=str(args.name),
+                kind=args.kind,
+                style=args.style,
+                out=args.out,
+                force=bool(args.force),
+                settings=settings,
+            )
+        elif target == "scene":
+            result = scaffold_new_scene(
+                root,
+                name=str(args.name),
+                parent=args.parent,
+                style=args.style,
+                out=args.out,
+                force=bool(args.force),
+                settings=settings,
+            )
+        elif target == "style":
+            result = scaffold_new_style(
+                root,
+                name=str(args.name),
+                from_preset=args.from_preset,
+                out=args.out,
+                force=bool(args.force),
+            )
+        else:
+            new_parser.print_help()
+            return 2
+    except (ValueError, FileExistsError) as exc:
+        _err(f"Error: {exc}")
+        return 2
+    emit_new_result(result, output_format=output_format, out=_out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level pixelforge CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -757,6 +816,48 @@ def build_parser() -> argparse.ArgumentParser:
     add_format_arguments(probe_p)
     probe_p.add_argument("--root", default=None, help="Project root directory")
 
+    new_p = sub.add_parser(
+        "new",
+        help="Scaffold zero-reference .asset.py, .scene.py, or .style.py modules",
+    )
+    new_p.set_defaults(_new_parser=new_p)
+    new_sub = new_p.add_subparsers(dest="new_target")
+
+    new_asset_p = new_sub.add_parser("asset", help="Scaffold a typed Asset[<Name>Palette] module")
+    new_asset_p.add_argument("name", help="Asset ID or filename stem")
+    new_asset_p.add_argument(
+        "--kind",
+        choices=ASSET_KINDS,
+        default="iso-prop",
+        help="Starter asset kind (default: iso-prop)",
+    )
+    new_asset_p.add_argument("--style", default=None, help="Target StylePack ID")
+    new_asset_p.add_argument("--out", default=None, help="Output file or directory")
+    new_asset_p.add_argument("--force", action="store_true", help="Overwrite existing file")
+    add_format_arguments(new_asset_p)
+    new_asset_p.add_argument("--root", default=None, help="Project root directory")
+
+    new_scene_p = new_sub.add_parser("scene", help="Scaffold a declarative .scene.py module")
+    new_scene_p.add_argument("name", help="Scene ID or filename stem")
+    new_scene_p.add_argument("--parent", default=None, help="Parent AssetSpec ID")
+    new_scene_p.add_argument("--style", default=None, help="Target StylePack ID")
+    new_scene_p.add_argument("--out", default=None, help="Output file or directory")
+    new_scene_p.add_argument("--force", action="store_true", help="Overwrite existing file")
+    add_format_arguments(new_scene_p)
+    new_scene_p.add_argument("--root", default=None, help="Project root directory")
+
+    new_style_p = new_sub.add_parser("style", help="Scaffold a StylePack module and sync stub")
+    new_style_p.add_argument("name", help="StylePack ID or filename stem")
+    new_style_p.add_argument(
+        "--from-preset",
+        default=None,
+        help="Optional built-in preset ID to clone",
+    )
+    new_style_p.add_argument("--out", default=None, help="Output file or directory")
+    new_style_p.add_argument("--force", action="store_true", help="Overwrite existing file")
+    add_format_arguments(new_style_p)
+    new_style_p.add_argument("--root", default=None, help="Project root directory")
+
     return parser
 
 
@@ -790,6 +891,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_inspect(args)
     if args.command == "probe":
         return _cmd_probe(args)
+    if args.command == "new":
+        new_parser: argparse.ArgumentParser = getattr(args, "_new_parser", parser)
+        return _cmd_new(args, settings, new_parser)
 
     parser.print_help()
     return 2
