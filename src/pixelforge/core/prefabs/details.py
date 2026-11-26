@@ -284,11 +284,146 @@ def floor_reflection(
     dst_slice[active] = src_slice[active]
 
 
+def wall_ac_unit(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    body: int,
+    shade: int,
+    vent: int,
+    outline: int | None = None,
+    led: int | None = None,
+) -> None:
+    """Draw a wall-mounted split AC unit onto a `(p0, p1, p2)` wall plane."""
+    with target.plane(p0=p0, p1=p1, p2=p2) as ac:
+        ac.rect(0.0, 0.0, 1.0, 1.0, fill=body, outline=outline)
+        ac.rect(0.06, 0.62, 0.88, 0.28, fill=shade)
+        ac.line(0.10, 0.72, 0.90, 0.72, vent)
+        ac.line(0.10, 0.82, 0.90, 0.82, vent)
+        if led is not None:
+            ac.dot(0.84, 0.28, led)
+
+
+def wall_whiteboard(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    frame: int,
+    board: int,
+    marker: int | None = None,
+    accent: int | None = None,
+    tray: int | None = None,
+    outline: int | None = None,
+) -> None:
+    """Draw a framed wall whiteboard with optional diagram strokes and marker tray."""
+    with target.plane(p0=p0, p1=p1, p2=p2) as wb:
+        wb.rect(0.0, 0.0, 1.0, 1.0, fill=frame, outline=outline)
+        wb.rect(0.07, 0.09, 0.86, 0.82, fill=board)
+        if marker is not None:
+            wb.line(0.15, 0.26, 0.56, 0.26, marker)
+            wb.line(0.15, 0.42, 0.46, 0.42, marker)
+            wb.line(0.15, 0.58, 0.64, 0.58, marker)
+        if accent is not None:
+            wb.rect(0.66, 0.22, 0.18, 0.20, fill=accent)
+        if tray is not None:
+            wb.rect(0.16, 0.92, 0.68, 0.08, fill=tray)
+
+
+def power_strip(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    *,
+    body: int,
+    socket: int,
+    switch: int | None = None,
+    outline: int | None = None,
+    outlets: int = 4,
+) -> None:
+    """Draw a floor or desk power strip along `(p0, p1)` with outlets and power switch."""
+    x0, y0 = round(p0[0]), round(p0[1])
+    x1, y1 = round(p1[0]), round(p1[1])
+    count = max(1, int(outlets))
+
+    if outline is not None:
+        target.line(x0, y0 - 2, x1, y1 - 2, outline)
+        target.line(x0, y0 + 2, x1, y1 + 2, outline)
+    for dy in (-1, 0, 1):
+        target.line(x0, y0 + dy, x1, y1 + dy, body)
+
+    if switch is not None:
+        sx = round(x0 + 0.12 * (x1 - x0))
+        sy = round(y0 + 0.12 * (y1 - y0))
+        target.put(sx, sy, switch)
+
+    start_t = 0.28 if switch is not None else 0.18
+    span_t = 0.66 if switch is not None else 0.64
+    for idx in range(count):
+        t = start_t + (idx / max(1, count - 1)) * span_t if count > 1 else 0.5
+        ox = round(x0 + t * (x1 - x0))
+        oy = round(y0 + t * (y1 - y0))
+        target.put(ox, oy, socket)
+
+
+def wall_outlet(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    plate: int,
+    socket: int,
+    outline: int | None = None,
+    dual: bool = True,
+) -> None:
+    """Draw a wall-mounted electrical or network outlet onto a `(p0, p1, p2)` wall plane."""
+    with target.plane(p0=p0, p1=p1, p2=p2) as outlet:
+        outlet.rect(0.0, 0.0, 1.0, 1.0, fill=plate, outline=outline)
+        if dual:
+            outlet.dot(0.50, 0.34, socket)
+            outlet.dot(0.50, 0.68, socket)
+        else:
+            outlet.dot(0.50, 0.50, socket)
+
+
+def iso_cable_catenary(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    *,
+    color: int,
+    sag: int = 6,
+    highlight: int | None = None,
+    segments: int = 8,
+) -> None:
+    """Draw a sagging catenary cable arc between `p0` and `p1`."""
+    segs = max(2, int(segments))
+    x0, y0 = float(p0[0]), float(p0[1])
+    x1, y1 = float(p1[0]), float(p1[1])
+    drop = float(sag)
+    points: list[Point2D] = []
+    for idx in range(segs + 1):
+        t = idx / segs
+        px = x0 + t * (x1 - x0)
+        py = y0 + t * (y1 - y0) + 4.0 * t * (1.0 - t) * drop
+        points.append((round(px), round(py)))
+    iso_cable_run(target, points, color=color, highlight=highlight)
+
+
 __all__ = [
     "cast_shadow",
     "contact_shadow",
     "floor_reflection",
+    "iso_cable_catenary",
     "iso_cable_run",
+    "power_strip",
+    "wall_ac_unit",
+    "wall_outlet",
     "wall_panel",
     "wall_poster",
+    "wall_whiteboard",
 ]

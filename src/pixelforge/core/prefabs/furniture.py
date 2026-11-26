@@ -7,10 +7,12 @@ from typing import Literal
 
 from pixelforge.core.builder import Asset, Layer
 from pixelforge.core.iso import IsoAnchor
+from pixelforge.core.plane import Point2D
 from pixelforge.core.prefabs.atmosphere import PlaneRegion
 
 Canvas = Asset | Layer
 RackFrontStyle = Literal["bays", "grille", "glass_door"]
+ChairFacing = Literal["se", "sw", "nw", "ne"]
 
 
 def _resolve_box_top_origin(
@@ -386,3 +388,341 @@ def iso_shelf(
         w=iw,
         d=id_,
     )
+
+
+def iso_chair(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    *,
+    seat_w: int = 12,
+    seat_d: int = 12,
+    seat_h: int = 3,
+    back_h: int = 11,
+    leg_h: int = 6,
+    top: int,
+    left: int,
+    right: int,
+    back: int,
+    leg: int,
+    outline: int | None = None,
+    facing: ChairFacing = "se",
+) -> tuple[int, int]:
+    """Draw a 2:1 isometric task chair and return the seat-center `(x, y)` anchor."""
+    sw = max(4, int(seat_w))
+    sd = max(4, int(seat_d))
+    sh = max(2, int(seat_h))
+    bh = max(3, int(back_h))
+    lh = max(2, int(leg_h))
+    icx = round(x)
+    icy = round(y)
+
+    # Central pedestal + 4-way caster base
+    base_y = icy + (sw + sd) // 4 + sh + lh
+    target.line(icx, icy + sh, icx, base_y, leg)
+    target.line(icx - sw // 2, base_y - 1, icx + sw // 2, base_y - 1, leg)
+    target.line(icx - 2, base_y, icx + 2, base_y, leg)
+
+    tx, ty = _resolve_box_top_origin(icx, icy, sw, sd, sh, "center")
+    p_top = (tx, ty)
+    p_right = (tx + sw, ty + sw // 2)
+    p_left = (tx - sd, ty + sd // 2)
+
+    def _draw_backrest() -> None:
+        if facing == "se":
+            target.iso_box(
+                tx,
+                ty - bh,
+                2,
+                sd,
+                bh,
+                top=top,
+                left=back,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "sw":
+            target.iso_box(
+                tx,
+                ty - bh,
+                sw,
+                2,
+                bh,
+                top=top,
+                left=left,
+                right=back,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "nw":
+            target.iso_box(
+                p_right[0] - 2,
+                p_right[1] - bh,
+                2,
+                sd,
+                bh,
+                top=top,
+                left=back,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "ne":
+            target.iso_box(
+                p_left[0],
+                p_left[1] - bh,
+                sw,
+                2,
+                bh,
+                top=top,
+                left=left,
+                right=back,
+                outline=outline,
+                anchor="top",
+            )
+        else:
+            msg = f"Unsupported chair facing: {facing!r}"
+            raise ValueError(msg)
+
+    if facing in ("se", "sw"):
+        _draw_backrest()
+        target.iso_box(
+            icx, icy, sw, sd, sh, top=top, left=left, right=right, outline=outline, anchor="center"
+        )
+    else:
+        target.iso_box(
+            icx, icy, sw, sd, sh, top=top, left=left, right=right, outline=outline, anchor="center"
+        )
+        _draw_backrest()
+
+    return _project_diamond(p_top, p_right, p_left, 0.5, 0.5)
+
+
+def iso_wall_shelf(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    top: int,
+    front: int,
+    bracket: int | None = None,
+    outline: int | None = None,
+    depth: int = 4,
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    """Draw a wall-mounted isometric shelf along `(p0, p1, p2)` and return 3 top slots."""
+    d = max(2, int(depth))
+    dx = -d if p1[1] >= p0[1] else d
+    dy = d // 2
+    p0_out = (p0[0] + dx, p0[1] + dy)
+    p1_out = (p1[0] + dx, p1[1] + dy)
+
+    with target.plane(p0=p0, p1=p1, p2=p0_out) as plank:
+        plank.rect(0.0, 0.0, 1.0, 1.0, fill=top, outline=outline)
+    with target.plane(p0=p0_out, p1=p1_out, p2=(p0_out[0], p0_out[1] + 2)) as lip:
+        lip.rect(0.0, 0.0, 1.0, 1.0, fill=front, outline=outline)
+
+    if bracket is not None:
+        for u in (0.18, 0.82):
+            bx = round(p0[0] + u * (p1[0] - p0[0]))
+            by = round(p0[1] + u * (p1[1] - p0[1])) + 2
+            target.line(bx, by, bx, by + 3, bracket)
+            target.line(bx, by, round(bx + dx * 0.7), round(by + dy * 0.7), bracket)
+
+    slots: list[tuple[int, int]] = []
+    for u in (0.22, 0.50, 0.78):
+        sx = round(p0[0] + u * (p1[0] - p0[0]) + dx * 0.5)
+        sy = round(p0[1] + u * (p1[1] - p0[1]) + dy * 0.5)
+        slots.append((sx, sy))
+    return (slots[0], slots[1], slots[2])
+
+
+def iso_bed(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 28,
+    d: int = 16,
+    *,
+    frame_h: int = 6,
+    headboard_h: int = 11,
+    frame: int,
+    frame_left: int,
+    frame_right: int,
+    mattress: int,
+    blanket: int,
+    blanket_shade: int | None = None,
+    pillow: int | None = None,
+    outline: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a 2:1 isometric bed with headboard, mattress, blanket, and optional pillow."""
+    iw = max(8, int(w))
+    id_ = max(6, int(d))
+    ifh = max(2, int(frame_h))
+    ihb = max(3, int(headboard_h))
+
+    tx, ty = _resolve_box_top_origin(x, y, iw, id_, ifh, anchor)
+    target.iso_box(
+        tx,
+        ty - ihb,
+        3,
+        id_,
+        ihb,
+        top=frame,
+        left=frame_left,
+        right=frame_right,
+        outline=outline,
+        anchor="top",
+    )
+    target.iso_box(
+        tx,
+        ty,
+        iw,
+        id_,
+        ifh,
+        top=mattress,
+        left=frame_left,
+        right=frame_right,
+        outline=outline,
+        anchor="top",
+    )
+
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + iw // 2)
+    p_left = (tx - id_, ty + id_ // 2)
+    with target.plane(p0=p_top, p1=p_right, p2=p_left) as top_plane:
+        top_plane.rect(0.36, 0.04, 0.62, 0.92, fill=blanket)
+        if blanket_shade is not None:
+            top_plane.rect(0.36, 0.04, 0.08, 0.92, fill=blanket_shade)
+        if pillow is not None:
+            top_plane.rect(0.10, 0.16, 0.20, 0.68, fill=pillow, outline=outline)
+
+    return _project_diamond(p_top, p_right, p_left, 0.5, 0.5)
+
+
+def iso_workbench(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 28,
+    d: int = 16,
+    *,
+    leg_h: int = 14,
+    top_h: int = 4,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    back_panel: int | None = None,
+    pegboard_dot: int | None = None,
+    lower_shelf: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+) -> IsoDeskSlots:
+    """Draw a 2:1 isometric workbench with optional lower shelf and rear pegboard."""
+    iw = max(8, int(w))
+    id_ = max(6, int(d))
+    ileg_h = max(4, int(leg_h))
+    itop_h = max(2, int(top_h))
+
+    if lower_shelf is not None:
+        target.iso_box(
+            x,
+            y + max(3, ileg_h // 2),
+            max(4, iw - 4),
+            max(4, id_ - 4),
+            2,
+            top=lower_shelf,
+            left=leg_left,
+            right=leg_right,
+            anchor="center",
+        )
+
+    slots = iso_desk(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        leg_h=ileg_h,
+        top_h=itop_h,
+        top=top,
+        left=left,
+        right=right,
+        leg_top=leg_top,
+        leg_left=leg_left,
+        leg_right=leg_right,
+        outline=outline,
+        highlight=highlight,
+    )
+
+    if back_panel is not None:
+        panel_h = max(6, ileg_h - 2)
+        p0 = (slots.p_top[0], slots.p_top[1] - panel_h)
+        p1 = (slots.p_right[0], slots.p_right[1] - panel_h)
+        p2 = slots.p_top
+        with target.plane(p0=p0, p1=p1, p2=p2) as peg:
+            peg.rect(0.0, 0.0, 1.0, 1.0, fill=back_panel, outline=outline)
+            if pegboard_dot is not None:
+                peg.grid(0.12, 0.16, 0.76, 0.68, cols=4, rows=3, color=pegboard_dot, cell_fill=0.4)
+
+    return slots
+
+
+def iso_drawer_unit(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 14,
+    d: int = 14,
+    h: int = 18,
+    *,
+    drawers: int = 3,
+    top: int,
+    left: int,
+    right: int,
+    drawer_face: int,
+    handle: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a 2:1 isometric drawer cabinet and return its `top_center` `(x, y)` anchor."""
+    iw = max(6, int(w))
+    id_ = max(6, int(d))
+    ih = max(6, int(h))
+    count = max(1, int(drawers))
+
+    target.iso_box(
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        top=top,
+        left=left,
+        right=right,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+
+    tx, ty = _resolve_box_top_origin(x, y, iw, id_, ih, anchor)
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + iw // 2)
+    p_left = (tx - id_, ty + id_ // 2)
+    p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
+    p_left_bot = (p_left[0], p_left[1] + ih)
+
+    with target.plane(p0=p_left, p1=p_front, p2=p_left_bot) as face:
+        face.grid(0.12, 0.10, 0.76, 0.80, cols=1, rows=count, color=drawer_face, cell_fill=0.65)
+        if handle is not None:
+            for idx in range(count):
+                v = 0.10 + (idx + 0.5) * (0.80 / count)
+                face.line(0.36, v, 0.64, v, handle)
+
+    return _project_diamond(p_top, p_right, p_left, 0.5, 0.5)

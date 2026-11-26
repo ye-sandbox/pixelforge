@@ -480,3 +480,260 @@ def wall_vent(
     with target.plane(p0=p0, p1=p1, p2=p2) as vent:
         vent.rect(0.0, 0.0, 1.0, 1.0, fill=frame, outline=outline)
         vent.grid(0.15, 0.20, 0.70, 0.60, cols=1, rows=count, color=slat, cell_fill=0.55)
+
+
+def iso_door(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    frame: int,
+    panel: int,
+    recess: int | None = None,
+    handle: int | None = None,
+    outline: int | None = None,
+    window: int | None = None,
+    threshold: int | None = None,
+) -> None:
+    """Draw a skewed isometric door onto a `(p0, p1, p2)` wall plane."""
+    with target.plane(p0=p0, p1=p1, p2=p2) as door:
+        door.rect(0.0, 0.0, 1.0, 1.0, fill=frame, outline=outline)
+        door.rect(0.10, 0.06, 0.80, 0.94, fill=panel)
+        if window is not None:
+            door.rect(0.24, 0.14, 0.52, 0.26, fill=window, outline=recess)
+        elif recess is not None:
+            door.rect(0.22, 0.14, 0.56, 0.30, fill=recess)
+        if recess is not None:
+            door.rect(0.22, 0.54, 0.56, 0.34, fill=recess)
+        if handle is not None:
+            door.dot(0.78, 0.52, handle)
+        if threshold is not None:
+            door.rect(-0.04, 0.96, 1.08, 0.06, fill=threshold)
+
+
+def front_door(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int | float,
+    h: int | float,
+    *,
+    frame: int,
+    panel: int,
+    recess: int | None = None,
+    handle: int | None = None,
+    outline: int | None = None,
+    window: int | None = None,
+    threshold: int | None = None,
+    frame_thickness: int = 2,
+) -> None:
+    """Draw a `front-2.5d` rectangular door with frame, optional vision glass, and handle."""
+    ix = round(x)
+    iy = round(y)
+    iw = max(5, int(w))
+    ih = max(8, int(h))
+    t = max(1, min(int(frame_thickness), (iw - 2) // 2, (ih - 2) // 2))
+
+    target.rect(ix, iy, iw, ih, frame, fill=True)
+    if outline is not None:
+        target.rect(ix, iy, iw, ih, outline, fill=False)
+
+    px, py = ix + t, iy + t
+    pw, ph = max(2, iw - 2 * t), max(4, ih - t)
+    target.rect(px, py, pw, ph, panel, fill=True)
+
+    inset_x = max(1, pw // 5)
+    inner_w = max(1, pw - 2 * inset_x)
+    if window is not None:
+        win_h = max(2, ph // 4)
+        target.rect(px + inset_x, py + max(2, ph // 8), inner_w, win_h, window, fill=True)
+        if recess is not None:
+            target.rect(px + inset_x, py + max(2, ph // 8), inner_w, win_h, recess, fill=False)
+    elif recess is not None:
+        target.rect(px + inset_x, py + max(2, ph // 8), inner_w, max(2, ph // 4), recess, fill=True)
+
+    if recess is not None:
+        target.rect(
+            px + inset_x,
+            py + max(4, (ph * 55) // 100),
+            inner_w,
+            max(2, ph // 3),
+            recess,
+            fill=True,
+        )
+    if handle is not None:
+        hx = px + max(1, pw - max(2, pw // 5))
+        hy = py + ph // 2
+        target.rect(hx, hy, 1, 2, handle, fill=True)
+    if threshold is not None:
+        target.rect(ix - 1, iy + ih - 1, iw + 2, 2, threshold, fill=True)
+
+
+def iso_raised_floor(
+    target: Canvas,
+    cx: int | float,
+    cy: int | float,
+    hw: int,
+    hh: int,
+    *,
+    step_h: int = 4,
+    top: int,
+    left: int,
+    right: int,
+    grid_color: int | None = None,
+    step: int = 12,
+    outline: int | None = None,
+) -> None:
+    """Draw a 2:1 isometric raised floor platform with extruded front skirts and optional grid."""
+    icx = round(cx)
+    icy = round(cy)
+    ihw = max(2, int(hw))
+    ihh = max(1, int(hh))
+    istep_h = max(1, int(step_h))
+
+    p_top = (icx, icy - ihh)
+    p_right = (icx + ihw, icy)
+    p_bot = (icx, icy + ihh)
+    p_left = (icx - ihw, icy)
+
+    target.polygon((p_top, p_right, p_bot, p_left), top)
+    if grid_color is not None:
+        iso_floor_pattern(target, icx, icy, ihw, ihh, color=grid_color, step=step, mode="grid")
+
+    target.polygon(
+        (p_left, p_bot, (p_bot[0], p_bot[1] + istep_h), (p_left[0], p_left[1] + istep_h)),
+        left,
+    )
+    target.polygon(
+        (p_bot, p_right, (p_right[0], p_right[1] + istep_h), (p_bot[0], p_bot[1] + istep_h)),
+        right,
+    )
+
+    if outline is not None:
+        target.line(p_top[0], p_top[1], p_right[0], p_right[1], outline)
+        target.line(p_top[0], p_top[1], p_left[0], p_left[1], outline)
+        target.line(p_left[0], p_left[1], p_left[0], p_left[1] + istep_h, outline)
+        target.line(p_right[0], p_right[1], p_right[0], p_right[1] + istep_h, outline)
+        target.line(p_left[0], p_left[1] + istep_h, p_bot[0], p_bot[1] + istep_h, outline)
+        target.line(p_bot[0], p_bot[1] + istep_h, p_right[0], p_right[1] + istep_h, outline)
+
+
+def iso_rug(
+    target: Canvas,
+    cx: int | float,
+    cy: int | float,
+    hw: int,
+    hh: int,
+    *,
+    fill: int,
+    border: int | None = None,
+    pattern: int | None = None,
+    fringe: int | None = None,
+    outline: int | None = None,
+) -> None:
+    """Draw a flat 2:1 isometric area rug with optional border, inner motif, and end fringe."""
+    icx = round(cx)
+    icy = round(cy)
+    ihw = max(2, int(hw))
+    ihh = max(1, int(hh))
+
+    target.iso_tile(icx, icy, ihw * 2, fill, height=ihh * 2, outline=outline)
+    with target.plane(
+        p0=(icx, icy - ihh),
+        p1=(icx + ihw, icy),
+        p2=(icx - ihw, icy),
+    ) as rug:
+        if border is not None:
+            rug.rect(0.10, 0.10, 0.80, 0.80, outline=border)
+        if pattern is not None:
+            rug.rect(0.28, 0.28, 0.44, 0.44, fill=pattern)
+        if fringe is not None:
+            for idx in range(4):
+                u = 0.18 + idx * 0.21
+                rug.dot(u, 0.02, fringe)
+                rug.dot(u, 0.98, fringe)
+
+
+def iso_cable_tray(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    *,
+    rail: int,
+    rung: int,
+    width: int = 4,
+    rungs: int = 5,
+    outline: int | None = None,
+) -> None:
+    """Draw a ladder-style cable tray between `p0` and `p1` with side rails and rungs."""
+    x0, y0 = round(p0[0]), round(p0[1])
+    x1, y1 = round(p1[0]), round(p1[1])
+    iw = max(2, int(width))
+    count = max(1, int(rungs))
+
+    for idx in range(count):
+        t = (idx + 0.5) / count
+        rx = round(x0 + t * (x1 - x0))
+        ry = round(y0 + t * (y1 - y0))
+        target.line(rx, ry, rx, ry + iw, rung)
+
+    target.line(x0, y0, x1, y1, rail)
+    target.line(x0, y0 + iw, x1, y1 + iw, rail)
+    if outline is not None:
+        target.line(x0, y0 - 1, x1, y1 - 1, outline)
+        target.line(x0, y0 + iw + 1, x1, y1 + iw + 1, outline)
+
+
+def window_blinds(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    slat: int,
+    shadow: int | None = None,
+    cord: int | None = None,
+    slats: int = 5,
+    open_ratio: float = 0.7,
+) -> None:
+    """Draw horizontal venetian blinds across a `(p0, p1, p2)` window glass plane."""
+    ratio = _clamp_unit(open_ratio)
+    if ratio <= 0.0:
+        return
+    count = max(1, int(slats))
+    with target.plane(p0=p0, p1=p1, p2=p2) as blinds:
+        step_v = ratio / count
+        slat_h = max(0.03, step_v * 0.55)
+        for idx in range(count):
+            v = idx * step_v
+            blinds.rect(0.0, v, 1.0, slat_h, fill=slat)
+            if shadow is not None:
+                blinds.line(0.0, min(1.0, v + slat_h), 1.0, min(1.0, v + slat_h), shadow)
+        if cord is not None:
+            blinds.line(0.84, 0.0, 0.84, min(1.0, ratio + 0.08), cord)
+
+
+def window_curtains(
+    target: Canvas,
+    p0: Point2D,
+    p1: Point2D,
+    p2: Point2D,
+    *,
+    fabric: int,
+    fold: int | None = None,
+    rod: int | None = None,
+    outline: int | None = None,
+    open_ratio: float = 0.35,
+) -> None:
+    """Draw parted left and right curtains onto a `(p0, p1, p2)` window plane."""
+    ratio = _clamp_unit(open_ratio)
+    panel_w = max(0.12, 0.48 * (1.0 - ratio * 0.72))
+    with target.plane(p0=p0, p1=p1, p2=p2) as curtains:
+        curtains.rect(0.0, 0.04, panel_w, 0.96, fill=fabric, outline=outline)
+        curtains.rect(1.0 - panel_w, 0.04, panel_w, 0.96, fill=fabric, outline=outline)
+        if fold is not None:
+            curtains.line(panel_w * 0.45, 0.06, panel_w * 0.45, 0.98, fold)
+            curtains.line(1.0 - panel_w * 0.45, 0.06, 1.0 - panel_w * 0.45, 0.98, fold)
+        if rod is not None:
+            curtains.rect(-0.04, 0.0, 1.08, 0.05, fill=rod)

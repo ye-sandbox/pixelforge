@@ -171,6 +171,156 @@ def _render_all_prefabs(asset: Asset) -> None:
         color=p.INK,
         highlight=p.METAL_M,
     )
+    prefabs.iso_raised_floor(
+        asset,
+        80,
+        92,
+        24,
+        12,
+        step_h=3,
+        top=p.METAL_M,
+        left=p.METAL_D,
+        right=p.INK,
+        grid_color=p.FLOOR_D,
+        outline=p.INK,
+    )
+    prefabs.iso_rug(
+        asset,
+        62,
+        90,
+        16,
+        8,
+        fill=p.WOOD_M,
+        border=p.WOOD_L,
+        pattern=p.WOOD_D,
+        fringe=p.CLOUD,
+        outline=p.INK,
+    )
+    prefabs.iso_door(
+        asset,
+        (108, 42),
+        (120, 48),
+        (108, 70),
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        recess=p.WOOD_D,
+        handle=p.SUN,
+        outline=p.INK,
+        window=p.SKY,
+        threshold=p.METAL_D,
+    )
+    prefabs.iso_cable_tray(
+        asset, (28, 30), (64, 18), rail=p.METAL_M, rung=p.METAL_D, width=3, outline=p.INK
+    )
+    prefabs.window_blinds(
+        asset,
+        (36, 40),
+        (60, 28),
+        (36, 62),
+        slat=p.METAL_H,
+        shadow=p.METAL_D,
+        cord=p.INK,
+    )
+    prefabs.window_curtains(
+        asset,
+        (36, 40),
+        (60, 28),
+        (36, 62),
+        fabric=p.WOOD_M,
+        fold=p.WOOD_D,
+        rod=p.METAL_D,
+        outline=p.INK,
+    )
+    prefabs.iso_chair(
+        asset,
+        64,
+        84,
+        top=p.METAL_M,
+        left=p.METAL_D,
+        right=p.INK,
+        back=p.METAL_M,
+        leg=p.INK,
+        outline=p.INK,
+    )
+    prefabs.iso_wall_shelf(
+        asset,
+        (86, 26),
+        (102, 34),
+        (86, 30),
+        top=p.WOOD_L,
+        front=p.WOOD_D,
+        bracket=p.INK,
+        outline=p.INK,
+    )
+    prefabs.iso_bed(
+        asset,
+        42,
+        68,
+        frame=p.WOOD_L,
+        frame_left=p.WOOD_M,
+        frame_right=p.WOOD_D,
+        mattress=p.CLOUD,
+        blanket=p.SKY,
+        blanket_shade=p.SKY_DARK,
+        pillow=p.METAL_H,
+        outline=p.INK,
+    )
+    prefabs.iso_workbench(
+        asset,
+        118,
+        74,
+        top=p.WOOD_L,
+        left=p.WOOD_M,
+        right=p.WOOD_D,
+        leg_top=p.METAL_M,
+        leg_left=p.METAL_D,
+        leg_right=p.INK,
+        back_panel=p.METAL_D,
+        pegboard_dot=p.METAL_H,
+        lower_shelf=p.WOOD_D,
+        outline=p.INK,
+    )
+    prefabs.iso_drawer_unit(
+        asset,
+        96,
+        76,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        drawer_face=p.FLOOR_D,
+        handle=p.SUN,
+        outline=p.INK,
+    )
+    prefabs.wall_ac_unit(
+        asset,
+        (88, 16),
+        (106, 25),
+        (88, 22),
+        body=p.CLOUD,
+        shade=p.METAL_M,
+        vent=p.INK,
+        outline=p.INK,
+        led=p.LED,
+    )
+    prefabs.wall_whiteboard(
+        asset,
+        (56, 24),
+        (74, 15),
+        (56, 38),
+        frame=p.METAL_D,
+        board=p.CLOUD,
+        marker=p.SKY_DARK,
+        accent=p.SUN,
+        tray=p.METAL_M,
+        outline=p.INK,
+    )
+    prefabs.power_strip(
+        asset, (54, 96), (68, 102), body=p.METAL_H, socket=p.INK, switch=p.LED, outline=p.INK
+    )
+    prefabs.wall_outlet(
+        asset, (74, 54), (78, 56), (74, 60), plate=p.CLOUD, socket=p.INK, outline=p.INK
+    )
+    prefabs.iso_cable_catenary(asset, (36, 62), (62, 74), color=p.INK, sag=5, highlight=p.METAL_M)
 
 
 def test_prefabs_reexported_and_deterministic() -> None:
@@ -708,3 +858,88 @@ def test_internal_atmospheric_and_telemetry_prefabs_loop_and_clip() -> None:
         points=((10, 5), (20, 5), (24, 20), (6, 20)),
     )
     assert np.all(quad_asset.root_surface.data[:, :5] == TRANSPARENT_INDEX)
+
+
+def test_room_fill_and_architectural_prefabs_contracts() -> None:
+    """Verify [19.1] architectural, furniture, and detail prefabs render and return slots."""
+    asset = _make_asset(128, 96)
+    p = asset.pal
+
+    prefabs.front_door(
+        asset,
+        8,
+        16,
+        18,
+        34,
+        frame=p.WOOD_D,
+        panel=p.WOOD_M,
+        recess=p.WOOD_D,
+        handle=p.SUN,
+        outline=p.INK,
+        window=p.SKY,
+        threshold=p.METAL_D,
+    )
+    assert np.any(asset.root_surface.data[16:50, 8:26] == p.SKY)
+
+    for idx, facing in enumerate(("se", "sw", "nw", "ne")):
+        cx, cy = prefabs.iso_chair(
+            asset,
+            40 + idx * 18,
+            34,
+            top=p.METAL_M,
+            left=p.METAL_D,
+            right=p.INK,
+            back=p.WOOD_M,
+            leg=p.INK,
+            outline=p.INK,
+            facing=facing,
+        )
+        assert 30 <= cx <= 110
+        assert 20 <= cy <= 50
+
+    shelf_slots = prefabs.iso_wall_shelf(
+        asset,
+        (72, 54),
+        (96, 66),
+        (72, 60),
+        top=p.WOOD_L,
+        front=p.WOOD_D,
+        bracket=p.INK,
+        outline=p.INK,
+    )
+    assert len(shelf_slots) == 3
+
+    wb_slots = prefabs.iso_workbench(
+        asset,
+        36,
+        72,
+        top=p.WOOD_L,
+        left=p.WOOD_M,
+        right=p.WOOD_D,
+        leg_top=p.METAL_M,
+        leg_left=p.METAL_D,
+        leg_right=p.INK,
+        back_panel=p.METAL_D,
+        pegboard_dot=p.METAL_H,
+        lower_shelf=p.WOOD_D,
+        outline=p.INK,
+    )
+    assert len(wb_slots.slots(2)) == 2
+
+    drawer_top = prefabs.iso_drawer_unit(
+        asset,
+        92,
+        74,
+        top=p.METAL_H,
+        left=p.METAL_M,
+        right=p.METAL_D,
+        drawer_face=p.FLOOR_D,
+        handle=p.SUN,
+        outline=p.INK,
+    )
+    assert drawer_top[0] > 70
+
+    # Catenary cable should sag below the straight chord y=80
+    cat_asset = _make_asset(64, 48)
+    prefabs.iso_cable_catenary(cat_asset, (10, 20), (50, 20), color=cat_asset.pal.INK, sag=8)
+    assert np.any(cat_asset.root_surface.data[26:30, 25:35] == cat_asset.pal.INK)
