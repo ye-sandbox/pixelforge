@@ -33,14 +33,25 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 EXPECTED_HOMELAB_IDS = (
     "ai_cluster_node",
+    "ai_cluster_node_iso",
     "bedroom_desk_iso",
     "old_laptop",
+    "old_laptop_iso",
     "used_gpu_rig",
+    "used_gpu_rig_iso",
 )
 EXPECTED_THINKPAD_IDS = (
     "thinkpad_r51_front",
     "thinkpad_r51_iso",
     "thinkpad_trackpoint_detail",
+)
+EXPECTED_PROPS_IDS = (
+    "coffee_mug_iso",
+    "desk_lamp_iso",
+    "monitor_iso",
+    "network_switch_iso",
+    "potted_plant_iso",
+    "storage_crate_iso",
 )
 
 
@@ -94,7 +105,9 @@ def test_pilot_pack_passes_all_guards_strict_orphans() -> None:
     assert report.violations == ()
     assert report.passed
     assert report.styles_checked == 1
-    assert report.assets_checked == len(EXPECTED_HOMELAB_IDS) + len(EXPECTED_THINKPAD_IDS)
+    assert report.assets_checked == len(EXPECTED_HOMELAB_IDS) + len(EXPECTED_THINKPAD_IDS) + len(
+        EXPECTED_PROPS_IDS
+    )
 
 
 def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
@@ -107,7 +120,7 @@ def test_pilot_pack_render_budget_and_exports(tmp_path: Path) -> None:
     }
 
     assert tuple(sorted(loaded_by_id.keys())) == tuple(
-        sorted((*EXPECTED_HOMELAB_IDS, *EXPECTED_THINKPAD_IDS))
+        sorted((*EXPECTED_HOMELAB_IDS, *EXPECTED_THINKPAD_IDS, *EXPECTED_PROPS_IDS))
     )
 
     bundles: list[ExportBundleResult] = []
