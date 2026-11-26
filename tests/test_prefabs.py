@@ -1251,3 +1251,164 @@ def test_floor_zones_thresholds_partitions_pillars_and_molding() -> None:
     )
     prefabs.iso_floor_zone(first_check, fgeom, 0.0, 0.0, 0.5, 0.5, fill=fp.WOOD_M, alt=fp.WOOD_D)
     assert np.array_equal(second.root_surface.data, first_check.root_surface.data)
+
+
+def test_living_and_workstation_furniture_prefabs() -> None:
+    def _render_furniture(asset: Asset) -> None:
+        p = asset.pal
+        l_slots = prefabs.iso_l_desk(
+            asset,
+            42,
+            38,
+            w=32,
+            d=28,
+            wing_w=14,
+            wing_d=12,
+            top=p.WOOD_L,
+            left=p.WOOD_M,
+            right=p.WOOD_D,
+            leg_top=p.METAL_M,
+            leg_left=p.METAL_D,
+            leg_right=p.INK,
+            outline=p.INK,
+            highlight=p.CLOUD,
+            mat_color=p.METAL_D,
+        )
+        assert len(l_slots.slots(2)) == 2
+
+        ns_top = prefabs.iso_nightstand(
+            asset,
+            92,
+            32,
+            top=p.WOOD_L,
+            left=p.WOOD_M,
+            right=p.WOOD_D,
+            drawer_face=p.FLOOR_D,
+            handle=p.SUN,
+            outline=p.INK,
+        )
+        assert ns_top[0] > 70
+
+        side_slots = prefabs.iso_side_table(
+            asset,
+            122,
+            34,
+            top=p.WOOD_L,
+            left=p.WOOD_M,
+            right=p.WOOD_D,
+            leg_top=p.METAL_M,
+            leg_left=p.METAL_D,
+            leg_right=p.INK,
+            lower_shelf=p.WOOD_D,
+            outline=p.INK,
+        )
+        assert side_slots.center == (122, 34)
+
+        for idx, facing in enumerate(("se", "sw", "nw", "ne")):
+            sx, sy = prefabs.iso_sofa(
+                asset,
+                34 + idx * 32,
+                76,
+                top=p.METAL_M,
+                left=p.METAL_D,
+                right=p.FLOOR_D,
+                back=p.WALL_L,
+                arm=p.METAL_H,
+                cushion_seam=p.INK,
+                outline=p.INK,
+                facing=facing,
+            )
+            assert 20 <= sx <= 145
+            assert 60 <= sy <= 90
+
+        arm_pt = prefabs.iso_armchair(
+            asset,
+            154,
+            76,
+            top=p.METAL_M,
+            left=p.METAL_D,
+            right=p.FLOOR_D,
+            back=p.WALL_L,
+            outline=p.INK,
+            facing="se",
+        )
+        assert 140 <= arm_pt[0] <= 170
+
+        coffee_slots = prefabs.iso_coffee_table(
+            asset,
+            40,
+            114,
+            top=p.WOOD_L,
+            left=p.WOOD_M,
+            right=p.WOOD_D,
+            leg_top=p.METAL_M,
+            leg_left=p.METAL_D,
+            leg_right=p.INK,
+            lower_shelf=p.WOOD_D,
+            inlay_color=p.SKY,
+            outline=p.INK,
+        )
+        assert coffee_slots.top_point(0.5, 0.5) != (0, 0)
+
+        w_top = prefabs.iso_wardrobe(
+            asset,
+            78,
+            114,
+            top=p.WOOD_L,
+            left=p.WOOD_M,
+            right=p.WOOD_D,
+            door=p.FLOOR_D,
+            handle=p.SUN,
+            outline=p.INK,
+        )
+        l_top = prefabs.iso_locker(
+            asset,
+            106,
+            114,
+            top=p.METAL_H,
+            left=p.METAL_M,
+            right=p.METAL_D,
+            door=p.FLOOR,
+            vent=p.INK,
+            handle=p.SUN,
+            badge_color=p.SUN,
+            outline=p.INK,
+        )
+        f_top = prefabs.iso_mini_fridge(
+            asset,
+            132,
+            114,
+            top=p.METAL_H,
+            left=p.METAL_M,
+            right=p.METAL_D,
+            door=p.CLOUD,
+            handle=p.INK,
+            vent=p.FLOOR_D,
+            led_color=p.LED,
+            outline=p.INK,
+        )
+        cab_top = prefabs.iso_filing_cabinet(
+            asset,
+            158,
+            114,
+            top=p.METAL_H,
+            left=p.METAL_M,
+            right=p.METAL_D,
+            drawer_face=p.FLOOR_D,
+            handle=p.SUN,
+            label_color=p.CLOUD,
+            outline=p.INK,
+        )
+        assert w_top[1] < l_top[1] + 20
+        assert f_top[0] > 110 and cab_top[0] > 140
+
+    first = _make_asset(180, 145)
+    second = _make_asset(180, 145)
+    _render_furniture(first)
+    _render_furniture(second)
+
+    assert np.array_equal(first.root_surface.data, second.root_surface.data)
+    assert np.any(first.root_surface.data == first.pal.SKY)
+    assert np.any(first.root_surface.data == first.pal.LED)
+    valid_indices = {c.index for c in first.style.palette} | {TRANSPARENT_INDEX}
+    assert set(np.unique(first.root_surface.data).tolist()).issubset(valid_indices)

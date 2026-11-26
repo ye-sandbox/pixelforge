@@ -728,3 +728,776 @@ def iso_drawer_unit(
                 face.line(0.36, v, 0.64, v, handle)
 
     return _project_diamond(p_top, p_right, p_left, 0.5, 0.5)
+
+
+def _draw_table_legs(
+    target: Canvas,
+    p_top: tuple[int, int],
+    p_right: tuple[int, int],
+    p_left: tuple[int, int],
+    iw: int,
+    id_: int,
+    itop_h: int,
+    ileg_h: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    uv_points: tuple[tuple[float, float], ...],
+) -> None:
+    leg_span = max(2, min(4, min(iw, id_) // 6))
+    coords = [_project_diamond(p_top, p_right, p_left, lu, lv) for lu, lv in uv_points]
+    coords.sort(key=lambda pt: (pt[1], pt[0]))
+    for lx, ly in coords:
+        target.iso_box(
+            lx,
+            ly + itop_h - 1,
+            leg_span,
+            leg_span,
+            ileg_h + 1,
+            top=leg_top,
+            left=leg_left,
+            right=leg_right,
+            anchor="center",
+        )
+
+
+def iso_l_desk(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 32,
+    d: int = 28,
+    *,
+    wing_w: int = 14,
+    wing_d: int = 12,
+    leg_h: int = 18,
+    top_h: int = 5,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    outline: int | None = None,
+    highlight: int | None = None,
+    mat_color: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> IsoDeskSlots:
+    """Draw a 2:1 isometric corner L-shaped desk and return bounding `IsoDeskSlots`."""
+    iw = max(12, int(w))
+    id_ = max(12, int(d))
+    ww = max(6, min(iw - 4, int(wing_w)))
+    wd = max(6, min(id_ - 4, int(wing_d)))
+    ileg_h = max(2, int(leg_h))
+    itop_h = max(2, int(top_h))
+
+    tx, ty = _resolve_box_top_origin(x, y, iw, id_, itop_h, anchor)
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + iw // 2)
+    p_left = (tx - id_, ty + id_ // 2)
+    p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
+
+    du = min(0.22, max(0.08, 3.0 / float(iw)))
+    dv = min(0.22, max(0.08, 3.0 / float(id_)))
+    u_wing = ww / float(iw)
+    v_wing = wd / float(id_)
+    _draw_table_legs(
+        target,
+        p_top,
+        p_right,
+        p_left,
+        iw,
+        id_,
+        itop_h,
+        ileg_h,
+        leg_top,
+        leg_left,
+        leg_right,
+        (
+            (du, dv),
+            (1.0 - du, dv),
+            (du, 1.0 - dv),
+            (max(du, u_wing - du), 1.0 - dv),
+            (1.0 - du, max(dv, v_wing - dv)),
+            (u_wing, v_wing),
+        ),
+    )
+
+    # INVARIANT: Draw both overlapping wings without outlines first, then paint the unified
+    # top surface and outer perimeter so the corner junction has zero internal seam.
+    target.iso_box(tx, ty, ww, id_, itop_h, top=top, left=left, right=right, anchor="top")
+    target.iso_box(tx, ty, iw, wd, itop_h, top=top, left=left, right=right, anchor="top")
+
+    p_r_front = (p_right[0] - wd, p_right[1] + wd // 2)
+    p_l_front = (p_left[0] + ww, p_left[1] + ww // 2)
+    p_inner = (tx + ww - wd, ty + ww // 2 + wd // 2)
+    p_top_l = (tx - wd, ty + wd // 2)
+    p_top_r = (tx + ww, ty + ww // 2)
+
+    with target.plane(p0=p_top, p1=p_top_r, p2=p_left) as left_wing_top:
+        left_wing_top.rect(0.0, 0.0, 1.0, 1.0, fill=top)
+    with target.plane(p0=p_top, p1=p_right, p2=p_top_l) as main_wing_top:
+        main_wing_top.rect(0.0, 0.0, 1.0, 1.0, fill=top)
+        if mat_color is not None:
+            main_wing_top.rect(0.38, 0.24, 0.42, 0.56, fill=mat_color)
+
+    if highlight is not None:
+        target.line(p_top[0], p_top[1], p_right[0], p_right[1], highlight)
+        target.line(p_top[0], p_top[1], p_left[0], p_left[1], highlight)
+
+    if outline is not None:
+        perimeter = (p_top, p_right, p_r_front, p_inner, p_l_front, p_left, p_top)
+        for idx in range(len(perimeter) - 1):
+            a_pt, b_pt = perimeter[idx], perimeter[idx + 1]
+            target.line(a_pt[0], a_pt[1], b_pt[0], b_pt[1], outline)
+        drops = (p_left, p_l_front, p_inner, p_r_front, p_right)
+        for pt in drops:
+            target.line(pt[0], pt[1], pt[0], pt[1] + itop_h, outline)
+        for idx in range(len(drops) - 1):
+            a_pt, b_pt = drops[idx], drops[idx + 1]
+            target.line(a_pt[0], a_pt[1] + itop_h, b_pt[0], b_pt[1] + itop_h, outline)
+
+    return IsoDeskSlots(
+        center=(round(x), round(y)),
+        p_top=p_top,
+        p_right=p_right,
+        p_left=p_left,
+        p_front=p_front,
+    )
+
+
+def _draw_table_with_shelf(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    iw: int,
+    id_: int,
+    ileg_h: int,
+    itop_h: int,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    lower_shelf: int | None,
+    inlay_color: int | None,
+    outline: int | None,
+    highlight: int | None,
+) -> IsoDeskSlots:
+    if lower_shelf is not None and ileg_h >= 5:
+        target.iso_box(
+            x,
+            y + max(2, ileg_h // 2),
+            max(4, iw - 4),
+            max(4, id_ - 4),
+            2,
+            top=lower_shelf,
+            left=leg_left,
+            right=leg_right,
+            anchor="center",
+        )
+    slots = iso_desk(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        leg_h=ileg_h,
+        top_h=itop_h,
+        top=top,
+        left=left,
+        right=right,
+        leg_top=leg_top,
+        leg_left=leg_left,
+        leg_right=leg_right,
+        outline=outline,
+        highlight=highlight,
+    )
+    if inlay_color is not None:
+        with target.plane(p0=slots.p_top, p1=slots.p_right, p2=slots.p_left) as top_plane:
+            top_plane.rect(0.18, 0.18, 0.64, 0.64, fill=inlay_color)
+    return slots
+
+
+def iso_side_table(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 12,
+    d: int = 12,
+    *,
+    leg_h: int = 12,
+    top_h: int = 3,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    lower_shelf: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+) -> IsoDeskSlots:
+    """Draw a compact 2:1 isometric side table with optional lower shelf."""
+    return _draw_table_with_shelf(
+        target,
+        x,
+        y,
+        max(6, int(w)),
+        max(6, int(d)),
+        max(3, int(leg_h)),
+        max(2, int(top_h)),
+        top=top,
+        left=left,
+        right=right,
+        leg_top=leg_top,
+        leg_left=leg_left,
+        leg_right=leg_right,
+        lower_shelf=lower_shelf,
+        inlay_color=None,
+        outline=outline,
+        highlight=highlight,
+    )
+
+
+def iso_coffee_table(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 22,
+    d: int = 14,
+    *,
+    leg_h: int = 6,
+    top_h: int = 3,
+    top: int,
+    left: int,
+    right: int,
+    leg_top: int,
+    leg_left: int,
+    leg_right: int,
+    lower_shelf: int | None = None,
+    inlay_color: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+) -> IsoDeskSlots:
+    """Draw a low 2:1 isometric coffee table with optional lower shelf and inlay."""
+    return _draw_table_with_shelf(
+        target,
+        x,
+        y,
+        max(8, int(w)),
+        max(8, int(d)),
+        max(2, int(leg_h)),
+        max(2, int(top_h)),
+        top=top,
+        left=left,
+        right=right,
+        leg_top=leg_top,
+        leg_left=leg_left,
+        leg_right=leg_right,
+        lower_shelf=lower_shelf,
+        inlay_color=inlay_color,
+        outline=outline,
+        highlight=highlight,
+    )
+
+
+def _draw_upholstered_seat(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int,
+    d: int,
+    seat_h: int,
+    back_h: int,
+    arm_h: int,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    back: int,
+    arm: int | None,
+    cushion_seam: int | None,
+    seats: int,
+    outline: int | None,
+    facing: ChairFacing,
+) -> tuple[int, int]:
+    sw = max(8, int(w))
+    sd = max(8, int(d))
+    sh = max(3, int(seat_h))
+    bh = max(4, int(back_h))
+    ah = max(3, int(arm_h))
+    arm_top = arm if arm is not None else top
+    tx, ty = _resolve_box_top_origin(x, y, sw, sd, sh, "center")
+    p_top = (tx, ty)
+    p_right = (tx + sw, ty + sw // 2)
+    p_left = (tx - sd, ty + sd // 2)
+    arm_thick = max(2, min(4, min(sw, sd) // 4))
+
+    def _backrest() -> None:
+        if facing == "se":
+            target.iso_box(
+                tx,
+                ty - bh,
+                3,
+                sd,
+                bh,
+                top=top,
+                left=back,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "sw":
+            target.iso_box(
+                tx,
+                ty - bh,
+                sw,
+                3,
+                bh,
+                top=top,
+                left=left,
+                right=back,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "nw":
+            target.iso_box(
+                p_right[0] - 3,
+                p_right[1] - bh,
+                3,
+                sd,
+                bh,
+                top=top,
+                left=back,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+        elif facing == "ne":
+            target.iso_box(
+                p_left[0],
+                p_left[1] - bh,
+                sw,
+                3,
+                bh,
+                top=top,
+                left=left,
+                right=back,
+                outline=outline,
+                anchor="top",
+            )
+        else:
+            msg = f"Unsupported seat facing: {facing!r}"
+            raise ValueError(msg)
+
+    def _arm(which: Literal["near", "far"]) -> None:
+        if facing in ("se", "nw"):
+            ax, ay = (tx, ty) if which == "far" else (p_left[0], p_left[1] - arm_thick // 2)
+            target.iso_box(
+                ax,
+                ay - ah + sh,
+                sw,
+                arm_thick,
+                ah,
+                top=arm_top,
+                left=left,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+        else:
+            ax, ay = (
+                (tx, ty)
+                if which == "far"
+                else (p_right[0] - arm_thick, p_right[1] + arm_thick // 2)
+            )
+            target.iso_box(
+                ax,
+                ay - ah + sh,
+                arm_thick,
+                sd,
+                ah,
+                top=arm_top,
+                left=left,
+                right=right,
+                outline=outline,
+                anchor="top",
+            )
+
+    if facing in ("se", "sw"):
+        _backrest()
+    _arm("far")
+    target.iso_box(
+        tx, ty, sw, sd, sh, top=top, left=left, right=right, outline=outline, anchor="top"
+    )
+    if cushion_seam is not None and seats > 1:
+        with target.plane(p0=p_top, p1=p_right, p2=p_left) as seat_plane:
+            for idx in range(1, seats):
+                t = idx / float(seats)
+                if facing in ("se", "nw"):
+                    seat_plane.line(0.15, t, 0.90, t, cushion_seam)
+                else:
+                    seat_plane.line(t, 0.15, t, 0.90, cushion_seam)
+    _arm("near")
+    if facing in ("nw", "ne"):
+        _backrest()
+
+    return _project_diamond(p_top, p_right, p_left, 0.5, 0.5)
+
+
+def iso_sofa(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 28,
+    d: int = 14,
+    *,
+    seat_h: int = 5,
+    back_h: int = 9,
+    arm_h: int = 6,
+    seats: int = 3,
+    top: int,
+    left: int,
+    right: int,
+    back: int,
+    arm: int | None = None,
+    cushion_seam: int | None = None,
+    outline: int | None = None,
+    facing: ChairFacing = "sw",
+) -> tuple[int, int]:
+    """Draw a 2:1 isometric multi-seat sofa and return its seat-center `(x, y)`."""
+    return _draw_upholstered_seat(
+        target,
+        x,
+        y,
+        w,
+        d,
+        seat_h,
+        back_h,
+        arm_h,
+        top=top,
+        left=left,
+        right=right,
+        back=back,
+        arm=arm,
+        cushion_seam=cushion_seam,
+        seats=max(2, int(seats)),
+        outline=outline,
+        facing=facing,
+    )
+
+
+def iso_armchair(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 14,
+    d: int = 14,
+    *,
+    seat_h: int = 5,
+    back_h: int = 9,
+    arm_h: int = 6,
+    top: int,
+    left: int,
+    right: int,
+    back: int,
+    arm: int | None = None,
+    outline: int | None = None,
+    facing: ChairFacing = "se",
+) -> tuple[int, int]:
+    """Draw a 2:1 isometric cushioned armchair and return its seat-center `(x, y)`."""
+    return _draw_upholstered_seat(
+        target,
+        x,
+        y,
+        w,
+        d,
+        seat_h,
+        back_h,
+        arm_h,
+        top=top,
+        left=left,
+        right=right,
+        back=back,
+        arm=arm,
+        cushion_seam=None,
+        seats=1,
+        outline=outline,
+        facing=facing,
+    )
+
+
+def iso_nightstand(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 12,
+    d: int = 12,
+    h: int = 14,
+    *,
+    drawers: int = 2,
+    top: int,
+    left: int,
+    right: int,
+    drawer_face: int,
+    handle: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a compact 2:1 isometric bedside nightstand and return `top_center` `(x, y)`."""
+    return iso_drawer_unit(
+        target,
+        x,
+        y,
+        max(6, int(w)),
+        max(6, int(d)),
+        max(6, int(h)),
+        drawers=max(1, int(drawers)),
+        top=top,
+        left=left,
+        right=right,
+        drawer_face=drawer_face,
+        handle=handle,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+
+
+def iso_filing_cabinet(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 12,
+    d: int = 14,
+    h: int = 24,
+    *,
+    drawers: int = 3,
+    top: int,
+    left: int,
+    right: int,
+    drawer_face: int,
+    handle: int | None = None,
+    label_color: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a tall 2:1 isometric filing cabinet with optional label tabs and return `top_center`."""
+    iw = max(6, int(w))
+    id_ = max(6, int(d))
+    ih = max(10, int(h))
+    count = max(2, int(drawers))
+    top_center = iso_drawer_unit(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        drawers=count,
+        top=top,
+        left=left,
+        right=right,
+        drawer_face=drawer_face,
+        handle=handle,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+    if label_color is not None:
+        tx, ty = _resolve_box_top_origin(x, y, iw, id_, ih, anchor)
+        p_left = (tx - id_, ty + id_ // 2)
+        p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
+        p_left_bot = (p_left[0], p_left[1] + ih)
+        with target.plane(p0=p_left, p1=p_front, p2=p_left_bot) as face:
+            for idx in range(count):
+                v = 0.10 + (idx + 0.25) * (0.80 / count)
+                face.line(0.40, v, 0.60, v, label_color)
+    return top_center
+
+
+def _draw_cabinet_box(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    iw: int,
+    id_: int,
+    ih: int,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    outline: int | None,
+    highlight: int | None,
+    anchor: IsoAnchor,
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]]:
+    target.iso_box(
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        top=top,
+        left=left,
+        right=right,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+    tx, ty = _resolve_box_top_origin(x, y, iw, id_, ih, anchor)
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + iw // 2)
+    p_left = (tx - id_, ty + id_ // 2)
+    p_front = (tx + iw - id_, ty + iw // 2 + id_ // 2)
+    p_left_bot = (p_left[0], p_left[1] + ih)
+    top_center = _project_diamond(p_top, p_right, p_left, 0.5, 0.5)
+    return (top_center, p_left, p_front, p_left_bot)
+
+
+def iso_wardrobe(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 18,
+    d: int = 12,
+    h: int = 30,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    door: int,
+    seam: int | None = None,
+    handle: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a tall 2:1 isometric double-door wardrobe and return `top_center` `(x, y)`."""
+    iw = max(8, int(w))
+    id_ = max(6, int(d))
+    ih = max(12, int(h))
+    top_center, p_left, p_front, p_left_bot = _draw_cabinet_box(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        top=top,
+        left=left,
+        right=right,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+    with target.plane(p0=p_left, p1=p_front, p2=p_left_bot) as face:
+        face.rect(0.10, 0.08, 0.80, 0.84, fill=door)
+        seam_col = seam if seam is not None else (outline if outline is not None else left)
+        face.line(0.50, 0.08, 0.50, 0.92, seam_col)
+        if handle is not None:
+            face.line(0.42, 0.42, 0.42, 0.56, handle)
+            face.line(0.58, 0.42, 0.58, 0.56, handle)
+    return top_center
+
+
+def iso_locker(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 12,
+    d: int = 12,
+    h: int = 30,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    door: int,
+    vent: int | None = None,
+    handle: int | None = None,
+    badge_color: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a tall 2:1 isometric metal locker with vents and return `top_center` `(x, y)`."""
+    iw = max(6, int(w))
+    id_ = max(6, int(d))
+    ih = max(12, int(h))
+    top_center, p_left, p_front, p_left_bot = _draw_cabinet_box(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        top=top,
+        left=left,
+        right=right,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+    with target.plane(p0=p_left, p1=p_front, p2=p_left_bot) as face:
+        face.rect(0.14, 0.08, 0.72, 0.84, fill=door)
+        vent_col = vent if vent is not None else (outline if outline is not None else left)
+        for v in (0.14, 0.20, 0.80, 0.86):
+            face.line(0.24, v, 0.76, v, vent_col)
+        if handle is not None:
+            face.line(0.74, 0.45, 0.74, 0.57, handle)
+        if badge_color is not None:
+            face.line(0.38, 0.30, 0.62, 0.30, badge_color)
+    return top_center
+
+
+def iso_mini_fridge(
+    target: Canvas,
+    x: int | float,
+    y: int | float,
+    w: int = 12,
+    d: int = 12,
+    h: int = 18,
+    *,
+    top: int,
+    left: int,
+    right: int,
+    door: int,
+    handle: int | None = None,
+    vent: int | None = None,
+    led_color: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "center",
+) -> tuple[int, int]:
+    """Draw a compact 2:1 isometric mini-fridge and return `top_center` `(x, y)`."""
+    iw = max(6, int(w))
+    id_ = max(6, int(d))
+    ih = max(8, int(h))
+    top_center, p_left, p_front, p_left_bot = _draw_cabinet_box(
+        target,
+        x,
+        y,
+        iw,
+        id_,
+        ih,
+        top=top,
+        left=left,
+        right=right,
+        outline=outline,
+        highlight=highlight,
+        anchor=anchor,
+    )
+    with target.plane(p0=p_left, p1=p_front, p2=p_left_bot) as face:
+        face.rect(0.12, 0.08, 0.76, 0.72, fill=door)
+        if handle is not None:
+            face.line(0.76, 0.24, 0.76, 0.56, handle)
+        if vent is not None:
+            face.line(0.18, 0.86, 0.82, 0.86, vent)
+            face.line(0.18, 0.92, 0.82, 0.92, vent)
+        if led_color is not None:
+            face.dot(0.24, 0.16, led_color)
+    return top_center
