@@ -27,7 +27,7 @@ from pixelforge.export.scene import (
 )
 from pixelforge.guard.ast_rules import check_ast_file
 from pixelforge.guard.runtime_rules import check_asset_runtime
-from pixelforge.guard.scene_rules import check_scene_runtime
+from pixelforge.guard.scene_rules import check_scene_graph, check_scene_runtime
 from pixelforge.guard.types import GuardViolation
 
 
@@ -442,6 +442,8 @@ def _check_single_scene(
     asset_id: str | None,
     asset_origins: dict[str, Path],
     loaded_assets_by_id: Mapping[str, LoadedAsset],
+    loaded_scenes_by_id: dict[str, tuple[SceneSpec, str]],
+    reported_scene_ids: set[str],
 ) -> tuple[int, list[GuardViolation]]:
     in_target_paths = target_paths is None or scene_path.resolve() in target_paths
     loaded_scene, checked_delta, pre_violations = _load_guarded_module(
@@ -458,9 +460,11 @@ def _check_single_scene(
         return dup_checked, dup_violations
 
     asset_origins[scene_spec.id] = scene_path
+    loaded_scenes_by_id[scene_spec.id] = (scene_spec, str(scene_path))
     if not in_target_paths or (asset_id is not None and scene_spec.id != asset_id):
         return 0, []
 
+    reported_scene_ids.add(scene_spec.id)
     parent = loaded_assets_by_id.get(scene_spec.parent_id)
     if parent is None:
         return 1, _file_violation(
@@ -517,6 +521,8 @@ def run_checks(
         assets_checked += checked_delta
         violations.extend(asset_violations)
 
+    loaded_scenes_by_id: dict[str, tuple[SceneSpec, str]] = {}
+    reported_scene_ids: set[str] = set()
     for scene_path in discover_scene_files(root / "assets"):
         checked_delta, scene_violations = _check_single_scene(
             scene_path,
@@ -525,9 +531,16 @@ def run_checks(
             asset_id,
             asset_origins,
             loaded_assets_by_id,
+            loaded_scenes_by_id,
+            reported_scene_ids,
         )
         assets_checked += checked_delta
         violations.extend(scene_violations)
+
+    if reported_scene_ids:
+        violations.extend(
+            check_scene_graph(loaded_scenes_by_id, report_scene_ids=reported_scene_ids)
+        )
 
     if asset_id is not None and assets_checked == 0:
         violations.append(

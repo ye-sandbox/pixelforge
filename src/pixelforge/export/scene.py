@@ -67,6 +67,19 @@ class SceneMountSpec(BaseModel):
     z_index: int = 0
 
 
+class ScenePortalSpec(BaseModel):
+    """Portal or transition edge linking this scene to another scene."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(min_length=1)
+    target_scene_id: str = Field(min_length=1)
+    anchor: str | None = None
+    target_portal_id: str | None = None
+    bidirectional: bool = False
+    transition: str = Field(default="interact", min_length=1)
+
+
 class SceneCompositionSpec(BaseModel):
     """Complete deterministic scene composition specification."""
 
@@ -92,6 +105,7 @@ class SceneSpec(BaseModel):
     frames: int | None = Field(default=None, ge=1)
     fps: int | None = Field(default=None, ge=1, le=60)
     mounts: tuple[SceneMountSpec, ...] = ()
+    portals: tuple[ScenePortalSpec, ...] = ()
     depth_sort: DepthSortMode = "iso_y"
     variant: str | None = None
     strict_bounds: bool = False

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Literal
 
 from pixelforge.export.analyze_ref import ReferenceAnalysis
@@ -55,6 +56,25 @@ _VIOLATION_HINTS: dict[str, str] = {
     ),
     "scene-occlusion": (
         "Adjust z_index, anchor spacing, or offsets to reduce prop overlap below threshold."
+    ),
+    "duplicate-portal": "Assign each ScenePortalSpec in SCENE.portals a unique id.",
+    "scene-portal-self-loop": (
+        "Target another scene id or a distinct target_portal_id on self-transitions."
+    ),
+    "scene-portal-anchor": (
+        "Ensure portal.anchor exists on the parent asset and lies inside its opaque bbox."
+    ),
+    "scene-portal-target": (
+        "Ensure portal.target_scene_id matches an existing *.scene.py SceneSpec.id."
+    ),
+    "scene-portal-target-portal": (
+        "Ensure portal.target_portal_id matches a declared portal id in the target scene."
+    ),
+    "scene-portal-reciprocal": (
+        "Add a matching reciprocal portal in the target scene for bidirectional portals."
+    ),
+    "scene-graph-unreachable": (
+        "Connect isolated scenes with incoming or outgoing portals in multi-scene worlds."
     ),
     "palette-stub-missing": (
         "Run `pixelforge check --sync-stubs` to generate typed *_palette.py stubs."
@@ -190,10 +210,12 @@ def emit_reference_analysis(
     *,
     output_format: OutputFormat,
     out: OutputFn,
+    scaffold_source: str | None = None,
+    scaffold_path: Path | None = None,
 ) -> None:
     """Emit `pixelforge analyze-ref` output in `llm`, `json`, or `human` format."""
     if output_format == "json":
-        payload = {
+        payload: dict[str, object] = {
             "ephemeral": True,
             "style_id": analysis.style_id,
             "source_width": analysis.source_width,
@@ -215,11 +237,20 @@ def emit_reference_analysis(
             "legend": analysis.legend,
             "ascii_sketch": list(analysis.ascii_sketch),
         }
+        if scaffold_source is not None:
+            payload["scaffold_source"] = scaffold_source
+        if scaffold_path is not None:
+            payload["scaffold_path"] = str(scaffold_path)
         out(json.dumps(payload, indent=2))
         return
 
     if output_format == "human":
         out(analysis.format_report())
+        if scaffold_path is not None:
+            out(f"\nscaffold_written: {scaffold_path}")
+        if scaffold_source is not None:
+            out("\n# --- scaffolded .asset.py ---")
+            out(scaffold_source)
         return
 
     sym_by_token = {token: sym for sym, token in analysis.legend.items()}
@@ -240,3 +271,8 @@ def emit_reference_analysis(
     out("ascii:")
     for row in analysis.ascii_sketch:
         out(row)
+    if scaffold_path is not None:
+        out(f"scaffold_path={scaffold_path}")
+    if scaffold_source is not None:
+        out("scaffold_source:")
+        out(scaffold_source)

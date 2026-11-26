@@ -11,8 +11,8 @@ from pixelforge.cli.main import main
 from pixelforge.core.builder import Asset
 from pixelforge.core.types import AssetSpec, PaletteColor, PerspectiveMode, StylePack
 from pixelforge.export.bundle import LoadedAsset
-from pixelforge.export.scene import SceneMountSpec, SceneSpec
-from pixelforge.guard.scene_rules import check_scene_runtime
+from pixelforge.export.scene import SceneMountSpec, ScenePortalSpec, SceneSpec
+from pixelforge.guard.scene_rules import check_scene_graph, check_scene_runtime
 
 
 def _sample_style() -> StylePack:
@@ -361,3 +361,179 @@ SCENE = SceneSpec(
     rules = {v["rule"] for v in err_payload["violations"]}
     assert {"duplicate-mount", "scene-anchor-bounds"} <= rules
     assert all(v["hint"] for v in err_payload["violations"])
+
+
+def test_scene_portal_runtime_checks() -> None:
+    """Verify duplicate-portal, self-loop, and portal anchor bounds checks."""
+    style = _sample_style()
+    parent = _make_parent(anchors=(("door_in", 12, 14), ("door_oob", 1, 1)))
+    scene = SceneSpec(
+        id="room_a",
+        parent_id="parent_room",
+        portals=(
+            ScenePortalSpec(id="p1", target_scene_id="room_a"),
+            ScenePortalSpec(id="p1", target_scene_id="room_b", anchor="missing_anchor"),
+            ScenePortalSpec(id="p2", target_scene_id="room_b", anchor="door_oob"),
+        ),
+    )
+
+    violations = check_scene_runtime(scene, parent, {}, style, file_path="room_a.scene.py")
+    rules = {v.rule for v in violations}
+    assert {"duplicate-portal", "scene-portal-self-loop", "scene-portal-anchor"} <= rules
+
+
+def test_check_scene_graph_multi_scene_validation() -> None:
+    """Validate bidirectional portal links, missing targets, and unreachable islands."""
+    room_a = SceneSpec(
+        id="room_a",
+        parent_id="p_a",
+        portals=(
+            ScenePortalSpec(
+                id="to_b",
+                target_scene_id="room_b",
+                target_portal_id="to_a",
+                bidirectional=True,
+            ),
+        ),
+    )
+    room_b = SceneSpec(
+        id="room_b",
+        parent_id="p_b",
+        portals=(
+            ScenePortalSpec(
+                id="to_a",
+                target_scene_id="room_a",
+                target_portal_id="to_b",
+                bidirectional=True,
+            ),
+        ),
+    )
+    assert (
+        check_scene_graph({"room_a": (room_a, "a.scene.py"), "room_b": (room_b, "b.scene.py")})
+        == []
+    )
+
+    # Broken target, missing target_portal_id, missing reciprocal, and unreachable island
+    broken_a = SceneSpec(
+        id="room_a",
+        parent_id="p_a",
+        portals=(
+            ScenePortalSpec(id="to_missing", target_scene_id="nowhere"),
+            ScenePortalSpec(
+                id="to_b_bad_port",
+                target_scene_id="room_b",
+                target_portal_id="nonexistent",
+            ),
+            ScenePortalSpec(
+                id="to_b_oneway",
+                target_scene_id="room_b",
+                bidirectional=True,
+            ),
+        ),
+    )
+    room_b_empty = SceneSpec(id="room_b", parent_id="p_b")
+    island = SceneSpec(id="island", parent_id="p_c")
+
+    violations = check_scene_graph(
+        {
+            "room_a": (broken_a, "a.scene.py"),
+            "room_b": (room_b_empty, "b.scene.py"),
+            "island": (island, "c.scene.py"),
+        }
+    )
+    by_rule = {v.rule: v for v in violations}
+    assert "scene-portal-target" in by_rule
+    assert "scene-portal-target-portal" in by_rule
+    assert "scene-portal-reciprocal" in by_rule
+    assert by_rule["scene-graph-unreachable"].severity == "warning"
+
+
+def test_cli_check_validates_multi_scene_world_graph(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `pixelforge check` validates multi-scene portal graphs across `*.scene.py`."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    (tmp_path / "assets" / "hall.asset.py").write_text(
+        """from __future__ import annotations
+from pixelforge import Asset, AssetSpec
+
+SPEC = AssetSpec(
+    id="hall_base",
+    style_id="homelab-16bit",
+    perspective="iso-2:1",
+    width=32,
+    height=32,
+    states=("idle",),
+)
+
+def render(a: Asset) -> None:
+    p = a.pal
+    a.rect(4, 4, 24, 24, p.CHASSIS_DARK)
+    a.anchor("door_east", 20, 16)
+""",
+        encoding="utf-8",
+    )
+
+    scene_a = tmp_path / "assets" / "hall_a.scene.py"
+    scene_b = tmp_path / "assets" / "hall_b.scene.py"
+    scene_a.write_text(
+        """from __future__ import annotations
+from pixelforge import ScenePortalSpec, SceneSpec
+
+SCENE = SceneSpec(
+    id="hall_a",
+    parent_id="hall_base",
+    portals=(
+        ScenePortalSpec(
+            id="east_door",
+            target_scene_id="hall_b",
+            anchor="door_east",
+            target_portal_id="west_door",
+            bidirectional=True,
+        ),
+    ),
+)
+""",
+        encoding="utf-8",
+    )
+    scene_b.write_text(
+        """from __future__ import annotations
+from pixelforge import ScenePortalSpec, SceneSpec
+
+SCENE = SceneSpec(
+    id="hall_b",
+    parent_id="hall_base",
+    portals=(
+        ScenePortalSpec(
+            id="west_door",
+            target_scene_id="hall_a",
+            anchor="door_east",
+            target_portal_id="east_door",
+            bidirectional=True,
+        ),
+    ),
+)
+""",
+        encoding="utf-8",
+    )
+
+    assert main(["check", "--format", "json", "--root", str(tmp_path)]) == 0
+    ok_payload = json.loads(capsys.readouterr().out)
+    assert ok_payload["passed"] is True
+
+    # Break reciprocal link in hall_b
+    scene_b.write_text(
+        """from __future__ import annotations
+from pixelforge import SceneSpec
+
+SCENE = SceneSpec(id="hall_b", parent_id="hall_base")
+""",
+        encoding="utf-8",
+    )
+    assert main(["check", "--format", "json", "--root", str(tmp_path)]) == 1
+    err_payload = json.loads(capsys.readouterr().out)
+    assert err_payload["passed"] is False
+    assert any(v["rule"] == "scene-portal-target-portal" for v in err_payload["violations"])

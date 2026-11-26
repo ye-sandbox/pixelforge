@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -12,11 +13,13 @@ from numpy.typing import NDArray
 from PIL import Image
 
 from pixelforge.core.palette import hex_to_rgb
+from pixelforge.core.palette_stub import palette_stub_class_name
 from pixelforge.core.types import TRANSPARENT_INDEX, PaletteColor, StylePack
 
 _ASCII_SYMBOLS = "#@%*=+:-~^!&?$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 _TRANSPARENT_CHAR = "."
 _MAX_SKETCH_DIM = 128
+_NON_IDENT_RE = re.compile(r"[^a-zA-Z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,7 @@ class ReferenceAnalysis:
     histogram: tuple[PaletteTokenCount, ...]
     legend: dict[str, str]
     ascii_sketch: tuple[str, ...]
+    opaque_bbox: tuple[int, int, int, int] | None = None
 
     def format_report(self) -> str:
         """Format the ephemeral analysis as human- and agent-readable text."""
@@ -188,6 +192,10 @@ def analyze_reference_image(
         char_by_index[pal_idx] = sym
 
     sketch_rows = tuple("".join(char_by_index[int(idx)] for idx in row) for row in index_grid)
+    ys, xs = np.nonzero(index_grid != TRANSPARENT_INDEX)
+    opaque_bbox: tuple[int, int, int, int] | None = (
+        (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())) if len(xs) > 0 else None
+    )
 
     return ReferenceAnalysis(
         source_width=src_w,
@@ -200,4 +208,151 @@ def analyze_reference_image(
         histogram=tuple(histogram),
         legend=legend,
         ascii_sketch=sketch_rows,
+        opaque_bbox=opaque_bbox,
     )
+
+
+def sanitize_asset_id(raw: str) -> str:
+    """Normalize an arbitrary string into a valid snake_case asset identifier."""
+    cleaned = _NON_IDENT_RE.sub("_", raw.strip()).strip("_").lower()
+    if not cleaned:
+        return "scaffold_asset"
+    if cleaned[0].isdigit():
+        return f"asset_{cleaned}"
+    return cleaned
+
+
+def _resolve_scaffold_tokens(
+    analysis: ReferenceAnalysis,
+    style: StylePack,
+) -> tuple[str, str, str | None, str | None]:
+    """Select `(outline, primary, secondary, emissive)` palette tokens for scaffolding."""
+    by_index = {c.index: c for c in style.palette}
+    by_name = {c.name: c for c in style.palette}
+
+    outline_color = by_index.get(style.outline_index)
+    outline_token = outline_color.name if outline_color is not None else style.palette[0].name
+
+    surface_tokens: list[str] = []
+    emissive_token: str | None = None
+    for entry in analysis.histogram:
+        color = by_name.get(entry.token)
+        if color is None or color.name == outline_token:
+            continue
+        if "emissive" in color.flags:
+            if emissive_token is None:
+                emissive_token = color.name
+            continue
+        surface_tokens.append(color.name)
+
+    if not surface_tokens:
+        for color in style.palette:
+            if color.name != outline_token and "emissive" not in color.flags:
+                surface_tokens.append(color.name)
+                if len(surface_tokens) >= 2:
+                    break
+    if not surface_tokens:
+        surface_tokens.append(outline_token)
+
+    primary_token = surface_tokens[0]
+    secondary_token = surface_tokens[1] if len(surface_tokens) > 1 else None
+    return outline_token, primary_token, secondary_token, emissive_token
+
+
+def _resolve_plane_corners(
+    analysis: ReferenceAnalysis,
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]]:
+    """Compute `(p0, p1, p2, anchor_bottom)` integer coordinates from `analysis`."""
+    w = analysis.target_width
+    h = analysis.target_height
+    if analysis.opaque_bbox is not None:
+        x0, y0, x1, y1 = analysis.opaque_bbox
+    else:
+        x0 = max(0, w // 4)
+        y0 = max(0, h // 4)
+        x1 = min(w - 1, max(x0, (3 * w) // 4 - 1))
+        y1 = min(h - 1, max(y0, (3 * h) // 4 - 1))
+
+    if x1 == x0 and w > 1:
+        x1 = min(w - 1, x0 + 1) if x0 + 1 < w else x0 - 1
+    if y1 == y0 and h > 1:
+        y1 = min(h - 1, y0 + 1) if y0 + 1 < h else y0 - 1
+
+    p0 = (x0, y0)
+    p1 = (x1, y0)
+    p2 = (x0, y1)
+    cx = max(0, min(w - 1, (x0 + x1) // 2))
+    cy = max(0, min(h - 1, y1))
+    return p0, p1, p2, (cx, cy)
+
+
+def scaffold_asset_from_analysis(
+    analysis: ReferenceAnalysis,
+    style: StylePack,
+    *,
+    asset_id: str,
+) -> str:
+    """Generate a `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeleton from `analysis`."""
+    norm_id = sanitize_asset_id(asset_id)
+    palette_slug = style.id.replace("-", "_")
+    palette_class = palette_stub_class_name(style.id)
+    outline_tok, primary_tok, secondary_tok, emissive_tok = _resolve_scaffold_tokens(
+        analysis, style
+    )
+    p0, p1, p2, (ax, ay) = _resolve_plane_corners(analysis)
+
+    token_summary = (
+        ", ".join(f"{e.token} ({e.percentage:.1f}%)" for e in analysis.histogram[:5])
+        or "none (empty reference)"
+    )
+
+    header = (
+        f'"""Scaffolded {norm_id} asset '
+        f'({analysis.target_width}x{analysis.target_height}, {style.perspective})."""'
+    )
+    render_doc = (
+        f'    """Render {norm_id} skeleton derived from reference ({analysis.simplified_ratio})."""'
+    )
+    body_lines: list[str] = [
+        header,
+        "",
+        "from __future__ import annotations",
+        "",
+        "from typing import TYPE_CHECKING",
+        "",
+        "from pixelforge import Asset, AssetSpec",
+        "",
+        "if TYPE_CHECKING:",
+        f"    from styles.{palette_slug}_palette import {palette_class}",
+        "",
+        "SPEC = AssetSpec(",
+        f'    id="{norm_id}",',
+        f'    style_id="{style.id}",',
+        f'    perspective="{style.perspective}",',
+        f"    width={analysis.target_width},",
+        f"    height={analysis.target_height},",
+        '    states=("idle",),',
+        "    frames=1,",
+        "    fps=4,",
+        ")",
+        "",
+        "",
+        f"def render(a: Asset[{palette_class}]) -> None:",
+        render_doc,
+        "    p = a.pal",
+        f"    # Reference palette tokens: {token_summary}",
+        f'    with a.layer("body", outline=p.{outline_tok}):',
+        f"        with a.plane(p0={p0!r}, p1={p1!r}, p2={p2!r}) as body_plane:",
+        f"            body_plane.rect(0.0, 0.0, 1.0, 1.0, fill=p.{primary_tok})",
+    ]
+    if secondary_tok is not None:
+        body_lines.append(
+            f"            body_plane.rect(0.2, 0.2, 0.6, 0.6, fill=p.{secondary_tok})"
+        )
+    if emissive_tok is not None:
+        cx = max(0, min(analysis.target_width - 1, (p0[0] + p1[0]) // 2))
+        cy = max(0, min(analysis.target_height - 1, (p0[1] + p2[1]) // 2))
+        body_lines.append(f"    a.put({cx}, {cy}, p.{emissive_tok})")
+    body_lines.append(f'    a.anchor("mount_bottom", {ax}, {ay})')
+    body_lines.append("")
+    return "\n".join(body_lines)

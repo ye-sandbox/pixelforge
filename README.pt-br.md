@@ -112,7 +112,7 @@ uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--sca
 uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Extrair proporção, histograma de paleta e rascunho ASCII quantizado efêmeros de uma imagem de referência local
-uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--scaffold [--id ASSET_ID] [--out PATH] [--force]] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Compor props filhos sobre âncoras declaradas de uma cena pai e validar limites/oclusão
 uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--format llm|json|human] [--json] [--human] [--root .]

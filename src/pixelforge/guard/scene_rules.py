@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Final
 
 import numpy as np
@@ -13,6 +13,7 @@ from pixelforge.export.scene import (
     MountedPropPlacement,
     SceneCompositionError,
     SceneCompositionResult,
+    ScenePortalSpec,
     SceneSpec,
     compose_scene_results,
 )
@@ -193,6 +194,102 @@ def _check_placement_ergonomics(
     return violations
 
 
+def _check_duplicate_portals(scene_spec: SceneSpec, file_path: str) -> list[GuardViolation]:
+    violations: list[GuardViolation] = []
+    seen_ids: set[str] = set()
+    reported: set[str] = set()
+    for portal in scene_spec.portals:
+        if portal.id in seen_ids and portal.id not in reported:
+            reported.add(portal.id)
+            violations.append(
+                _violation(
+                    file_path,
+                    "duplicate-portal",
+                    f"Duplicate portal ID {portal.id!r} in scene {scene_spec.id!r}",
+                )
+            )
+        seen_ids.add(portal.id)
+    return violations
+
+
+def _check_portal_self_loops(scene_spec: SceneSpec, file_path: str) -> list[GuardViolation]:
+    violations: list[GuardViolation] = []
+    for portal in scene_spec.portals:
+        if portal.target_scene_id == scene_spec.id and (
+            portal.target_portal_id is None or portal.target_portal_id == portal.id
+        ):
+            violations.append(
+                _violation(
+                    file_path,
+                    "scene-portal-self-loop",
+                    (
+                        f"Portal {portal.id!r} in scene {scene_spec.id!r} "
+                        f"forms a self-loop to {scene_spec.id!r}"
+                    ),
+                )
+            )
+    return violations
+
+
+def _check_portal_anchors(
+    scene_spec: SceneSpec,
+    parent: AssetModule,
+    parent_frames_by_key: Mapping[tuple[str, int], RenderedFrame],
+    res: SceneCompositionResult,
+    file_path: str,
+    seen_keys: set[tuple[str, str]],
+) -> list[GuardViolation]:
+    if not scene_spec.portals:
+        return []
+    parent_frame = parent_frames_by_key.get((res.parent_state, res.parent_frame))
+    if parent_frame is None:
+        return []
+
+    label = f"({res.parent_state!r}, frame={res.parent_frame})"
+    anchors_by_name: dict[str, AnchorPoint] = {a.name: a for a in res.parent_anchors}
+    bbox = _opaque_bbox(parent_frame)
+    violations: list[GuardViolation] = []
+
+    for portal in scene_spec.portals:
+        if portal.anchor is None:
+            continue
+        anchor = anchors_by_name.get(portal.anchor)
+        if anchor is None:
+            key = ("scene-portal-anchor-missing", f"{portal.id}:{portal.anchor}")
+            if key not in seen_keys:
+                seen_keys.add(key)
+                violations.append(
+                    _violation(
+                        file_path,
+                        "scene-portal-anchor",
+                        (
+                            f"Portal {portal.id!r} anchor {portal.anchor!r} not found on "
+                            f"parent {parent.SPEC.id!r} in {label}"
+                        ),
+                    )
+                )
+            continue
+
+        if bbox is not None:
+            x0, y0, x1, y1 = bbox
+            if not (x0 <= anchor.x <= x1 and y0 <= anchor.y <= y1):
+                key = ("scene-portal-anchor-bounds", f"{portal.id}:{portal.anchor}")
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    violations.append(
+                        _violation(
+                            file_path,
+                            "scene-portal-anchor",
+                            (
+                                f"Portal {portal.id!r} anchor {portal.anchor!r} "
+                                f"({anchor.x}, {anchor.y}) lies outside parent {parent.SPEC.id!r} "
+                                f"opaque bbox [{x0}..{x1}]x[{y0}..{y1}] in {label}"
+                            ),
+                        )
+                    )
+    return violations
+
+
 def check_scene_runtime(
     scene_spec: SceneSpec,
     parent: AssetModule,
@@ -203,6 +300,8 @@ def check_scene_runtime(
 ) -> list[GuardViolation]:
     """Validate deterministic ergonomics invariants on a `SceneSpec`."""
     violations = _check_duplicate_mounts(scene_spec, file_path)
+    violations.extend(_check_duplicate_portals(scene_spec, file_path))
+    violations.extend(_check_portal_self_loops(scene_spec, file_path))
 
     try:
         _, results, _ = compose_scene_results(
@@ -232,6 +331,16 @@ def check_scene_runtime(
                 seen_keys,
             )
         )
+        violations.extend(
+            _check_portal_anchors(
+                scene_spec,
+                parent,
+                parent_frames_by_key,
+                res,
+                file_path,
+                seen_keys,
+            )
+        )
         label = f"({res.parent_state!r}, frame={res.parent_frame})"
         for placement in res.placements:
             violations.extend(
@@ -242,6 +351,114 @@ def check_scene_runtime(
                     label,
                     file_path,
                     seen_keys,
+                )
+            )
+
+    return violations
+
+
+def _find_reciprocal_portal(
+    source_scene_id: str,
+    portal: ScenePortalSpec,
+    target_spec: SceneSpec,
+) -> ScenePortalSpec | None:
+    """Return a matching return portal in `target_spec` if one exists."""
+    for candidate in target_spec.portals:
+        if candidate.target_scene_id != source_scene_id:
+            continue
+        if portal.target_portal_id is not None and candidate.id != portal.target_portal_id:
+            continue
+        if candidate.target_portal_id is not None and candidate.target_portal_id != portal.id:
+            continue
+        return candidate
+    return None
+
+
+def check_scene_graph(
+    scenes_by_id: Mapping[str, tuple[SceneSpec, str]],
+    *,
+    report_scene_ids: Collection[str] | None = None,
+) -> list[GuardViolation]:
+    """Validate multi-scene portal targets, return links, and world-graph connectivity."""
+    if not scenes_by_id:
+        return []
+
+    violations: list[GuardViolation] = []
+    incoming_targets: set[str] = set()
+    has_any_portals = any(spec.portals for spec, _ in scenes_by_id.values())
+
+    for spec, _ in scenes_by_id.values():
+        for portal in spec.portals:
+            incoming_targets.add(portal.target_scene_id)
+
+    for scene_id, (scene_spec, file_path) in sorted(scenes_by_id.items()):
+        if report_scene_ids is not None and scene_id not in report_scene_ids:
+            continue
+
+        for portal in scene_spec.portals:
+            target_entry = scenes_by_id.get(portal.target_scene_id)
+            if target_entry is None:
+                violations.append(
+                    _violation(
+                        file_path,
+                        "scene-portal-target",
+                        (
+                            f"Portal {portal.id!r} in scene {scene_id!r} targets unknown "
+                            f"scene {portal.target_scene_id!r}"
+                        ),
+                    )
+                )
+                continue
+
+            target_spec, _ = target_entry
+            target_portals = {p.id: p for p in target_spec.portals}
+            if (
+                portal.target_portal_id is not None
+                and portal.target_portal_id not in target_portals
+            ):
+                violations.append(
+                    _violation(
+                        file_path,
+                        "scene-portal-target-portal",
+                        (
+                            f"Portal {portal.id!r} in scene {scene_id!r} references missing "
+                            f"target_portal_id {portal.target_portal_id!r} in scene "
+                            f"{portal.target_scene_id!r}"
+                        ),
+                    )
+                )
+                continue
+
+            if (
+                portal.bidirectional
+                and _find_reciprocal_portal(scene_id, portal, target_spec) is None
+            ):
+                violations.append(
+                    _violation(
+                        file_path,
+                        "scene-portal-reciprocal",
+                        (
+                            f"Bidirectional portal {portal.id!r} in scene {scene_id!r} has no "
+                            f"matching reciprocal portal back from scene {portal.target_scene_id!r}"
+                        ),
+                    )
+                )
+
+        if (
+            len(scenes_by_id) > 1
+            and has_any_portals
+            and not scene_spec.portals
+            and scene_id not in incoming_targets
+        ):
+            violations.append(
+                _violation(
+                    file_path,
+                    "scene-graph-unreachable",
+                    (
+                        f"Scene {scene_id!r} has no incoming or outgoing portals in "
+                        "multi-scene world graph"
+                    ),
+                    severity="warning",
                 )
             )
 

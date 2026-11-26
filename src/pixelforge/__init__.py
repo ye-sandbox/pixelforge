@@ -41,7 +41,7 @@ from pixelforge.core import (
     render_font_atlas,
     xorshift32,
 )
-from pixelforge.export import SceneMountSpec, SceneSpec
+from pixelforge.export import SceneMountSpec, ScenePortalSpec, SceneSpec
 
 __all__ = [
     "MAX_PALETTE_INDEX",
@@ -64,6 +64,7 @@ __all__ = [
     "PaletteLookupError",
     "Plane",
     "SceneMountSpec",
+    "ScenePortalSpec",
     "SceneSpec",
     "StylePack",
     "TilemapSpec",

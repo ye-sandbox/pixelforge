@@ -32,7 +32,12 @@ from pixelforge.cli.settings import (
     load_pixelforge_settings,
 )
 from pixelforge.cli.watch_cmd import watch_loop
-from pixelforge.export.analyze_ref import analyze_reference_image, parse_sketch_size
+from pixelforge.export.analyze_ref import (
+    analyze_reference_image,
+    parse_sketch_size,
+    sanitize_asset_id,
+    scaffold_asset_from_analysis,
+)
 from pixelforge.guard.runner import load_all_styles, run_checks, sync_palette_stubs
 
 
@@ -218,7 +223,36 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
         _err(f"failed to analyze reference image {image_path}: {exc}")
         return 1
 
-    emit_reference_analysis(analysis, output_format=output_format, out=_out)
+    scaffold_source: str | None = None
+    scaffold_path: Path | None = None
+    if bool(args.scaffold):
+        asset_id = (
+            sanitize_asset_id(str(args.id)) if args.id else sanitize_asset_id(image_path.stem)
+        )
+        scaffold_source = scaffold_asset_from_analysis(
+            analysis, styles[style_id], asset_id=asset_id
+        )
+        if args.out is not None:
+            raw_out = Path(str(args.out))
+            target_path = (
+                raw_out / f"{asset_id}.asset.py"
+                if raw_out.is_dir() or raw_out.suffix != ".py"
+                else raw_out
+            )
+            if target_path.exists() and not bool(args.force):
+                _err(f"refusing to overwrite existing {target_path} (pass --force to overwrite)")
+                return 1
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(scaffold_source, encoding="utf-8")
+            scaffold_path = target_path
+
+    emit_reference_analysis(
+        analysis,
+        output_format=output_format,
+        out=_out,
+        scaffold_source=scaffold_source,
+        scaffold_path=scaffold_path,
+    )
     return 0
 
 
@@ -489,6 +523,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_p.add_argument("--style", default=None, help="Target StylePack ID")
     analyze_p.add_argument("--size", default="32x32", help="Sketch dimensions WxH (default: 32x32)")
+    analyze_p.add_argument(
+        "--scaffold",
+        action="store_true",
+        help="Generate an initial Layer/Plane/StylePack-tokenized .asset.py skeleton",
+    )
+    analyze_p.add_argument(
+        "--id", default=None, help="Asset ID for --scaffold (default: image stem)"
+    )
+    analyze_p.add_argument(
+        "--out",
+        default=None,
+        help="Optional output .asset.py path or directory when --scaffold is set",
+    )
+    analyze_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing file when --scaffold --out is set",
+    )
     add_format_arguments(analyze_p)
     analyze_p.add_argument("--root", default=None, help="Project root directory")
 
