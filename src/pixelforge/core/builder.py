@@ -66,6 +66,19 @@ class LayerDiagnostic:
     pixel_count: int
 
 
+@dataclass(frozen=True)
+class CapturedLayer:
+    """Isolated full-canvas surface for a single `with a.layer(...)` block."""
+
+    name: str
+    role: LayerRole
+    depth: int
+    offset: tuple[int, int]
+    opaque_bbox: tuple[int, int, int, int] | None
+    pixel_count: int
+    surface: IndexedSurface
+
+
 def _infer_layer_role(name: str) -> LayerRole:
     lower = name.lower()
     if lower in {"collision", "solid", "wall", "walls", "blocker", "colliders"} or lower.startswith(
@@ -211,6 +224,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
     _layer_spans: list[LayerSemanticSpan]
     _track_layers: bool
     _layer_diagnostics: list[LayerDiagnostic]
+    _capture_layers: bool
+    _captured_layers: list[CapturedLayer]
 
     def __init__(
         self,
@@ -223,6 +238,7 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         token_overrides: Mapping[str, str | int] | None = None,
         track_maps: bool = False,
         track_layers: bool = False,
+        capture_layers: bool = False,
     ) -> None:
         active_state = spec.states[0] if state is None else state
         if active_state not in spec.states:
@@ -255,6 +271,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         self._layer_spans = []
         self._track_layers = track_layers
         self._layer_diagnostics = []
+        self._capture_layers = capture_layers
+        self._captured_layers = []
 
     def __enter__(self) -> Self:
         return self
@@ -353,6 +371,11 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
     def layer_diagnostics(self) -> tuple[LayerDiagnostic, ...]:
         """Snapshot of per-layer bounding boxes and pixel counts (`track_layers=True`)."""
         return tuple(self._layer_diagnostics)
+
+    @property
+    def captured_layers(self) -> tuple[CapturedLayer, ...]:
+        """Snapshot of isolated per-layer surfaces (`capture_layers=True`)."""
+        return tuple(self._captured_layers)
 
     def hashf(self, x: int, y: int, salt: int = 0) -> float:
         """Stateless deterministic `[0, 1)` coordinate hash salted by asset seed."""
@@ -490,6 +513,8 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
             self._record_layer_span(frame, surf)
         if self._track_layers:
             self._record_layer_diagnostic(frame, surf, depth=len(self._layer_stack))
+        if self._capture_layers:
+            self._record_captured_layer(frame, surf, depth=len(self._layer_stack))
 
         parent = self.surface
         z_offset = 0.0
@@ -557,6 +582,41 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
                 size=(surf.width, surf.height),
                 opaque_bbox=bbox,
                 pixel_count=pixel_count,
+            )
+        )
+
+    def _record_captured_layer(
+        self,
+        frame: _LayerFrame,
+        surf: IndexedSurface,
+        *,
+        depth: int,
+    ) -> None:
+        parent_ox, parent_oy = self._current_offset()
+        gx_off = parent_ox + frame.offset[0]
+        gy_off = parent_oy + frame.offset[1]
+        isolated = IndexedSurface(self._root_surface.width, self._root_surface.height)
+        isolated.blit_layer(surf, gx_off, gy_off)
+        ys, xs = np.nonzero(isolated.data != TRANSPARENT_INDEX)
+        if len(xs) == 0:
+            bbox: tuple[int, int, int, int] | None = None
+            pixel_count = 0
+        else:
+            min_x = int(xs.min())
+            max_x = int(xs.max())
+            min_y = int(ys.min())
+            max_y = int(ys.max())
+            bbox = (min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+            pixel_count = len(xs)
+        self._captured_layers.append(
+            CapturedLayer(
+                name=frame.name,
+                role=frame.role,
+                depth=depth,
+                offset=(gx_off, gy_off),
+                opaque_bbox=bbox,
+                pixel_count=pixel_count,
+                surface=isolated,
             )
         )
 

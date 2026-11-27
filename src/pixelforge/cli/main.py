@@ -127,6 +127,7 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
         previews_dir=_resolve_dir(root, settings.previews_dir),
         sheet=bool(args.sheet),
+        layers=bool(args.layers),
         animate=bool(args.animate),
         animate_format=args.animate_format,
         emissive=args.emissive,
@@ -492,6 +493,11 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
     render_p.add_argument("--out", default=None, help="Output directory")
     render_p.add_argument("--sheet", action="store_true", help="Generate diagnostic .contact.png")
+    render_p.add_argument(
+        "--layers",
+        action="store_true",
+        help="Include isolated per-layer explode view in .contact.png when --sheet is set",
+    )
     render_p.add_argument(
         "--animate",
         action="store_true",

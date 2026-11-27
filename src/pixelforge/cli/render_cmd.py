@@ -130,6 +130,7 @@ def compile_and_write_asset(
     previews_dir: Path | None,
     *,
     sheet: bool,
+    layers: bool = False,
     update_manifest: bool,
     err: OutputFn,
 ) -> tuple[StylePack, ExportBundleResult] | None:
@@ -154,7 +155,7 @@ def compile_and_write_asset(
         contact = generate_contact_sheet(
             loaded,
             style,
-            ContactSheetOptions(variant=options.variant),
+            ContactSheetOptions(variant=options.variant, layers=layers),
         )
         (sheets_dir / f"{loaded.SPEC.id}.contact.png").write_bytes(contact.png)
     return (style, bundle)
@@ -267,6 +268,7 @@ def _render_asset_targets(
     ids_filter: set[str] | None,
     filtered: bool,
     sheet: bool,
+    layers: bool = False,
     pack_entries: list[PackSheetEntry] | None,
     err: OutputFn,
 ) -> (
@@ -316,6 +318,7 @@ def _render_asset_targets(
             sheets_dir,
             previews_dir,
             sheet=sheet,
+            layers=layers,
             update_manifest=filtered,
             err=err,
         )
@@ -570,6 +573,7 @@ def render_once(
     sheets_dir: Path,
     previews_dir: Path,
     sheet: bool,
+    layers: bool = False,
     animate: bool,
     animate_format: Literal["gif", "apng"] = "gif",
     emissive: bool | None,
@@ -630,6 +634,7 @@ def render_once(
         ids_filter=parsed_ids,
         filtered=filtered,
         sheet=sheet,
+        layers=layers,
         pack_entries=pack_entries,
         err=err,
     )

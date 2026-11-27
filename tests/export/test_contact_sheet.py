@@ -123,9 +123,10 @@ def test_contact_sheet_emissive_column_renders_only_emissive_pixels() -> None:
     ruler_left = 28
     header_h = 44
     zoomed_w = spec.width * 4
-    right_x = pad + ruler_left + zoomed_w + 24
+    right_x = pad + ruler_left + zoomed_w + 16 + zoomed_w + 24
     right_y = header_h + pad
-    matrix_y = right_y + spec.height + 24
+    sil_y = right_y + 10 + spec.height + 10
+    matrix_y = sil_y + 10 + (spec.height * 2) + 12
 
     # state_label_w = max(measure_text("healthy")[0], measure_text("faulty")[0]) + 10 = 44
     state_label_w = 44
@@ -244,9 +245,13 @@ def test_contact_sheet_apng_for_multiframe_asset() -> None:
 
     # Layout coordinates for zoom=4, 16x16
     zoom_x = 16 + 28
-    zoom_y = 44 + 16 + 14
-    right_x = zoom_x + (16 * 4) + 24
+    zoom_y = 44 + 16 + 24
+    zoomed_w = 16 * 4
+    clean_zoom_x = zoom_x + zoomed_w + 16
+    right_x = clean_zoom_x + zoomed_w + 24
     preview_1x_y = (44 + 16) + 10
+    sil_y = preview_1x_y + 16 + 10
+    matrix_y = sil_y + 10 + (16 * 2) + 12
 
     with Image.open(io.BytesIO(res_a.png)) as apng:
         assert getattr(apng, "is_animated", False) is True
@@ -261,10 +266,12 @@ def test_contact_sheet_apng_for_multiframe_asset() -> None:
             if frame_idx == 0:
                 assert np.array_equal(rgba, res_a.rgba)
 
-            # Check zoomed pixel at (4 + frame_idx, 8) -> center of 4x4 block
+            # Check zoomed pixel at (4 + frame_idx, 8) -> center of 4x4 block (annotated & clean)
             zx = zoom_x + (4 + frame_idx) * 4 + 2
+            czx = clean_zoom_x + (4 + frame_idx) * 4 + 2
             zy = zoom_y + 8 * 4 + 2
             assert tuple(int(c) for c in rgba[zy, zx, :3]) == (0x39, 0xC5, 0xCF)
+            assert tuple(int(c) for c in rgba[zy, czx, :3]) == (0x39, 0xC5, 0xCF)
 
             # Check 1x dark preview pixel at (4 + frame_idx, 8)
             px = right_x + (4 + frame_idx)
@@ -273,10 +280,94 @@ def test_contact_sheet_apng_for_multiframe_asset() -> None:
 
             # Check `anim` column in state matrix animates non-primary state ("fault") too
             state_label_w = max(measure_text("idle")[0], measure_text("fault")[0]) + 10
-            matrix_y = (44 + 16) + 16 + 24
             fault_row_y = matrix_y + 20 + (16 * 2 + 6)
             emit_step = max(16 * 2, measure_text("emissive")[0]) + 6
             anim_x = right_x + state_label_w + 3 * (16 * 2 + 6) + emit_step
             ax = anim_x + (4 + frame_idx) * 2 + 1
             ay = fault_row_y + 8 * 2 + 1
             assert tuple(int(c) for c in rgba[ay, ax, :3]) == (0x39, 0xC5, 0xCF)
+
+
+def test_contact_sheet_clean_zoom_panel_silhouettes_and_dense_rulers() -> None:
+    style = _non_emissive_style()
+    spec = AssetSpec(
+        id="dense_tile",
+        style_id="flat-style",
+        width=16,
+        height=16,
+        perspective="iso-2:1",
+        states=("idle",),
+        frames=1,
+        fps=1,
+    )
+
+    def render(a: Asset) -> None:
+        a.rect(2, 2, 12, 12, a.pal.CHASSIS_MID_GREY)
+        a.anchor("center", 8, 8)
+        a.hitbox("body", 2, 2, 12, 12)
+
+    asset = LoadedAsset(SPEC=spec, render=render)
+    zoom = 6
+    res = generate_contact_sheet(
+        asset, style, ContactSheetOptions(zoom=zoom, include_variants=False)
+    )
+    rgba = res.rgba
+
+    zoom_x = 16 + 28
+    zoom_y = 44 + 16 + 24
+    zoomed_w = 16 * zoom
+    clean_zoom_x = zoom_x + zoomed_w + 16
+    right_x = clean_zoom_x + zoomed_w + 24
+    sil_y = (44 + 16) + 10 + 16 + 10
+
+    # Annotated panel has anchor crosshair at (8, 8); clean panel has pure CHASSIS_MID_GREY.
+    ann_cx = zoom_x + 8 * zoom + (zoom // 2)
+    clean_cx = clean_zoom_x + 8 * zoom + (zoom // 2)
+    cy = zoom_y + 8 * zoom + (zoom // 2)
+    assert tuple(int(c) for c in rgba[cy, ann_cx, :3]) == (255, 123, 114)
+    assert tuple(int(c) for c in rgba[cy, clean_cx, :3]) == (0x55, 0x66, 0x77)
+
+    # Denser 2px ruler tick on <= 32px sprite at x=2
+    tick_2px_x = zoom_x + 2 * zoom
+    assert tuple(int(c) for c in rgba[zoom_y - 1, tick_2px_x, :3]) == (121, 192, 255)
+
+    # Pure silhouette strips: sil 1x w/b at right_x, sil 1x b/w at right_x + sil_1x_col_w
+    sil_1x_col_w = max(16, measure_text("sil 1x b/w")[0]) + 8
+    sil_wb_x = right_x
+    sil_bw_x = right_x + sil_1x_col_w
+    sil_img_y = sil_y + 10
+    # Background pixel (0, 0) vs opaque pixel (8, 8)
+    assert tuple(int(c) for c in rgba[sil_img_y, sil_wb_x, :3]) == (0, 0, 0)
+    assert tuple(int(c) for c in rgba[sil_img_y + 8, sil_wb_x + 8, :3]) == (255, 255, 255)
+    assert tuple(int(c) for c in rgba[sil_img_y, sil_bw_x, :3]) == (255, 255, 255)
+    assert tuple(int(c) for c in rgba[sil_img_y + 8, sil_bw_x + 8, :3]) == (0, 0, 0)
+
+
+def test_contact_sheet_layers_explode_view() -> None:
+    style = _non_emissive_style()
+    spec = AssetSpec(
+        id="layered_crate",
+        style_id="flat-style",
+        width=16,
+        height=16,
+        perspective="iso-2:1",
+        states=("idle",),
+        frames=1,
+        fps=1,
+    )
+
+    def render(a: Asset) -> None:
+        with a.layer("base"):
+            a.rect(2, 6, 12, 8, a.pal.CHASSIS_MID_GREY)
+        with a.layer("rim"):
+            a.rect(4, 2, 8, 4, a.pal.DEEP_OUTLINE_TOKEN)
+
+    asset = LoadedAsset(SPEC=spec, render=render)
+    res_plain = generate_contact_sheet(
+        asset, style, ContactSheetOptions(zoom=4, include_variants=False, layers=False)
+    )
+    res_layers = generate_contact_sheet(
+        asset, style, ContactSheetOptions(zoom=4, include_variants=False, layers=True)
+    )
+    assert res_layers.height > res_plain.height
+    assert_binary_alpha(res_layers.rgba)

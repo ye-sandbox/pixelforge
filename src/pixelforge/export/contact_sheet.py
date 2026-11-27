@@ -8,6 +8,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from pixelforge.core.builder import Asset, CapturedLayer
 from pixelforge.core.palette import hex_to_rgb
 from pixelforge.core.surface import IndexedSurface, orphan_pixel_mask
 from pixelforge.core.types import TRANSPARENT_INDEX, AnchorPoint, AssetSpec, HitboxRect, StylePack
@@ -50,6 +51,7 @@ class ContactSheetOptions:
     zoom: int | None = None
     variant: str | None = None
     include_variants: bool = True
+    layers: bool = False
 
 
 @dataclass(frozen=True)
@@ -153,17 +155,25 @@ def _draw_zoom_overlays(
             py = panel_y + gy * zoom
             canvas[py, panel_x : panel_x + zoomed_w] = (*_GRID_LINE, 255)
 
-    tick_step = 16 if max(asset_w, asset_h) > 96 else 4
+    max_dim = max(asset_w, asset_h)
+    if max_dim <= 32:
+        tick_step = 2
+    elif max_dim <= 96:
+        tick_step = 4
+    else:
+        tick_step = 16
+    label_step = tick_step if tick_step * zoom >= 12 else tick_step * 2
+
     for x in range(0, asset_w + 1, tick_step):
         px = panel_x + x * zoom
         fill_rgba_rect(canvas, px, panel_y - 3, 1, 3, _RULER_COLOR)
-        if x < asset_w:
+        if x < asset_w and x % label_step == 0:
             draw_bitmap_text(canvas, str(x), px, panel_y - 11, _RULER_COLOR)
 
     for y in range(0, asset_h + 1, tick_step):
         py = panel_y + y * zoom
         fill_rgba_rect(canvas, panel_x - 3, py, 3, 1, _RULER_COLOR)
-        if y < asset_h:
+        if y < asset_h and y % label_step == 0:
             label = str(y)
             tw, _ = measure_text(label)
             draw_bitmap_text(canvas, label, max(4, panel_x - 5 - tw), py, _RULER_COLOR)
@@ -211,10 +221,15 @@ class _ContactSheetLayout:
     zoom: int
     zoom_x: int
     zoom_y: int
+    clean_zoom_x: int
+    clean_zoom_y: int
     zoomed_w: int
     zoomed_h: int
     right_x: int
     right_y: int
+    sil_y: int
+    sil_1x_col_w: int
+    sil_2x_col_w: int
     has_emissive: bool
     has_anim: bool
     cell_scale: int
@@ -234,6 +249,13 @@ class _ContactSheetLayout:
     swatch_col_w: int
     swatch_cols: int
     swatches_y: int
+    captured_layers: tuple[CapturedLayer, ...]
+    layer_scale: int
+    layer_cell_w: int
+    layer_cell_h: int
+    layer_col_w: int
+    layer_cols: int
+    layers_y: int
     title_line: str
     metrics_line: str
     canvas_w: int
@@ -247,15 +269,20 @@ def _compute_contact_sheet_layout(
     frames: tuple[RenderedFrame, ...],
     metrics: ContactSheetMetrics,
     opts: ContactSheetOptions,
+    captured_layers: tuple[CapturedLayer, ...] = (),
 ) -> _ContactSheetLayout:
     zoom = opts.zoom if opts.zoom is not None else choose_zoom(spec.width, spec.height)
     pad = 16
     ruler_left = 28
-    ruler_top = 14
+    ruler_top = 24
     header_h = 44
     zoomed_w = spec.width * zoom
     zoomed_h = spec.height * zoom
-    preview_1x_w = max(spec.width * 2 + 12, 120)
+    zoom_gap = 16
+    preview_1x_w = max(spec.width + 16, 60) + max(spec.width, 60)
+    sil_1x_col_w = max(spec.width, measure_text("sil 1x b/w")[0]) + 8
+    sil_2x_col_w = max(spec.width * 2, measure_text("sil 2x b/w")[0]) + 8
+    sil_strip_w = sil_1x_col_w * 2 + sil_2x_col_w * 2
 
     has_emissive = any("emissive" in entry.flags for entry in style.palette)
     has_anim = spec.frames > 1
@@ -291,8 +318,8 @@ def _compute_contact_sheet_layout(
     max_label_w = max((measure_text(lbl)[0] for lbl, _ in swatch_labels), default=60)
     swatch_col_w = 18 + max_label_w + 14
 
-    left_col_w = ruler_left + zoomed_w
-    right_col_w = max(preview_1x_w, matrix_w, variant_strip_w)
+    left_col_w = ruler_left + zoomed_w + zoom_gap + zoomed_w
+    right_col_w = max(preview_1x_w, sil_strip_w, matrix_w, variant_strip_w)
     body_w = left_col_w + 24 + right_col_w
 
     bbox_str = (
@@ -316,20 +343,58 @@ def _compute_contact_sheet_layout(
     swatch_rows = (len(swatch_labels) + swatch_cols - 1) // swatch_cols
     swatch_h = swatch_rows * 16 + 18
 
-    left_h = ruler_top + zoomed_h + 10
-    right_h = (spec.height + 16) + 12 + matrix_h + (variant_strip_h + 12 if variant_names else 0)
-    canvas_h = header_h + pad + max(left_h, right_h) + 16 + swatch_h + pad
+    right_y = header_h + pad
+    sil_y = right_y + 10 + spec.height + 10
+    matrix_y = sil_y + 10 + spec.height * 2 + 12
 
+    left_h = ruler_top + zoomed_h + 10
+    right_h = (
+        (10 + spec.height)
+        + 10
+        + (10 + spec.height * 2)
+        + 12
+        + matrix_h
+        + (variant_strip_h + 12 if variant_names else 0)
+    )
+    swatches_y = header_h + pad + max(left_h, right_h) + 14
+
+    active_layers = captured_layers if opts.layers else ()
+    layer_scale = 2 if max(spec.width, spec.height) <= 32 else 1
+    layer_cell_w = spec.width * layer_scale
+    layer_cell_h = spec.height * layer_scale
+    if active_layers:
+        layer_labels = [f"{layer.name} ({layer.pixel_count}px)" for layer in active_layers]
+        max_layer_lbl_w = max((measure_text(lbl)[0] for lbl in layer_labels), default=60)
+        layer_col_w = max(layer_cell_w, max_layer_lbl_w) + 12
+        layer_cols = max(1, (canvas_w - pad * 2) // layer_col_w)
+        layer_rows = (len(active_layers) + layer_cols - 1) // layer_cols
+        layers_y = swatches_y + swatch_h + 10
+        layers_h = 16 + layer_rows * (layer_cell_h + 18)
+    else:
+        layer_col_w = layer_cell_w + 12
+        layer_cols = 1
+        layers_y = swatches_y + swatch_h
+        layers_h = 0
+
+    canvas_h = swatches_y + swatch_h + (layers_h + 10 if active_layers else 0) + pad
+
+    zoom_x = pad + ruler_left
+    zoom_y = header_h + pad + ruler_top
     return _ContactSheetLayout(
         pad=pad,
         header_h=header_h,
         zoom=zoom,
-        zoom_x=pad + ruler_left,
-        zoom_y=header_h + pad + ruler_top,
+        zoom_x=zoom_x,
+        zoom_y=zoom_y,
+        clean_zoom_x=zoom_x + zoomed_w + zoom_gap,
+        clean_zoom_y=zoom_y,
         zoomed_w=zoomed_w,
         zoomed_h=zoomed_h,
         right_x=pad + left_col_w + 24,
-        right_y=header_h + pad,
+        right_y=right_y,
+        sil_y=sil_y,
+        sil_1x_col_w=sil_1x_col_w,
+        sil_2x_col_w=sil_2x_col_w,
         has_emissive=has_emissive,
         has_anim=has_anim,
         cell_scale=cell_scale,
@@ -339,7 +404,7 @@ def _compute_contact_sheet_layout(
         state_label_w=state_label_w,
         matrix_title=matrix_title,
         matrix_row_offset=matrix_row_offset,
-        matrix_y=header_h + pad + spec.height + 24,
+        matrix_y=matrix_y,
         matrix_h=matrix_h,
         variant_names=variant_names,
         variant_scale=variant_scale,
@@ -348,7 +413,14 @@ def _compute_contact_sheet_layout(
         swatch_labels=swatch_labels,
         swatch_col_w=swatch_col_w,
         swatch_cols=swatch_cols,
-        swatches_y=header_h + pad + max(left_h, right_h) + 14,
+        swatches_y=swatches_y,
+        captured_layers=active_layers,
+        layer_scale=layer_scale,
+        layer_cell_w=layer_cell_w,
+        layer_cell_h=layer_cell_h,
+        layer_col_w=layer_col_w,
+        layer_cols=layer_cols,
+        layers_y=layers_y,
         title_line=title_line,
         metrics_line=metrics_line,
         canvas_w=canvas_w,
@@ -376,6 +448,11 @@ def _render_zoom_panel(
     style: StylePack,
     opts: ContactSheetOptions,
 ) -> None:
+    label_y = layout.header_h + layout.pad
+    draw_bitmap_text(canvas, f"annotated {layout.zoom}x", layout.zoom_x, label_y, _TEXT_MUTED)
+    draw_bitmap_text(canvas, f"clean {layout.zoom}x", layout.clean_zoom_x, label_y, _TEXT_MUTED)
+
+    zoomed_rgba = surface_to_rgba(primary.surface, style, variant=opts.variant, scale=layout.zoom)
     draw_checkerboard(
         canvas,
         layout.zoom_x,
@@ -386,7 +463,6 @@ def _render_zoom_panel(
         _CHECK_DARK_B,
         8,
     )
-    zoomed_rgba = surface_to_rgba(primary.surface, style, variant=opts.variant, scale=layout.zoom)
     composite_rgba(canvas, zoomed_rgba, layout.zoom_x, layout.zoom_y)
     _draw_zoom_overlays(
         canvas,
@@ -398,6 +474,52 @@ def _render_zoom_panel(
         primary.anchors,
         primary.hitboxes,
     )
+
+    # Render an overlay-free zoomed panel alongside the annotated view for unobstructed inspection.
+    draw_checkerboard(
+        canvas,
+        layout.clean_zoom_x,
+        layout.clean_zoom_y,
+        layout.zoomed_w,
+        layout.zoomed_h,
+        _CHECK_DARK_A,
+        _CHECK_DARK_B,
+        8,
+    )
+    composite_rgba(canvas, zoomed_rgba, layout.clean_zoom_x, layout.clean_zoom_y)
+
+
+def _surface_to_silhouette_rgba(
+    surface: IndexedSurface,
+    fg: Rgb,
+    bg: Rgb,
+    scale: int,
+) -> NDArray[np.uint8]:
+    rgba = np.empty((surface.height, surface.width, 4), dtype=np.uint8)
+    rgba[:, :] = (*bg, 255)
+    rgba[surface.data != TRANSPARENT_INDEX] = (*fg, 255)
+    if scale <= 1:
+        return rgba
+    return np.repeat(np.repeat(rgba, scale, axis=0), scale, axis=1)
+
+
+def _render_silhouette_strips(
+    canvas: NDArray[np.uint8],
+    layout: _ContactSheetLayout,
+    primary: RenderedFrame,
+) -> None:
+    strips: tuple[tuple[str, Rgb, Rgb, int, int], ...] = (
+        ("sil 1x w/b", (255, 255, 255), (0, 0, 0), 1, layout.sil_1x_col_w),
+        ("sil 1x b/w", (0, 0, 0), (255, 255, 255), 1, layout.sil_1x_col_w),
+        ("sil 2x w/b", (255, 255, 255), (0, 0, 0), 2, layout.sil_2x_col_w),
+        ("sil 2x b/w", (0, 0, 0), (255, 255, 255), 2, layout.sil_2x_col_w),
+    )
+    sx = layout.right_x
+    for label, fg, bg, scale, col_w in strips:
+        draw_bitmap_text(canvas, label, sx, layout.sil_y, _TEXT_MUTED)
+        sil_rgba = _surface_to_silhouette_rgba(primary.surface, fg, bg, scale)
+        composite_rgba(canvas, sil_rgba, sx, layout.sil_y + 10)
+        sx += col_w
 
 
 def _render_1x_previews(
@@ -537,6 +659,47 @@ def _render_swatches(canvas: NDArray[np.uint8], layout: _ContactSheetLayout) -> 
         draw_bitmap_text(canvas, label, sx + 16, sy + 3, _TEXT_LIGHT)
 
 
+def _render_exploded_layers(
+    canvas: NDArray[np.uint8],
+    layout: _ContactSheetLayout,
+    style: StylePack,
+    opts: ContactSheetOptions,
+) -> None:
+    if not layout.captured_layers:
+        return
+    draw_bitmap_text(
+        canvas,
+        f"exploded layers ({len(layout.captured_layers)})",
+        layout.pad,
+        layout.layers_y,
+        _TEXT_MUTED,
+    )
+    for idx, layer in enumerate(layout.captured_layers):
+        col = idx % layout.layer_cols
+        row = idx // layout.layer_cols
+        lx = layout.pad + col * layout.layer_col_w
+        ly = layout.layers_y + 14 + row * (layout.layer_cell_h + 18)
+        label = f"{layer.name} ({layer.pixel_count}px)"
+        draw_bitmap_text(canvas, label, lx, ly, _TEXT_LIGHT)
+        draw_checkerboard(
+            canvas,
+            lx,
+            ly + 10,
+            layout.layer_cell_w,
+            layout.layer_cell_h,
+            _CHECK_DARK_A,
+            _CHECK_DARK_B,
+            4,
+        )
+        layer_rgba = surface_to_rgba(
+            layer.surface,
+            style,
+            variant=opts.variant,
+            scale=layout.layer_scale,
+        )
+        composite_rgba(canvas, layer_rgba, lx, ly + 10)
+
+
 def _render_state_matrix_anim(
     canvas: NDArray[np.uint8],
     layout: _ContactSheetLayout,
@@ -578,6 +741,7 @@ def _render_dynamic_panels(
 ) -> None:
     _render_zoom_panel(canvas, layout, spec, frame_item, style, opts)
     _render_1x_previews(canvas, layout, spec, frame_item, style, opts)
+    _render_silhouette_strips(canvas, layout, frame_item)
     _render_variant_strip(canvas, layout, frame_item, style)
 
 
@@ -586,18 +750,29 @@ def generate_contact_sheet_from_frames(
     frames: tuple[RenderedFrame, ...],
     style: StylePack,
     options: ContactSheetOptions | None = None,
+    *,
+    captured_layers: tuple[CapturedLayer, ...] = (),
 ) -> ContactSheetResult:
     """Render `.contact.png` from pre-rendered frames (static PNG or looping APNG)."""
     opts = options or ContactSheetOptions()
     primary = frames[0]
     metrics = compute_surface_metrics(primary.surface)
-    layout = _compute_contact_sheet_layout(spec, style, primary, frames, metrics, opts)
+    layout = _compute_contact_sheet_layout(
+        spec,
+        style,
+        primary,
+        frames,
+        metrics,
+        opts,
+        captured_layers=captured_layers,
+    )
 
     base_canvas = np.empty((layout.canvas_h, layout.canvas_w, 4), dtype=np.uint8)
     base_canvas[:, :] = (*_BG_MAIN, 255)
     _render_header(base_canvas, layout, metrics)
     _render_state_matrix(base_canvas, layout, spec, frames, style, opts)
     _render_swatches(base_canvas, layout)
+    _render_exploded_layers(base_canvas, layout, style, opts)
 
     if spec.frames <= 1:
         _render_dynamic_panels(base_canvas, layout, spec, primary, style, opts)
@@ -652,4 +827,22 @@ def generate_contact_sheet(
     """Render `.contact.png` (static PNG for 1 frame, looping APNG when `spec.frames > 1`)."""
     opts = options or ContactSheetOptions()
     frames = render_asset_frames(asset, style, variant=opts.variant)
-    return generate_contact_sheet_from_frames(asset.SPEC, frames, style, opts)
+    captured: tuple[CapturedLayer, ...] = ()
+    if opts.layers:
+        builder = Asset(
+            asset.SPEC,
+            style,
+            state=asset.SPEC.states[0],
+            frame=0,
+            variant=opts.variant,
+            capture_layers=True,
+        )
+        asset.render(builder)
+        captured = builder.captured_layers
+    return generate_contact_sheet_from_frames(
+        asset.SPEC,
+        frames,
+        style,
+        opts,
+        captured_layers=captured,
+    )

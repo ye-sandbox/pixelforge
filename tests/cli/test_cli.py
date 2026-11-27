@@ -483,6 +483,18 @@ def test_cli_render_no_emissive_animate_apng_and_sheet_variant(tmp_path: Path) -
     assert int(np.count_nonzero(amber_mask)) > 0
 
 
+def test_cli_render_sheet_layers_explode_view(tmp_path: Path) -> None:
+    """Verify `pixelforge render --sheet --layers` produces a taller exploded-layer sheet."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    assert main(["render", "--root", str(tmp_path), "--sheet"]) == 0
+    sheet_path = tmp_path / ".pixelforge" / "sheets" / "example_crate.contact.png"
+    plain_h = Image.open(sheet_path).height
+
+    assert main(["render", "--root", str(tmp_path), "--sheet", "--layers"]) == 0
+    layers_h = Image.open(sheet_path).height
+    assert layers_h > plain_h
+
+
 def test_cli_compose_mounts_props_and_validates_anchors(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
