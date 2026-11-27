@@ -21,10 +21,12 @@ from pixelforge.export.scene import (
 from pixelforge.guard.critic import (
     CriticAssetInput,
     CriticBatchReport,
+    CriticCategory,
     CriticConfig,
     CriticError,
     discover_changed_paths_from_git,
     format_critic_markdown,
+    infer_critic_category,
     score_assets_batch,
 )
 from pixelforge.guard.runner import (
@@ -61,6 +63,7 @@ def _build_asset_critic_input(
     style_paths: dict[str, Path],
     base_ref: str | None,
     variant: str | None,
+    category: CriticCategory | None = None,
 ) -> CriticAssetInput:
     style = styles[current_asset.SPEC.style_id]
     sheet_res = generate_contact_sheet(
@@ -106,11 +109,17 @@ def _build_asset_critic_input(
         diff_png = diff_res.png
         diff_changed = diff_res.changed_pixels
 
+    resolved_category = category or infer_critic_category(
+        current_asset.SPEC,
+        kind="asset",
+        asset_path=asset_path,
+    )
     return CriticAssetInput(
         asset=current_asset,
         contact_sheet_png=sheet_res.png,
         diff_png=diff_png,
         diff_changed_pixels=diff_changed,
+        category=resolved_category,
     )
 
 
@@ -189,6 +198,7 @@ def _build_scene_critic_input(
     style_paths: dict[str, Path],
     base_ref: str | None,
     variant: str | None,
+    category: CriticCategory | None = None,
 ) -> CriticAssetInput:
     scene_spec = current_scene.SCENE
     parent = assets_by_id[scene_spec.parent_id]
@@ -242,6 +252,7 @@ def _build_scene_critic_input(
     return CriticAssetInput(
         spec=resolved_spec,
         kind="scene",
+        category=category or "scene",
         contact_sheet_png=sheet_res.png,
         diff_png=diff_png,
         diff_changed_pixels=diff_changed,
@@ -335,11 +346,20 @@ def _emit_critic_report(
         for verdict in report.verdicts:
             status = "PASS" if verdict.passed else "FAIL"
             out(
-                f"critic [{verdict.kind}] {verdict.asset_id}: "
+                f"critic [{verdict.kind}/{verdict.category}] {verdict.asset_id}: "
                 f"{verdict.score}/100 [{status}] — {verdict.summary}"
             )
+            if verdict.criteria is not None:
+                c = verdict.criteria
+                out(
+                    f"  rubric: sil={c.silhouette_1x}/20 lit={c.lighting_consistency}/20 "
+                    f"clu={c.cluster_cleanliness}/20 leg={c.state_frame_legibility}/20 "
+                    f"anc={c.anchors_and_palette}/20"
+                )
             for finding in verdict.findings:
                 out(f"  - {finding}")
+            for fix in verdict.fixes:
+                out(f"  * fix: {fix}")
         out(
             f"critic summary: {len(report.verdicts)} target(s), "
             f"avg {report.average_score}/100, threshold {report.threshold}"
@@ -347,12 +367,22 @@ def _emit_critic_report(
         return
     for verdict in report.verdicts:
         status = "PASS" if verdict.passed else "FAIL"
+        rubric_part = ""
+        if verdict.criteria is not None:
+            c = verdict.criteria
+            rubric_part = (
+                f" criteria=sil:{c.silhouette_1x},lit:{c.lighting_consistency},"
+                f"clu:{c.cluster_cleanliness},leg:{c.state_frame_legibility},"
+                f"anc:{c.anchors_and_palette}"
+            )
         out(
-            f"critic kind={verdict.kind} asset={verdict.asset_id} "
-            f"score={verdict.score}/100 status={status} summary={verdict.summary}"
+            f"critic kind={verdict.kind} category={verdict.category} asset={verdict.asset_id} "
+            f"score={verdict.score}/100 status={status}{rubric_part} summary={verdict.summary}"
         )
         for finding in verdict.findings:
             out(f"finding asset={verdict.asset_id} detail={finding}")
+        for fix in verdict.fixes:
+            out(f"fix asset={verdict.asset_id} detail={fix}")
     out(
         f"summary count={len(report.verdicts)} avg={report.average_score}/100 "
         f"threshold={report.threshold} passed={str(report.passed).lower()}"
@@ -396,9 +426,11 @@ def critic_workflow(
     asset_id: str | None,
     base_ref: str | None,
     variant: str | None,
+    category: CriticCategory | None = None,
     base_url: str,
     api_key: str,
     model: str,
+    allow_dev_model: bool = False,
     timeout_seconds: float,
     threshold: int,
     summary_md: Path | None = None,
@@ -451,6 +483,7 @@ def critic_workflow(
             base_url=base_url,
             api_key=api_key,
             model=model,
+            allow_dev_model=allow_dev_model,
             timeout_seconds=timeout_seconds,
             threshold=threshold,
         )
@@ -467,6 +500,7 @@ def critic_workflow(
             style_paths=style_paths,
             base_ref=base_ref,
             variant=variant,
+            category=category,
         )
         for asset_path, current_asset in asset_targets
     ]
@@ -483,6 +517,7 @@ def critic_workflow(
                     style_paths=style_paths,
                     base_ref=base_ref,
                     variant=variant,
+                    category=category,
                 )
             )
         except SceneCompositionError as exc:

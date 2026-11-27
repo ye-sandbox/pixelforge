@@ -42,6 +42,8 @@ class HydraSettings(BaseSettings):
     base_url: str = "https://hydra-router.homelab.yegear.dev/v1"
     api_key: str = ""
     model_fast: str = "fast"
+    model_deep: str = "deep"
+    model_dev: str | None = None
     timeout_seconds: float = 120.0
 
 

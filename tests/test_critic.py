@@ -11,15 +11,19 @@ import pytest
 
 from pixelforge.cli.main import main
 from pixelforge.cli.scaffold import scaffold_project
+from pixelforge.core.types import AssetSpec, NineSliceMargins
 from pixelforge.export.bundle import LoadedAsset
 from pixelforge.guard.critic import (
     CriticAssetInput,
     CriticBatchReport,
     CriticConfig,
+    CriticCriteria,
     CriticError,
     CriticVerdict,
     build_critic_payload,
+    build_system_prompt,
     format_critic_markdown,
+    infer_critic_category,
     parse_critic_response,
     score_asset_via_hydra,
     score_assets_batch,
@@ -37,7 +41,7 @@ def _make_sample_asset(tmp_path: Path) -> LoadedAsset:
     return load_asset_module(asset_path)
 
 
-def test_critic_config_enforces_fast_model_and_redacts_key() -> None:
+def test_critic_config_enforces_fast_model_by_default_and_allows_dev_tier() -> None:
     cfg = CriticConfig(
         base_url="https://hydra-router.homelab.yegear.dev/v1/",
         api_key="hydra_live_secret_token_123",
@@ -53,6 +57,22 @@ def test_critic_config_enforces_fast_model_and_redacts_key() -> None:
                 api_key="sk-test",
                 model=bad_model,
             )
+
+    dev_cfg = CriticConfig(
+        base_url="http://127.0.0.1:3000/v1",
+        api_key="sk-test",
+        model="deep",
+        allow_dev_model=True,
+    )
+    assert dev_cfg.model == "deep"
+
+    custom_dev_cfg = CriticConfig(
+        base_url="http://127.0.0.1:3000/v1",
+        api_key="sk-test",
+        model="gemini-2.5-pro",
+        allow_dev_model=True,
+    )
+    assert custom_dev_cfg.model == "gemini-2.5-pro"
 
 
 def test_build_critic_payload_includes_contact_sheet_and_optional_diff(tmp_path: Path) -> None:
@@ -77,15 +97,68 @@ def test_build_critic_payload_includes_contact_sheet_and_optional_diff(tmp_path:
     assert user_parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
-def test_critic_system_prompt_includes_spatial_and_scene_coherence_checks(tmp_path: Path) -> None:
+def test_critic_prompts_are_category_aware_without_homelab_bias(tmp_path: Path) -> None:
     loaded = _make_sample_asset(tmp_path)
-    payload = build_critic_payload(CriticAssetInput(asset=loaded, contact_sheet_png=_TINY_PNG))
-    system_prompt = payload["messages"][0]["content"]
-    assert "1-3px" in system_prompt
-    assert "rectangular workstation desk" in system_prompt
-    assert "facing direction" in system_prompt
-    assert "peripherals" in system_prompt
-    assert "duplicate baked-in props" in system_prompt
+    prop_payload = build_critic_payload(CriticAssetInput(asset=loaded, contact_sheet_png=_TINY_PNG))
+    prop_prompt = prop_payload["messages"][0]["content"]
+    for axis in (
+        "silhouette_1x",
+        "lighting_consistency",
+        "cluster_cleanliness",
+        "state_frame_legibility",
+        "anchors_and_palette",
+    ):
+        assert axis in prop_prompt
+    assert "rectangular workstation desk" not in prop_prompt
+    assert "Category focus (iso_prop)" in prop_prompt
+
+    char_prompt = build_system_prompt("character")
+    assert "Category focus (character)" in char_prompt
+    assert "head-to-body" in char_prompt
+    assert "rectangular workstation desk" not in char_prompt
+
+    ui_prompt = build_system_prompt("ui_tilemap")
+    assert "Category focus (ui_tilemap)" in ui_prompt
+    assert "9-slice" in ui_prompt
+    assert "rectangular workstation desk" not in ui_prompt
+
+    scene_prompt = build_system_prompt("scene")
+    assert "Category focus (scene)" in scene_prompt
+    assert "1-3px" in scene_prompt
+    assert "duplicate baked-in props" in scene_prompt
+    assert "rectangular workstation desk" not in scene_prompt
+
+
+def test_infer_critic_category_handles_all_categories() -> None:
+    base_spec = AssetSpec(
+        id="crate_iso",
+        style_id="homelab-16bit",
+        width=32,
+        height=32,
+        perspective="iso-2:1",
+    )
+    assert infer_critic_category(base_spec) == "iso_prop"
+    assert infer_critic_category(base_spec, kind="scene") == "scene"
+
+    char_spec = base_spec.model_copy(update={"id": "hero_knight", "perspective": "front-2.5d"})
+    assert infer_critic_category(char_spec) == "character"
+    assert (
+        infer_critic_category(base_spec, asset_path=Path("assets/characters/worker.asset.py"))
+        == "character"
+    )
+
+    ui_spec = base_spec.model_copy(
+        update={
+            "id": "panel",
+            "perspective": "front-2.5d",
+            "nine_slice": NineSliceMargins(left=4, right=4, top=4, bottom=4),
+        }
+    )
+    assert infer_critic_category(ui_spec) == "ui_tilemap"
+    assert (
+        infer_critic_category(base_spec, asset_path=Path("assets/tiles/ground.asset.py"))
+        == "ui_tilemap"
+    )
 
 
 def test_parse_critic_response_handles_fenced_json_and_threshold() -> None:
@@ -274,8 +347,8 @@ def test_format_critic_markdown_includes_assets_scenes_and_findings() -> None:
     assert "## Pixelforge Visual Critic Summary" in md
     assert "**Status:** FAIL" in md
     assert "**Base:** `origin/main`" in md
-    assert "| `desk_iso` | asset | 85/100 | PASS |" in md
-    assert "| `desk_scene` | scene | 64/100 | FAIL |" in md
+    assert "| `desk_iso` | asset | iso_prop | 85/100 | PASS |" in md
+    assert "| `desk_scene` | scene | iso_prop | 64/100 | FAIL |" in md
     assert "- **`desk_scene`**: (22, 10): monitor clips lamp shade" in md
 
 
@@ -336,6 +409,7 @@ def test_cli_critic_scores_composed_scene_and_writes_summary_md(
             CriticVerdict(
                 asset_id=item.target_spec.id,
                 kind=item.kind,
+                category=item.category or ("scene" if item.kind == "scene" else "iso_prop"),
                 score=91,
                 passed=True,
                 summary="Coherent scene composition.",
@@ -378,9 +452,9 @@ def test_cli_critic_scores_composed_scene_and_writes_summary_md(
     assert "tiny_led@foot" in user_text
 
     out = capsys.readouterr().out
-    assert "critic kind=scene asset=crate_scene score=91/100 status=PASS" in out
+    assert "critic kind=scene category=scene asset=crate_scene score=91/100 status=PASS" in out
     md_text = summary_md.read_text(encoding="utf-8")
-    assert "| `crate_scene` | scene | 91/100 | PASS |" in md_text
+    assert "| `crate_scene` | scene | scene | 91/100 | PASS |" in md_text
 
 
 def test_cli_critic_base_selects_scene_when_prop_changes_and_writes_skip_md(
@@ -449,3 +523,148 @@ def test_cli_critic_base_selects_scene_when_prop_changes_and_writes_skip_md(
     )
     assert skip_code == 0
     assert "No changed assets, styles, or scenes detected" in skip_md.read_text(encoding="utf-8")
+
+
+def test_parse_critic_response_5_axis_rubric_and_structured_findings() -> None:
+    raw = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "criteria": {
+                                "silhouette_1x": 18,
+                                "lighting_consistency": 16,
+                                "cluster_cleanliness": 15,
+                                "state_frame_legibility": 19,
+                                "anchors_and_palette": 17,
+                            },
+                            "summary": "Strong 1x silhouette with minor cluster noise.",
+                            "strengths": ["Crisp top-left key highlight"],
+                            "issues": [
+                                {
+                                    "x": 14,
+                                    "y": 9,
+                                    "axis": "cluster_cleanliness",
+                                    "message": "orphan 1x1 shadow pixel",
+                                }
+                            ],
+                            "fixes": ["Erase stray pixel at (14, 9)"],
+                        }
+                    )
+                }
+            }
+        ]
+    }
+    verdict = parse_critic_response(
+        raw,
+        asset_id="hero_knight",
+        model="deep",
+        threshold=70,
+        category="character",
+    )
+    assert verdict.category == "character"
+    assert verdict.score == 85
+    assert verdict.passed is True
+    assert verdict.criteria == CriticCriteria(
+        silhouette_1x=18,
+        lighting_consistency=16,
+        cluster_cleanliness=15,
+        state_frame_legibility=19,
+        anchors_and_palette=17,
+    )
+    assert verdict.strengths == ["Crisp top-left key highlight"]
+    assert verdict.findings == ["(14, 9) [cluster_cleanliness]: orphan 1x1 shadow pixel"]
+    assert verdict.fixes == ["Erase stray pixel at (14, 9)"]
+
+
+def test_cli_critic_supports_category_override_dev_tier_and_json_rubric(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _make_sample_asset(tmp_path)
+    seen_configs: list[CriticConfig] = []
+    seen_categories: list[str | None] = []
+
+    def _fake_batch(
+        items: list[CriticAssetInput],
+        config: CriticConfig,
+    ) -> CriticBatchReport:
+        seen_configs.append(config)
+        seen_categories.extend(item.category for item in items)
+        criteria = CriticCriteria(
+            silhouette_1x=17,
+            lighting_consistency=16,
+            cluster_cleanliness=16,
+            state_frame_legibility=18,
+            anchors_and_palette=17,
+        )
+        verdicts = [
+            CriticVerdict(
+                asset_id=item.target_spec.id,
+                kind=item.kind,
+                category=item.category or "iso_prop",
+                score=criteria.total,
+                passed=True,
+                criteria=criteria,
+                summary="Clean 5-axis pass.",
+                strengths=["Readable 1x silhouette"],
+                findings=["(6, 4) [cluster_cleanliness]: 1px corner step"],
+                fixes=["Smooth corner at (6, 4)"],
+                model=config.model,
+                threshold=config.threshold,
+            )
+            for item in items
+        ]
+        return CriticBatchReport(
+            verdicts=verdicts,
+            passed=True,
+            threshold=config.threshold,
+            average_score=float(criteria.total),
+        )
+
+    monkeypatch.setattr("pixelforge.cli.critic_cmd.score_assets_batch", _fake_batch)
+    monkeypatch.setenv("LLM_API_KEY", "sk-test-dev")
+    monkeypatch.setenv("LLM_MODEL_DEV", "dev-vision-v2")
+
+    code = main(
+        [
+            "critic",
+            "example_crate",
+            "--root",
+            str(tmp_path),
+            "--category",
+            "ui_tilemap",
+            "--tier",
+            "dev",
+            "--json",
+        ]
+    )
+    assert code == 0
+    assert seen_configs[0].model == "dev-vision-v2"
+    assert seen_configs[0].allow_dev_model is True
+    assert seen_categories == ["ui_tilemap"]
+
+    payload = json.loads(capsys.readouterr().out)
+    v = payload["verdicts"][0]
+    assert v["category"] == "ui_tilemap"
+    assert v["score"] == 84
+    assert v["criteria"]["silhouette_1x"] == 17
+    assert v["findings"] == ["(6, 4) [cluster_cleanliness]: 1px corner step"]
+    assert v["fixes"] == ["Smooth corner at (6, 4)"]
+
+    # Explicit --model overrides --tier and sets allow_dev_model=True
+    code2 = main(
+        [
+            "critic",
+            "example_crate",
+            "--root",
+            str(tmp_path),
+            "--model",
+            "custom-dev-model",
+        ]
+    )
+    assert code2 == 0
+    assert seen_configs[1].model == "custom-dev-model"
+    assert seen_configs[1].allow_dev_model is True

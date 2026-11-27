@@ -38,6 +38,7 @@ from pixelforge.export.analyze_ref import (
     scaffold_asset_from_analysis,
 )
 from pixelforge.export.scene_models import DepthSortMode
+from pixelforge.guard.critic import CriticCategory, CriticTier
 from pixelforge.guard.probe import probe_asset
 from pixelforge.guard.runner import (
     discover_asset_files,
@@ -481,20 +482,35 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
         asset_id: str | None = None,
         base_ref: str | None = None,
         variant: str | None = None,
+        category: CriticCategory | None = None,
+        tier: CriticTier = "fast",
+        model: str | None = None,
         threshold: int = 7,
         root: str | None = None,
     ) -> CallToolResult:
         out_lines, err_lines, out, err = _capture()
         project_root = _resolve_root(root, base_root)
         hydra = load_hydra_settings(project_root)
+        if model:
+            resolved_model = model
+            allow_dev_model = True
+        elif tier == "dev":
+            resolved_model = hydra.model_dev or hydra.model_deep
+            allow_dev_model = True
+        else:
+            resolved_model = hydra.model_fast
+            allow_dev_model = False
+
         code = critic_workflow(
             project_root,
             asset_id=asset_id,
             base_ref=base_ref,
             variant=variant,
+            category=category,
             base_url=hydra.base_url,
             api_key=hydra.api_key,
-            model=hydra.model_fast,
+            model=resolved_model,
+            allow_dev_model=allow_dev_model,
             timeout_seconds=hydra.timeout_seconds,
             threshold=threshold,
             summary_md=None,

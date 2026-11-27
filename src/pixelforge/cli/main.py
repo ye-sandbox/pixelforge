@@ -320,14 +320,26 @@ def _cmd_critic(args: argparse.Namespace) -> int:
     root = _resolve_root(args.root)
     summary_md = _resolve_dir(root, Path(args.summary_md)) if args.summary_md else None
     hydra = load_hydra_settings(root)
+    if args.model:
+        model = str(args.model)
+        allow_dev_model = True
+    elif args.tier == "dev":
+        model = hydra.model_dev or hydra.model_deep
+        allow_dev_model = True
+    else:
+        model = hydra.model_fast
+        allow_dev_model = False
+
     return critic_workflow(
         root,
         asset_id=args.asset_id,
         base_ref=args.base,
         variant=args.variant,
+        category=args.category,
         base_url=hydra.base_url,
         api_key=hydra.api_key,
-        model=hydra.model_fast,
+        model=model,
+        allow_dev_model=allow_dev_model,
         timeout_seconds=hydra.timeout_seconds,
         threshold=int(args.threshold),
         summary_md=summary_md,
@@ -751,6 +763,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum passing visual score 0-100 (default: 70)",
     )
     critic_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
+    critic_p.add_argument(
+        "--category",
+        choices=("character", "iso_prop", "scene", "ui_tilemap"),
+        default=None,
+        help="Optional critic rubric category override (default: auto-detect)",
+    )
+    critic_p.add_argument(
+        "--tier",
+        choices=("fast", "dev"),
+        default="fast",
+        help="Review model tier: 'fast' (CI default) or 'dev' (uses LLM_MODEL_DEV/LLM_MODEL_DEEP)",
+    )
+    critic_p.add_argument(
+        "--model",
+        default=None,
+        help="Optional explicit dev review model override (implies --tier dev)",
+    )
     critic_p.add_argument(
         "--summary-md",
         default=None,

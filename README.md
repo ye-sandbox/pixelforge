@@ -117,8 +117,8 @@ uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32
 # Compose child prop assets onto declared parent scene anchors and validate bounds/occlusion
 uv run pixelforge compose <parent_id> --mount <prop_id>@<anchor>[:<prop_anchor>] [--state <name>] [--strict-bounds] [--sheet] [--format llm|json|human] [--json] [--human] [--root .]
 
-# Score changed assets and scenes via internal hydra-llm-router multimodal critic (OpenAI v1, virtual model 'fast')
-uv run pixelforge critic [asset_id] [--base HEAD] [--threshold 70] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
+# Score changed assets and scenes via internal hydra-llm-router multimodal critic (OpenAI v1, 'fast' CI default or configurable 'dev' tier)
+uv run pixelforge critic [asset_id] [--base HEAD] [--category character|iso_prop|scene|ui_tilemap] [--tier fast|dev] [--model <name>] [--threshold 70] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Introspect StylePack token groups, prefab signatures, asset anchors/states, and scene mounts
 uv run pixelforge inspect {style|presets|prefabs|api|assets|scenes} [target] [--format llm|json|human] [--json] [--human] [--root .]
