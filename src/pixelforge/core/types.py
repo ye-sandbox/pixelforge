@@ -21,7 +21,7 @@ MAX_PALETTE_INDEX: Final[int] = 254
 PerspectiveMode = Literal["front-2.5d", "iso-2:1", "top-down", "side"]
 LightingAngle = Literal["top-left", "top-right", "top"]
 AutotileMode = Literal["cardinal16", "blob47"]
-BitmapFontPreset = Literal["4x6", "5x7"]
+BitmapFontPreset = Literal["4x6", "5x7", "6x8", "8x10"]
 LayerRole = Literal["visual", "collision", "walkable", "occlusion", "interact"]
 PaletteFlag = Literal[
     "outline",

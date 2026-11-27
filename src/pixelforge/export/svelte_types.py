@@ -204,7 +204,7 @@ def generate_svelte_manifest_dts(
         "}",
         "",
         "export interface PixelForgeBitmapFont {",
-        "  readonly preset: '4x6' | '5x7';",
+        "  readonly preset: '4x6' | '5x7' | '6x8' | '8x10';",
         "  readonly glyph_width: number;",
         "  readonly glyph_height: number;",
         "  readonly line_height: number;",

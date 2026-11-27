@@ -380,8 +380,11 @@ class DrawingMixin:
         font: BitmapFontPreset = "4x6",
         scale: int = 1,
         shadow: int | None = None,
+        outline: int | None = None,
         letter_spacing: int | None = None,
         line_height: int | None = None,
+        proportional: bool = False,
+        tabular_digits: bool = True,
     ) -> None:
         """Render crisp 1x bitmap text onto the active surface using palette indices."""
         draw_indexed_text(
@@ -393,8 +396,11 @@ class DrawingMixin:
             font=font,
             scale=scale,
             shadow=shadow,
+            outline=outline,
             letter_spacing=letter_spacing,
             line_height=line_height,
+            proportional=proportional,
+            tabular_digits=tabular_digits,
         )
 
     def iso_tile(

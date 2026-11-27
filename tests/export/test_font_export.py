@@ -77,3 +77,41 @@ def test_font_bundle_manifest_dts_and_indexed_ts() -> None:
     indexed_manifest_ts = generate_indexed_manifest_ts([bundle])
     assert '"font": {' in indexed_manifest_ts
     assert '"preset": "4x6"' in indexed_manifest_ts
+
+
+def test_font_bundle_bmfont_fnt_and_display_preset() -> None:
+    style = _font_style()
+    font_spec = make_bitmap_font_spec(
+        "6x8",
+        charset=" AÇÃO♥18",
+        columns=4,
+        margin=1,
+        spacing=1,
+        proportional=True,
+    )
+    w, h = compute_font_atlas_size(font_spec)
+    spec = AssetSpec(
+        id="hud_font_6x8",
+        style_id=style.id,
+        width=w,
+        height=h,
+        perspective="front-2.5d",
+        font=font_spec,
+    )
+
+    def _render(a: Asset[object]) -> None:
+        render_font_atlas(a, font_spec, 1)
+
+    bundle = export_asset_bundle(
+        LoadedAsset(SPEC=spec, render=_render),
+        style,
+        ExportBundleOptions(atlas="all"),
+    )
+    assert "hud_font_6x8.fnt" in bundle.files
+    fnt_text = bundle.files["hud_font_6x8.fnt"].decode("utf-8")
+    assert 'info face="hud_font_6x8" size=8 bold=1' in fnt_text
+    assert 'page id=0 file="hud_font_6x8_default.png"' in fnt_text
+    assert f"char id={ord('Ç')} " in fnt_text
+
+    dts = generate_svelte_manifest_dts([bundle.manifest])
+    assert "'6x8' | '8x10'" in dts

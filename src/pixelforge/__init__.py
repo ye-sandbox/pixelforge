@@ -2,7 +2,11 @@
 
 from pixelforge._version import __version__
 from pixelforge.core import (
+    DEFAULT_ASCII_CHARSET,
+    HUD_SYMBOLS_CHARSET,
     MAX_PALETTE_INDEX,
+    PTBR_DIACRITICS_CHARSET,
+    PTBR_HUD_CHARSET,
     TRANSPARENT_INDEX,
     AnchorPoint,
     Asset,
@@ -31,6 +35,7 @@ from pixelforge.core import (
     autotile_walls,
     compute_font_atlas_size,
     draw_indexed_text,
+    format_bmfont_fnt,
     hashf,
     iso_box,
     iso_cylinder,
@@ -47,7 +52,11 @@ from pixelforge.core import (
 from pixelforge.export import SceneMountSpec, ScenePortalSpec, SceneSpec
 
 __all__ = [
+    "DEFAULT_ASCII_CHARSET",
+    "HUD_SYMBOLS_CHARSET",
     "MAX_PALETTE_INDEX",
+    "PTBR_DIACRITICS_CHARSET",
+    "PTBR_HUD_CHARSET",
     "TRANSPARENT_INDEX",
     "AnchorPoint",
     "Asset",
@@ -80,6 +89,7 @@ __all__ = [
     "autotile_walls",
     "compute_font_atlas_size",
     "draw_indexed_text",
+    "format_bmfont_fnt",
     "hashf",
     "iso_box",
     "iso_cylinder",

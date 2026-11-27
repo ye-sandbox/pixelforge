@@ -7,19 +7,23 @@ import pytest
 from pydantic import ValidationError
 
 from pixelforge import (
+    PTBR_HUD_CHARSET,
     TRANSPARENT_INDEX,
     Asset,
     AssetSpec,
+    BitmapFontPreset,
     BitmapFontSpec,
     IndexedSurface,
     PaletteColor,
     StylePack,
     compute_font_atlas_size,
     draw_indexed_text,
+    format_bmfont_fnt,
     make_bitmap_font_spec,
     measure_bitmap_text,
     render_font_atlas,
 )
+from pixelforge.core.font import get_font_definition
 
 
 def _sample_style() -> StylePack:
@@ -121,3 +125,70 @@ def test_bitmap_font_spec_validation_guards() -> None:
             charset="AA",
             glyphs=font_spec.glyphs,
         )
+
+
+def test_ptbr_diacritics_and_hud_symbols_across_all_presets() -> None:
+    presets: tuple[BitmapFontPreset, ...] = ("4x6", "5x7", "6x8", "8x10")
+    for preset in presets:
+        defn = get_font_definition(preset)
+        for ch in PTBR_HUD_CHARSET:
+            assert ch in defn.glyphs, f"Missing {ch!r} in {preset}"
+            rows = defn.glyphs[ch]
+            assert len(rows) == defn.glyph_height
+            if ch != " ":
+                assert any(r != 0 for r in rows), f"Empty glyph {ch!r} in {preset}"
+
+
+def test_proportional_and_tabular_digits() -> None:
+    # 'i' in 4x6 is 1px wide; with spacing=1, "ii" is 1 + 1 + 1 = 3px wide.
+    assert measure_bitmap_text("ii", font="4x6", proportional=False) == (9, 6)
+    assert measure_bitmap_text("ii", font="4x6", proportional=True) == (3, 6)
+
+    # Tabular digits keep counters aligned even when proportional=True.
+    assert measure_bitmap_text(
+        "100", font="5x7", proportional=True, tabular_digits=True
+    ) == measure_bitmap_text("888", font="5x7", proportional=True, tabular_digits=True)
+
+    spec = make_bitmap_font_spec(
+        "4x6",
+        charset=" i18",
+        columns=4,
+        margin=0,
+        spacing=1,
+        proportional=True,
+        tabular_digits=True,
+    )
+    by_char = {g.char: g for g in spec.glyphs}
+    assert by_char["i"].width == 1
+    assert by_char["i"].x_advance == 2
+    assert by_char["1"].x_advance == by_char["8"].x_advance
+
+    w, h = compute_font_atlas_size(spec)
+    surf = IndexedSurface(w, h)
+    render_font_atlas(surf, spec, color=1)
+    # Trimmed 'i' draws at its exact cell x=5, width=1 (column 6 remains transparent).
+    assert np.any(surf.data[:, 5] == 1)
+    assert np.all(surf.data[:, 6] == TRANSPARENT_INDEX)
+
+
+def test_display_presets_and_native_outline() -> None:
+    assert measure_bitmap_text("TÍTULO", font="6x8") == (41, 8)
+    assert measure_bitmap_text("AÇÃO", font="8x10") == (35, 10)
+
+    surf = IndexedSurface(48, 20)
+    draw_indexed_text(surf, "♥ 10", 4, 4, color=1, font="6x8", outline=0)
+    assert np.count_nonzero(surf.data == 1) > 0
+    assert np.count_nonzero(surf.data == 0) > 0
+    # Foreground pixel at top-left of heart (x=5, y=4) must not be overwritten by outline.
+    assert int(surf.data[4, 5]) == 1
+    assert int(surf.data[3, 5]) == 0
+
+
+def test_format_bmfont_fnt() -> None:
+    spec = make_bitmap_font_spec("6x8", charset=" A1♥", columns=4, proportional=True)
+    fnt = format_bmfont_fnt(spec, page_file="hud_font.png", face="hud_title", scale=2)
+    assert 'info face="hud_title" size=16 bold=1' in fnt
+    assert "common lineHeight=20 base=16" in fnt
+    assert 'page id=0 file="hud_font.png"' in fnt
+    assert "chars count=4" in fnt
+    assert f"char id={ord('♥')} " in fnt

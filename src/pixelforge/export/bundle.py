@@ -16,6 +16,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from pixelforge.core.builder import Asset, LayerSemanticSpan
+from pixelforge.core.font import format_bmfont_fnt
 from pixelforge.core.semantics import derive_gameplay_semantics
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import (
@@ -571,6 +572,17 @@ def _export_atlas_outputs(
             files[f"{spec.id}.phaser.json"] = serialize_tilemap_json(
                 build_phaser_tilemap_atlas(spec, scale=opts.scale, image_name=image_name)
             )
+
+    if opts.atlas == "all" and spec.font is not None:
+        fnt_text = format_bmfont_fnt(
+            spec.font,
+            page_file=image_name,
+            face=spec.id,
+            atlas_width=spec.width,
+            atlas_height=spec.height,
+            scale=opts.scale,
+        )
+        files[f"{spec.id}.fnt"] = fnt_text.encode("utf-8")
 
     return files
 
