@@ -62,6 +62,15 @@ STYLE = StylePack(
         "GOLD_L": "GOLD_M",
         "IRON_L": "STONE_L",
     },
+    ramps={
+        "soil": ("INK", "SOIL_D", "SOIL_M", "SOIL_L"),
+        "grass": ("INK", "GRASS_D", "GRASS_M", "GRASS_L", "LEAF_L"),
+        "stone": ("INK", "STONE_D", "STONE_M", "STONE_L", "STONE_H"),
+        "bark": ("INK", "BARK_D", "BARK_M", "BARK_L"),
+        "water": ("INK", "WATER_D", "WATER_M", "WATER_L"),
+        "iron": ("INK", "IRON_D", "IRON_M", "IRON_L"),
+        "gold": ("BARK_D", "GOLD_D", "GOLD_M", "GOLD_L"),
+    },
     variants={
         "dusk": {
             "GRASS_D": "#142f1e",

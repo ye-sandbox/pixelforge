@@ -27,6 +27,9 @@ STYLE = StylePack(
         "EMISSIVE_1": "HIGHLIGHT",
         "EMISSIVE_2": "HIGHLIGHT",
     },
+    ramps={
+        "lcd": ("INK", "SHADE_D", "SHADE_L", "HIGHLIGHT"),
+    },
     variants={
         "pocket": {
             "INK": "#1e1b18",

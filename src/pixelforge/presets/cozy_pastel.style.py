@@ -46,6 +46,12 @@ STYLE = StylePack(
         "WARM_GLOW": "BUTTER",
         "CREAM": "LINEN",
     },
+    ramps={
+        "wood": ("COCOA_OUTLINE", "ESPRESSO", "OAK_M", "OAK_L", "CREAM"),
+        "sage": ("COCOA_OUTLINE", "SAGE_D", "SAGE_L", "CREAM"),
+        "sky": ("COCOA_OUTLINE", "SKY_D", "SKY_L", "CREAM"),
+        "warm": ("ESPRESSO", "TERRACOTTA", "BUTTER", "WARM_GLOW"),
+    },
     variants={
         "evening": {
             "CREAM": "#d6c5ae",

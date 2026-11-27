@@ -22,6 +22,7 @@ from pixelforge.core.types import (
     AnchorPoint,
     BitmapFontPreset,
     HitboxRect,
+    LightingAngle,
 )
 
 ScatterMask = Literal["all", "opaque", "transparent"]
@@ -64,6 +65,15 @@ class DrawingMixin:
 
     def _resolve_pal_index(self, token_or_idx: str | int) -> int:
         raise NotImplementedError
+
+    def _resolve_pal_ramp(self, ramp: str | Sequence[int]) -> tuple[int, ...]:
+        raise NotImplementedError
+
+    def _default_lighting_angle(self) -> LightingAngle:
+        return "top-left"
+
+    def _default_outline_index(self) -> int | None:
+        return None
 
     def _make_plane(
         self,
@@ -251,6 +261,59 @@ class DrawingMixin:
     ) -> None:
         """Recolor top/bottom exposed opaque edge pixels for bevels and rims."""
         self.surface.edge_mask(top_color, bottom_color)
+
+    def bevel_rect(
+        self,
+        x: int | float,
+        y: int | float,
+        w: int | float,
+        h: int | float,
+        ramp: str | Sequence[int],
+        *,
+        thickness: int = 1,
+        lighting_angle: LightingAngle | None = None,
+        recessed: bool = False,
+        outline: int | None = None,
+    ) -> None:
+        """Draw a filled rectangle with directional bevel highlights and shadows from `ramp`."""
+        resolved_ramp = self._resolve_pal_ramp(ramp)
+        angle = self._default_lighting_angle() if lighting_angle is None else lighting_angle
+        self.surface.bevel_rect(
+            x,
+            y,
+            w,
+            h,
+            resolved_ramp,
+            thickness=thickness,
+            lighting_angle=angle,
+            recessed=recessed,
+            outline=outline,
+        )
+
+    def shade_volume(
+        self,
+        ramp: str | Sequence[int],
+        *,
+        lighting_angle: LightingAngle | None = None,
+        bounds: tuple[int, int, int, int] | None = None,
+        only_colors: Sequence[int] | None = None,
+        dither: bool = False,
+        preserve_outline: bool = True,
+        outline_color: int | None = None,
+    ) -> int:
+        """Directionally shade opaque pixels across `ramp` (dark-to-light) by `lighting_angle`."""
+        resolved_ramp = self._resolve_pal_ramp(ramp)
+        angle = self._default_lighting_angle() if lighting_angle is None else lighting_angle
+        resolved_outline = self._default_outline_index() if outline_color is None else outline_color
+        return self.surface.shade_volume(
+            resolved_ramp,
+            lighting_angle=angle,
+            bounds=bounds,
+            only_colors=only_colors,
+            dither=dither,
+            preserve_outline=preserve_outline,
+            outline_color=resolved_outline,
+        )
 
     def text(
         self,

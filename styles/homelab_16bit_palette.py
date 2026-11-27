@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 
 class Homelab16bitPalette(Protocol):
@@ -203,6 +203,24 @@ class Homelab16bitPalette(Protocol):
 
     @property
     def GLASS_L(self) -> int: ...
+
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]: ...
+
+    def ramp(
+        self,
+        name: Literal[
+            "wall",
+            "floor",
+            "metal",
+            "wood",
+            "pcb",
+            "screen",
+            "skin",
+            "tile",
+            "glass",
+        ],
+    ) -> tuple[int, ...]: ...
 
     def __getitem__(self, name: str) -> int: ...
 

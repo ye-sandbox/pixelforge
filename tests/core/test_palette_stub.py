@@ -80,8 +80,10 @@ def test_asset_generic_palette_annotation_runtime_compatibility() -> None:
         p = a.pal
         a.put(2, 2, p.INK)
         a.put(3, 2, p.LED_C)
+        assert p.ramp("metal")[0] == p.INK
 
     asset: Asset[Homelab16bitPalette] = Asset(spec, style)
     render(asset)
     assert int(asset.root_surface.data[2, 2]) == asset.pal["INK"]
     assert int(asset.root_surface.data[2, 3]) == asset.pal["LED_C"]
+    assert "metal" in asset.pal.ramps

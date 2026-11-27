@@ -177,3 +177,81 @@ def test_spr_blit_mirror_flip_outline_sel_out_and_edge_mask() -> None:
     assert bevel.get(2, 1) == 10
     assert bevel.get(2, 2) == 2
     assert bevel.get(2, 3) == 11
+
+
+def test_bevel_rect_directional_angles_recessed_and_outline() -> None:
+    """Verify `bevel_rect` respects lighting_angle, recessed mode, thickness, and outline."""
+    surf = IndexedSurface(8, 8)
+    surf.bevel_rect(0, 0, 8, 8, (1, 2, 3), lighting_angle="top-left", outline=0)
+    # 1px outer border
+    assert surf.get(0, 0) == 0
+    assert surf.get(7, 7) == 0
+    # Interior top-left highlight (3) and bottom-right shadow (1) with mid fill (2)
+    assert surf.get(1, 1) == 3
+    assert surf.get(2, 1) == 3
+    assert surf.get(1, 2) == 3
+    assert surf.get(6, 6) == 1
+    assert surf.get(5, 6) == 1
+    assert surf.get(6, 5) == 1
+    assert surf.get(3, 3) == 2
+
+    # Top-right angle swaps left/right highlight vs shadow
+    surf_tr = IndexedSurface(6, 6)
+    surf_tr.bevel_rect(0, 0, 6, 6, (1, 2, 3), lighting_angle="top-right")
+    assert surf_tr.get(5, 0) == 3
+    assert surf_tr.get(0, 5) == 1
+
+    # Recessed swaps highlight and shadow
+    surf_rec = IndexedSurface(6, 6)
+    surf_rec.bevel_rect(0, 0, 6, 6, (1, 2, 3), lighting_angle="top-left", recessed=True)
+    assert surf_rec.get(0, 0) == 1
+    assert surf_rec.get(5, 5) == 3
+
+
+def test_shade_volume_directional_dither_and_outline_preservation() -> None:
+    """Verify `shade_volume` shades opaque pixels dark-to-light and preserves outlines."""
+    surf = IndexedSurface(10, 10)
+    surf.rect(1, 1, 8, 8, 2)
+    surf.rect(1, 1, 8, 8, 0, fill=False)
+    shaded = surf.shade_volume((1, 2, 3, 4), lighting_angle="top-left", outline_color=0)
+    assert shaded == 36
+    # Outline stays untouched
+    assert surf.get(1, 1) == 0
+    assert surf.get(8, 8) == 0
+    # Lit corner (top-left interior) is brightest, shadow corner (bottom-right) is darkest
+    assert surf.get(2, 2) == 4
+    assert surf.get(7, 7) == 1
+
+    # Top-right lighting moves highlight to top-right
+    surf_tr = IndexedSurface(8, 8)
+    surf_tr.rect(1, 1, 6, 6, 2)
+    surf_tr.shade_volume((1, 2, 3, 4), lighting_angle="top-right", dither=True)
+    assert surf_tr.get(6, 1) >= surf_tr.get(1, 6)
+
+
+def test_asset_and_layer_ramp_primitives() -> None:
+    """Verify `Asset` and `Layer` resolve named StylePack ramps in `bevel_rect`/`shade_volume`."""
+    from pixelforge.core.builder import Asset
+    from pixelforge.core.types import AssetSpec
+    from pixelforge.presets import load_preset_style
+
+    style = load_preset_style("sweetie-16")
+    spec = AssetSpec(
+        id="ramp_probe",
+        style_id="sweetie-16",
+        perspective="iso-2:1",
+        width=16,
+        height=16,
+    )
+    a = Asset(spec, style)
+    a.bevel_rect(1, 1, 6, 6, ramp="slate", outline=a.pal.INK)
+    slate = a.pal.ramp("slate")
+    assert a.get(1, 1) == a.pal.INK
+    assert a.get(2, 2) == slate[-1]
+    assert a.get(5, 5) == slate[0]
+
+    with a.layer("orb", outline=a.pal.INK) as layer:
+        layer.circle(11, 11, 3, a.pal.SLATE_M, fill=True)
+        count = layer.shade_volume("slate")
+        assert count > 0
+        assert slate.index(layer.get(10, 9)) > slate.index(layer.get(12, 13))

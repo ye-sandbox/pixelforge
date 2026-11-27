@@ -45,6 +45,12 @@ STYLE = StylePack(
         "CYAN": "SKY",
         "WHITE": "SLATE_L",
     },
+    ramps={
+        "slate": ("INK", "SLATE_D", "SLATE_M", "SLATE_L", "WHITE"),
+        "forest": ("INK", "TEAL", "GREEN", "LIME"),
+        "blue": ("INK", "NAVY", "BLUE", "SKY", "WHITE"),
+        "warm": ("PLUM", "CRIMSON", "ORANGE", "GOLD"),
+    },
     variants={
         "dusk": {
             "SLATE_L": "#7892a8",

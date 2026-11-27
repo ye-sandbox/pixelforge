@@ -54,6 +54,11 @@ STYLE = StylePack(
         "NEON_MAGENTA": "TRIM_PURPLE",
         "CHROME": "HULL_L",
     },
+    ramps={
+        "hull": ("INK", "VOID", "HULL_D", "HULL_M", "HULL_L", "CHROME"),
+        "glass": ("INK", "GLASS_D", "GLASS_L", "NEON_CYAN", "CORE_WHITE"),
+        "trim": ("INK", "TRIM_PURPLE", "NEON_MAGENTA"),
+    },
     variants={
         "overdrive": {
             "NEON_CYAN": "#80f8ff",

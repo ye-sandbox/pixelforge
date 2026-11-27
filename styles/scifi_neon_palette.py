@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 
 class ScifiNeonPalette(Protocol):
@@ -89,6 +89,11 @@ class ScifiNeonPalette(Protocol):
 
     @property
     def EMISSIVE_2(self) -> int: ...
+
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]: ...
+
+    def ramp(self, name: Literal["hull", "glass", "trim"]) -> tuple[int, ...]: ...
 
     def __getitem__(self, name: str) -> int: ...
 

@@ -64,4 +64,11 @@ STYLE = StylePack(
         "GLOW_GOLD": "GOLD",
         "WHITE": "SILVER",
     },
+    ramps={
+        "steel": ("INK", "SLATE", "STEEL_D", "STEEL_M", "STEEL_L", "SILVER", "WHITE"),
+        "wood": ("INK", "WOOD_D", "WOOD_M", "WOOD_L", "TAN_L"),
+        "green": ("INK", "PINE", "FOREST", "GREEN", "LIME"),
+        "fire": ("CRIMSON", "RED", "ORANGE", "GOLD", "YELLOW"),
+        "blue": ("INK", "NAVY", "BLUE", "GLOW_CYAN", "WHITE"),
+    },
 )

@@ -152,6 +152,7 @@ def _emit_styles(
                     "outline_index": s.outline_index,
                     "token_count": len(s.palette),
                     "variants": sorted(s.variants),
+                    "ramps": {name: list(tokens) for name, tokens in s.ramps.items()},
                     "groups": {
                         "paint": [_token_to_dict(c) for c in paint],
                         "emissive": [_token_to_dict(c) for c in emissive],
@@ -180,6 +181,8 @@ def _emit_styles(
             out(f"  Bright ({len(bright)}): " + ", ".join(c.name for c in bright))
             refl_items = [f"{k}->{v}" for k, v in s.reflections.items()]
             out(f"  Reflections ({len(refl_items)}): " + (", ".join(refl_items) or "none"))
+            ramp_items = [f"{k}=[{' -> '.join(v)}]" for k, v in s.ramps.items()]
+            out(f"  Ramps ({len(ramp_items)}): " + (", ".join(ramp_items) or "none"))
             continue
 
         out(
@@ -192,6 +195,8 @@ def _emit_styles(
         out(f"bright({len(bright)}): " + " ".join(_format_token_compact(c) for c in bright))
         refl_items = [f"{k}->{v}" for k, v in s.reflections.items()]
         out(f"reflections({len(refl_items)}): " + (" ".join(refl_items) if refl_items else "none"))
+        ramp_items = [f"{k}={'->'.join(v)}" for k, v in s.ramps.items()]
+        out(f"ramps({len(ramp_items)}): " + (" ".join(ramp_items) if ramp_items else "none"))
 
 
 def inspect_style_workflow(

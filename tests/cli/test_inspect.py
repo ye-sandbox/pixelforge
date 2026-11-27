@@ -62,6 +62,7 @@ def test_inspect_style_formats_and_error(
     assert "emissive(" in llm_out
     assert "bright(" in llm_out
     assert "reflections(" in llm_out
+    assert "ramps(" in llm_out
 
     # Strict JSON output
     assert main(["inspect", "style", "sweetie-16", "--json", "--root", str(tmp_path)]) == 0
@@ -70,6 +71,7 @@ def test_inspect_style_formats_and_error(
     style_obj = payload["styles"][0]
     assert style_obj["id"] == "sweetie-16"
     assert set(style_obj["groups"]) == {"paint", "emissive", "bright", "reflections"}
+    assert "slate" in style_obj["ramps"]
     assert len(style_obj["groups"]["emissive"]) >= 1
     assert all("emissive" in tok["flags"] for tok in style_obj["groups"]["emissive"])
     assert all("emissive" not in tok["flags"] for tok in style_obj["groups"]["paint"])
@@ -79,6 +81,7 @@ def test_inspect_style_formats_and_error(
     human_out = capsys.readouterr().out
     assert "Style: sweetie-16" in human_out
     assert "Emissive (" in human_out
+    assert "Ramps (" in human_out
 
     # Unknown style error with fuzzy suggestion
     assert main(["inspect", "style", "sweetie-15", "--root", str(tmp_path)]) == 1

@@ -279,3 +279,76 @@ def test_single_asset_compiles_across_presets_via_universal_palette(tmp_path: Pa
         assert len(bundle.rendered_frames) == 1
         assert bundle.rendered_frames[0].surface.data.shape == (8, 8)
         assert int(bundle.rendered_frames[0].surface.data[2, 2]) == style.outline_index
+
+
+def test_stylepack_ramps_validation_and_lookup() -> None:
+    """Verify dark-to-light ramp validation, lookup, overrides, and fail-loud errors."""
+    style = StylePack(
+        id="ramp-test",
+        perspective="top-down",
+        lighting_angle="top-left",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="INK", hex="#101018", flags=("outline",)),
+            PaletteColor(index=1, name="SLATE_D", hex="#2a3244", flags=("surface",)),
+            PaletteColor(index=2, name="SLATE_M", hex="#4d5b7a", flags=("surface",)),
+            PaletteColor(index=3, name="SLATE_L", hex="#8da0c4", flags=("surface",)),
+            PaletteColor(index=4, name="CRIMSON", hex="#b13e53", flags=("accent",)),
+        ),
+        aliases={"BASE": "SLATE_M"},
+        ramps={"slate": ("INK", "SLATE_D", "BASE", "SLATE_L")},
+    )
+    pal = PaletteLookup(style)
+    assert pal.ramps == {"slate": (0, 1, 2, 3)}
+    assert pal.ramp("slate") == (0, 1, 2, 3)
+
+    overridden = pal.with_overrides(BASE="CRIMSON")
+    assert overridden.ramp("slate") == (0, 1, 4, 3)
+
+    with pytest.raises(PaletteLookupError, match="did you mean 'slate'"):
+        _ = pal.ramp("sltae")
+
+    # Reject light-to-dark reversed ramp
+    with pytest.raises(ValidationError, match="dark-to-light"):
+        StylePack(
+            id="bad-lum",
+            perspective="top-down",
+            lighting_angle="top-left",
+            outline_index=0,
+            palette=style.palette,
+            ramps={"bad": ("SLATE_L", "SLATE_D")},
+        )
+
+    # Reject single-stop ramp and unknown token
+    with pytest.raises(ValidationError, match="at least 2 tokens"):
+        StylePack(
+            id="short-ramp",
+            perspective="top-down",
+            lighting_angle="top-left",
+            outline_index=0,
+            palette=style.palette,
+            ramps={"short": ("SLATE_D",)},
+        )
+
+    with pytest.raises(ValidationError, match="unknown token"):
+        StylePack(
+            id="unknown-tok",
+            perspective="top-down",
+            lighting_angle="top-left",
+            outline_index=0,
+            palette=style.palette,
+            ramps={"bad": ("INK", "NO_SUCH_COLOR")},
+        )
+
+
+def test_builtin_presets_define_valid_ramps() -> None:
+    """Verify all 8 built-in presets define at least one validated dark-to-light ramp."""
+    from pixelforge.presets import load_all_presets
+
+    presets = load_all_presets()
+    assert len(presets) == 8
+    for preset_id, style in presets.items():
+        assert style.ramps, f"Preset {preset_id!r} should define at least one color ramp"
+        pal = PaletteLookup(style)
+        for ramp_name in style.ramps:
+            assert len(pal.ramp(ramp_name)) >= 2

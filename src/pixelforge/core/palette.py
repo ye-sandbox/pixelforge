@@ -63,6 +63,11 @@ class UniversalPalette(Protocol):
     @property
     def EMISSIVE_2(self) -> int: ...
 
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]: ...
+
+    def ramp(self, name: str) -> tuple[int, ...]: ...
+
     def __getitem__(self, name: str) -> int: ...
 
     def __contains__(self, name: object) -> bool: ...
@@ -86,6 +91,7 @@ class PaletteLookup:
 
     _style_id: str
     _indices: dict[str, int]
+    _ramp_tokens: dict[str, tuple[str, ...]]
 
     def __init__(self, style: StylePack, tokens: Sequence[str] | None = None) -> None:
         by_name = {entry.name: entry.index for entry in style.palette}
@@ -102,15 +108,39 @@ class PaletteLookup:
                     raise PaletteLookupError(msg)
                 resolved[token] = by_name[token]
 
+        ramp_tokens = {
+            ramp_name: ramp_seq
+            for ramp_name, ramp_seq in style.ramps.items()
+            if all(tok in resolved for tok in ramp_seq)
+        }
+
         # INVARIANT: Fail loudly on unknown token reads instead of returning None or 0,
         # which would silently write palette index 0 into the uint8 framebuffer.
         object.__setattr__(self, "_style_id", style.id)
         object.__setattr__(self, "_indices", resolved)
+        object.__setattr__(self, "_ramp_tokens", ramp_tokens)
 
     @property
     def style_id(self) -> str:
         """Return the bound StylePack identifier."""
         return self._style_id
+
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]:
+        """Return resolved dark-to-light palette index ramps keyed by ramp name."""
+        return {
+            name: tuple(self._indices[token] for token in tokens)
+            for name, tokens in self._ramp_tokens.items()
+        }
+
+    def ramp(self, name: str) -> tuple[int, ...]:
+        """Resolve a named dark-to-light palette ramp into uint8 palette indices."""
+        tokens = self._ramp_tokens.get(name)
+        if tokens is None:
+            suggestion = _format_close_matches(name, self._ramp_tokens.keys())
+            msg = f"Missing palette ramp: {name!r} (style: {self._style_id!r}){suggestion}"
+            raise PaletteLookupError(msg)
+        return tuple(self._indices[token] for token in tokens)
 
     def __getattr__(self, name: str) -> int:
         if name.startswith("_"):
@@ -140,10 +170,20 @@ class PaletteLookup:
         return iter(self._indices)
 
     @classmethod
-    def _from_resolved(cls, style_id: str, resolved: Mapping[str, int]) -> PaletteLookup:
+    def _from_resolved(
+        cls,
+        style_id: str,
+        resolved: Mapping[str, int],
+        ramp_tokens: Mapping[str, tuple[str, ...]] | None = None,
+    ) -> PaletteLookup:
         instance = cls.__new__(cls)
         object.__setattr__(instance, "_style_id", style_id)
         object.__setattr__(instance, "_indices", dict(resolved))
+        object.__setattr__(
+            instance,
+            "_ramp_tokens",
+            dict(ramp_tokens) if ramp_tokens is not None else {},
+        )
         return instance
 
     def with_overrides(
@@ -176,7 +216,7 @@ class PaletteLookup:
                     )
                     raise ValueError(msg)
                 resolved[src_token] = idx
-        return PaletteLookup._from_resolved(self._style_id, resolved)
+        return PaletteLookup._from_resolved(self._style_id, resolved, self._ramp_tokens)
 
     def to_dict(self) -> dict[str, int]:
         """Return a shallow copy of the resolved token-to-index map."""

@@ -25,6 +25,9 @@ STYLE = StylePack(
         "EMISSIVE_1": "PAPER",
         "EMISSIVE_2": "PAPER",
     },
+    ramps={
+        "mono": ("INK", "PAPER"),
+    },
     variants={
         "amber": {
             "INK": "#140e07",

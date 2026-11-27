@@ -36,6 +36,14 @@ PaletteFlag = Literal[
 _HEX_PATTERN: Final[str] = r"^#[0-9a-fA-F]{6}$"
 
 
+def _hex_luminance(hex_color: str) -> float:
+    """Return relative sRGB luminance (0..255 scale) for a validated `#RRGGBB` hex string."""
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
 class PaletteColor(BaseModel):
     """Single indexed color entry inside a StylePack."""
 
@@ -60,11 +68,13 @@ class StylePack(BaseModel):
     aliases: dict[str, str] = Field(default_factory=dict)
     reflections: dict[str, str] = Field(default_factory=dict)
     variants: dict[str, dict[str, str]] = Field(default_factory=dict)
+    ramps: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_integrity(self) -> StylePack:
         indices: set[int] = set()
         names: set[str] = set()
+        hex_by_name: dict[str, str] = {}
         for entry in self.palette:
             if entry.index in indices:
                 msg = f"Duplicate palette index {entry.index} in style {self.id!r}"
@@ -74,6 +84,7 @@ class StylePack(BaseModel):
                 raise ValueError(msg)
             indices.add(entry.index)
             names.add(entry.name)
+            hex_by_name[entry.name] = entry.hex
 
         if self.outline_index not in indices:
             msg = f"outline_index {self.outline_index} is not defined in style {self.id!r}"
@@ -95,6 +106,7 @@ class StylePack(BaseModel):
                     f"in style {self.id!r}"
                 )
                 raise ValueError(msg)
+            hex_by_name[alias_name] = hex_by_name[target_token]
 
         for src, dst in self.reflections.items():
             if src not in names:
@@ -116,6 +128,32 @@ class StylePack(BaseModel):
                     msg = f"Variant {variant_name!r} token {token!r} has invalid hex {hex_val!r}"
                     raise ValueError(msg)
                 int(hex_val[1:], 16)
+
+        for ramp_name, ramp_tokens in self.ramps.items():
+            if not ramp_name:
+                msg = f"Ramp name must be non-empty in style {self.id!r}"
+                raise ValueError(msg)
+            if len(ramp_tokens) < 2:
+                msg = f"Ramp {ramp_name!r} in style {self.id!r} must have at least 2 tokens"
+                raise ValueError(msg)
+            prev_lum = -1.0
+            prev_token = ""
+            for token in ramp_tokens:
+                if token not in hex_by_name:
+                    msg = (
+                        f"Ramp {ramp_name!r} references unknown token {token!r} "
+                        f"in style {self.id!r}"
+                    )
+                    raise ValueError(msg)
+                lum = _hex_luminance(hex_by_name[token])
+                if lum < prev_lum - 1e-6:
+                    msg = (
+                        f"Ramp {ramp_name!r} in style {self.id!r} must be ordered dark-to-light: "
+                        f"{prev_token!r} ({prev_lum:.1f}) is brighter than {token!r} ({lum:.1f})"
+                    )
+                    raise ValueError(msg)
+                prev_lum = lum
+                prev_token = token
 
         return self
 

@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pixelforge.core.surface_maps import SurfaceMaps
-from pixelforge.core.types import TRANSPARENT_INDEX
+from pixelforge.core.types import TRANSPARENT_INDEX, LightingAngle
 
 DitherPattern = Literal["bayer2", "bayer4", "checker"]
 DitherMask = Literal["all", "opaque"]
@@ -780,6 +780,155 @@ class IndexedSurface:
             self.data[below_empty] = c_bot
         if c_top is not None:
             self.data[above_empty] = c_top
+
+    def bevel_rect(
+        self,
+        x: int | float,
+        y: int | float,
+        w: int | float,
+        h: int | float,
+        ramp: Sequence[int],
+        *,
+        thickness: int = 1,
+        lighting_angle: LightingAngle = "top-left",
+        recessed: bool = False,
+        outline: int | None = None,
+    ) -> None:
+        """Draw a filled rectangle with directional bevel highlights and shadows from `ramp`."""
+        if not ramp:
+            msg = "bevel_rect requires at least one color in ramp"
+            raise ValueError(msg)
+        if thickness < 1:
+            msg = f"bevel_rect thickness must be >= 1, got {thickness}"
+            raise ValueError(msg)
+
+        ix, iy, iw, ih = int(x), int(y), int(w), int(h)
+        if iw <= 0 or ih <= 0:
+            return
+
+        ramp_idx = [_normalize_index(c) for c in ramp]
+        if outline is not None:
+            outline_idx = _normalize_index(outline)
+            if iw < 3 or ih < 3:
+                self.rect(ix, iy, iw, ih, outline_idx, fill=True)
+                return
+            self.rect(ix, iy, iw, ih, outline_idx, fill=False)
+            ix += 1
+            iy += 1
+            iw -= 2
+            ih -= 2
+
+        if len(ramp_idx) == 1:
+            self.rect(ix, iy, iw, ih, ramp_idx[0], fill=True)
+            return
+
+        shadow = ramp_idx[0]
+        highlight = ramp_idx[-1]
+        mid = ramp_idx[len(ramp_idx) // 2]
+        if recessed:
+            shadow, highlight = highlight, shadow
+
+        self.rect(ix, iy, iw, ih, mid, fill=True)
+        t_max = min(thickness, iw // 2, ih // 2)
+        for t in range(t_max):
+            rx = ix + t
+            ry = iy + t
+            rw = iw - 2 * t
+            rh = ih - 2 * t
+            x_end = rx + rw - 1
+            y_end = ry + rh - 1
+            if lighting_angle == "top-left":
+                self._hspan(rx, x_end, y_end, shadow)
+                self.line(x_end, ry, x_end, y_end, shadow)
+                self._hspan(rx, x_end, ry, highlight)
+                self.line(rx, ry, rx, y_end, highlight)
+            elif lighting_angle == "top-right":
+                self._hspan(rx, x_end, y_end, shadow)
+                self.line(rx, ry, rx, y_end, shadow)
+                self._hspan(rx, x_end, ry, highlight)
+                self.line(x_end, ry, x_end, y_end, highlight)
+            else:  # "top"
+                self._hspan(rx, x_end, y_end, shadow)
+                self._hspan(rx, x_end, ry, highlight)
+
+    def shade_volume(
+        self,
+        ramp: Sequence[int],
+        *,
+        lighting_angle: LightingAngle = "top-left",
+        bounds: tuple[int, int, int, int] | None = None,
+        only_colors: Sequence[int] | None = None,
+        dither: bool = False,
+        preserve_outline: bool = True,
+        outline_color: int | None = None,
+    ) -> int:
+        """Directionally shade opaque pixels across `ramp` (dark-to-light) by `lighting_angle`."""
+        if not ramp:
+            msg = "shade_volume requires at least one color in ramp"
+            raise ValueError(msg)
+
+        ramp_idx = np.array([_normalize_index(c) for c in ramp], dtype=np.uint8)
+        if bounds is None:
+            x0, y0, x1, y1 = 0, 0, self.width, self.height
+        else:
+            bx, by, bw, bh = bounds
+            x0 = max(0, int(bx))
+            y0 = max(0, int(by))
+            x1 = min(self.width, int(bx) + int(bw))
+            y1 = min(self.height, int(by) + int(bh))
+        if x0 >= x1 or y0 >= y1:
+            return 0
+
+        patch = self.data[y0:y1, x0:x1]
+        eligible = patch != TRANSPARENT_INDEX
+        if only_colors is not None:
+            allowed = np.isin(
+                patch,
+                np.array([_normalize_index(c) for c in only_colors], dtype=np.uint8),
+            )
+            eligible &= allowed
+        if preserve_outline and outline_color is not None:
+            eligible &= patch != _normalize_index(outline_color)
+
+        ys, xs = np.nonzero(eligible)
+        count = len(xs)
+        if count == 0:
+            return 0
+        if len(ramp_idx) == 1:
+            patch[ys, xs] = ramp_idx[0]
+            return count
+
+        x_min, x_max = int(xs.min()), int(xs.max())
+        y_min, y_max = int(ys.min()), int(ys.max())
+        x_span = x_max - x_min
+        y_span = y_max - y_min
+        nx = (
+            ((xs.astype(np.float64) - x_min) / float(x_span)) * 2.0 - 1.0
+            if x_span > 0
+            else np.zeros(count, dtype=np.float64)
+        )
+        ny = (
+            ((ys.astype(np.float64) - y_min) / float(y_span)) * 2.0 - 1.0
+            if y_span > 0
+            else np.zeros(count, dtype=np.float64)
+        )
+
+        if lighting_angle == "top-left":
+            lx, ly = -1.0, -1.0
+        elif lighting_angle == "top-right":
+            lx, ly = 1.0, -1.0
+        else:  # "top"
+            lx, ly = 0.0, -1.0
+
+        max_abs = abs(lx) + abs(ly)
+        t = ((nx * lx + ny * ly) / max_abs + 1.0) * 0.5
+        if dither:
+            thresholds = compute_dither_thresholds(x0, y0, x1 - x0, y1 - y0, pattern="bayer4")
+            t = t + (thresholds[ys, xs] - 0.5) / float(len(ramp_idx))
+
+        bins = np.clip((t * len(ramp_idx)).astype(np.int64), 0, len(ramp_idx) - 1)
+        patch[ys, xs] = ramp_idx[bins]
+        return count
 
 
 def orphan_pixel_mask(surface: IndexedSurface) -> NDArray[np.bool_]:

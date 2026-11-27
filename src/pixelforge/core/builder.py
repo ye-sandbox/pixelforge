@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import TracebackType
@@ -26,6 +26,7 @@ from pixelforge.core.types import (
     AssetSpec,
     HitboxRect,
     LayerRole,
+    LightingAngle,
     StylePack,
 )
 
@@ -120,6 +121,9 @@ class Layer(DrawingMixin):
     _surface: IndexedSurface
     _rng: Callable[[], float]
     _resolve_color: Callable[[str | int], int]
+    _resolve_ramp_cb: Callable[[str | Sequence[int]], tuple[int, ...]] | None
+    _lighting_angle: LightingAngle
+    _outline_index: int | None
     _emit_anchor_cb: Callable[
         [Layer, str, int | float, int | float, str | None, tuple[int, int] | None],
         AnchorPoint,
@@ -149,12 +153,18 @@ class Layer(DrawingMixin):
         ],
         on_enter: Callable[[Layer], None],
         on_exit: Callable[[Layer, bool], None],
+        resolve_ramp: Callable[[str | Sequence[int]], tuple[int, ...]] | None = None,
+        lighting_angle: LightingAngle = "top-left",
+        outline_index: int | None = None,
     ) -> None:
         self.name = name
         self.offset = offset
         self._surface = surface
         self._rng = rng
         self._resolve_color = resolve_color
+        self._resolve_ramp_cb = resolve_ramp
+        self._lighting_angle = lighting_angle
+        self._outline_index = outline_index
         self._emit_anchor_cb = emit_anchor
         self._emit_hitbox_cb = emit_hitbox
         self._on_enter = on_enter
@@ -169,6 +179,20 @@ class Layer(DrawingMixin):
 
     def _resolve_pal_index(self, token_or_idx: str | int) -> int:
         return self._resolve_color(token_or_idx)
+
+    def _resolve_pal_ramp(self, ramp: str | Sequence[int]) -> tuple[int, ...]:
+        if self._resolve_ramp_cb is not None:
+            return self._resolve_ramp_cb(ramp)
+        if isinstance(ramp, str):
+            msg = f"Layer {self.name!r} has no bound StylePack to resolve ramp {ramp!r}"
+            raise ValueError(msg)
+        return tuple(int(c) for c in ramp)
+
+    def _default_lighting_angle(self) -> LightingAngle:
+        return self._lighting_angle
+
+    def _default_outline_index(self) -> int | None:
+        return self._outline_index
 
     def _emit_anchor(
         self,
@@ -436,6 +460,9 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
             emit_hitbox=self._emit_hitbox_for_layer,
             on_enter=_enter_layer,
             on_exit=self._exit_layer_callback,
+            resolve_ramp=self._resolve_pal_ramp,
+            lighting_angle=self.style.lighting_angle,
+            outline_index=self.style.outline_index,
         )
         # INVARIANT: Push onto `_layer_stack` only inside `Layer.__enter__` so unentered
         # `a.layer(...)` handles cannot leak onto the stack and corrupt subsequent draws.
@@ -646,6 +673,17 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
             msg = f"Palette index {idx} out of range [0..{TRANSPARENT_INDEX}]"
             raise ValueError(msg)
         return idx
+
+    def _resolve_pal_ramp(self, ramp: str | Sequence[int]) -> tuple[int, ...]:
+        if isinstance(ramp, str):
+            return cast(PaletteLookup, self._pal).ramp(ramp)
+        return tuple(self._resolve_pal_index(c) for c in ramp)
+
+    def _default_lighting_angle(self) -> LightingAngle:
+        return self.style.lighting_angle
+
+    def _default_outline_index(self) -> int | None:
+        return self.style.outline_index
 
     def _record_global_anchor(
         self,

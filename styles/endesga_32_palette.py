@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 
 class Endesga32Palette(Protocol):
@@ -137,6 +137,11 @@ class Endesga32Palette(Protocol):
 
     @property
     def EMISSIVE_2(self) -> int: ...
+
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]: ...
+
+    def ramp(self, name: Literal["steel", "wood", "green", "fire", "blue"]) -> tuple[int, ...]: ...
 
     def __getitem__(self, name: str) -> int: ...
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 
 class TopdownRpgPalette(Protocol):
@@ -107,6 +107,22 @@ class TopdownRpgPalette(Protocol):
 
     @property
     def RUNE_GOLD(self) -> int: ...
+
+    @property
+    def ramps(self) -> dict[str, tuple[int, ...]]: ...
+
+    def ramp(
+        self,
+        name: Literal[
+            "soil",
+            "grass",
+            "stone",
+            "bark",
+            "water",
+            "iron",
+            "gold",
+        ],
+    ) -> tuple[int, ...]: ...
 
     def __getitem__(self, name: str) -> int: ...
 

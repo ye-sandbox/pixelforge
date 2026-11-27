@@ -26,13 +26,14 @@ def palette_stub_path(style_path: Path) -> Path:
 def generate_palette_stub(style: StylePack) -> str:
     """Generate a `ruff`-formatted `Protocol` stub module for `style`."""
     class_name = palette_stub_class_name(style.id)
+    typing_imports = "Literal, Protocol, Self" if style.ramps else "Protocol, Self"
     lines: list[str] = [
         f'"""Auto-generated typed palette stub for StylePack {style.id!r}."""',
         "",
         "from __future__ import annotations",
         "",
         "from collections.abc import Iterator, Mapping",
-        "from typing import Protocol, Self",
+        f"from typing import {typing_imports}",
         "",
         "",
         f"class {class_name}(Protocol):",
@@ -66,8 +67,33 @@ def generate_palette_stub(style: StylePack) -> str:
             ]
         )
 
+    ramp_lines: list[str]
+    if style.ramps:
+        literal_items = [f'"{name}"' for name in style.ramps]
+        single_line = (
+            f"    def ramp(self, name: Literal[{', '.join(literal_items)}]) -> tuple[int, ...]: ..."
+        )
+        if len(single_line) <= 100:
+            ramp_lines = [single_line]
+        else:
+            ramp_lines = [
+                "    def ramp(",
+                "        self,",
+                "        name: Literal[",
+                *[f"            {item}," for item in literal_items],
+                "        ],",
+                "    ) -> tuple[int, ...]: ...",
+            ]
+    else:
+        ramp_lines = ["    def ramp(self, name: str) -> tuple[int, ...]: ..."]
+
     lines.extend(
         [
+            "    @property",
+            "    def ramps(self) -> dict[str, tuple[int, ...]]: ...",
+            "",
+            *ramp_lines,
+            "",
             "    def __getitem__(self, name: str) -> int: ...",
             "",
             "    def __contains__(self, name: object) -> bool: ...",

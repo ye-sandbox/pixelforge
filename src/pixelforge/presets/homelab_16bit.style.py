@@ -107,6 +107,17 @@ STYLE = StylePack(
         "METAL_H": "FLOOR_L",
         "WHITE": "TILE_L",
     },
+    ramps={
+        "wall": ("VOID", "INK", "WALL_D", "WALL_M", "WALL_L"),
+        "floor": ("VOID", "FLOOR_D", "FLOOR_M", "FLOOR_L"),
+        "metal": ("INK", "METAL_D", "METAL_M", "METAL_L", "METAL_H", "WHITE"),
+        "wood": ("INK", "WOOD_D", "WOOD_M", "WOOD_L"),
+        "pcb": ("INK", "PCB_D", "PCB_G", "LED_G"),
+        "screen": ("INK", "SCREEN_D", "SCREEN_L", "LED_C", "SOLAR_L"),
+        "skin": ("INK", "SKIN_D", "SKIN_M", "SKIN_L"),
+        "tile": ("VOID", "TILE_D", "TILE_L"),
+        "glass": ("INK", "GLASS_D", "GLASS_L", "WHITE"),
+    },
     variants={
         "night": {
             "WALL_D": "#0d121a",
