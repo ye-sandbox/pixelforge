@@ -8,11 +8,11 @@
 
 ## Active Task
 
-### `[48.1]` Category-Aware 5-Axis Visual Critic (`pixelforge critic` & `blind-critic` Alignment)
-- [ ] Align `guard/critic.py` JSON output with the 5-axis rubric (`silhouette_1x`, `lighting_consistency`, `cluster_cleanliness`, `state_frame_legibility`, `anchors_and_palette`) and coordinate-anchored findings
-- [ ] Split critic prompts by category (`character`, `iso_prop`, `scene`, `ui_tilemap`) to remove homelab-room bias
-- [ ] Support configurable dev review model tier while keeping `fast` as CI default
-- [ ] Add unit and CLI tests in `tests/`
+### `[49.1]` First-Class Color Ramps (`StylePack.ramps`) & Directional Volume Shading
+- [ ] Add validated dark-to-light `ramps` to `StylePack` and populate built-in presets
+- [ ] Expose ramps in `inspect style` and generated palette stubs (`*_palette.py`)
+- [ ] Add native `bevel_rect(..., ramp=...)` and directional `shade_volume(ramp, ...)` primitives in `core/`
+- [ ] Add unit, guard, and CLI tests in `tests/`
 
 ---
 
@@ -20,6 +20,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[48.1]` Category-Aware 5-Axis Visual Critic (`pixelforge critic` & `blind-critic` Alignment) (`7cacf39`)
 - `[47.1]` Upgraded Diagnostic Contact Sheet & Enriched MCP Visual Loop (`e3a4747`)
 - `[46.1]` Native Stdio MCP Server (`pixelforge mcp`) (`3fb1ab4`)
 - `[45.1]` Environment Health Check (`pixelforge doctor`) & Blind Visual Critic Skill (`e7be5d2`)
@@ -60,7 +61,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track H — Agent Visual Assertiveness & Pixel-Art Craft
-- `[49.1]` **First-Class Color Ramps (`StylePack.ramps`) & Directional Volume Shading:** Add validated dark-to-light `ramps` to `StylePack`, populate built-in presets, expose ramps in `inspect style` and generated palette stubs, and add native `bevel_rect(..., ramp=...)` and directional `shade_volume(ramp, ...)` primitives in `core/`.
 - `[50.1]` **Layer Alpha-Lock (`clip="opaque"`) & Organic Pixel Primitives:** Support `clip="opaque"` on `Asset.layer(...)` so shading/texture passes never bleed outside the parent silhouette; add crisp organic primitives (`bezier`, `arc`, `capsule`, `iso_cylinder`, `iso_ramp`) and `cleanup_jaggies()` post-pass in `core/surface.py` and `core/iso.py` with `inspect api` coverage.
 - `[51.1]` **Deterministic Pixel-Art Craft Lints in `pixelforge check`:** Add fast `numpy` craft diagnostics (advisory by default + `--strict-craft`) for double-pixel L-corner jaggies, concentric pillow-shading/banding, directional lighting balance vs `style.lighting_angle`, `1x` silhouette contrast against `#0d1117`/`#e6edf3`, state/frame no-op SHA-256 delta guard, and anchor/hitbox fidelity.
 - `[52.1]` **Perceptual Reference Pipeline (`analyze-ref` OKLab, `--trim`, `--emit-spr`):** Upgrade `export/analyze_ref.py` from `BILINEAR` + Euclidean RGB to perceptual OKLab quantization (excluding `emissive` tokens by default), `--trim` auto-crop, edge-preserving downscaling, and `--emit-spr` clean ASCII `spr()` scaffolding for ephemeral reference/image-gen blueprints.
