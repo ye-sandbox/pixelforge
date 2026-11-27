@@ -19,14 +19,19 @@ description: Author, guard-check, and visually refine deterministic code-drawn i
 
 ---
 
-## 2. Progressive Disclosure References
+## 2. Domain Routing Table
 
-Load these references on demand when the task involves them:
+Load only the reference module matching the current asset domain (do not duplicate shared invariants):
 
-- **Prefab Kits & Window Recipes:** [references/prefabs.md](references/prefabs.md) — Complete `architecture`, `furniture`, `details`, and `atmosphere` prefab kits + clipped window recipes.
-- **Declarative Scenes & Spatial Ergonomics:** [references/scenes.md](references/scenes.md) — `*.scene.py` (`SceneSpec` / `SceneMountSpec`), `pixelforge compose`, and room ergonomics.
-- **Multimodal Visual Critic & `critic` CLI:** [references/critic.md](references/critic.md) — Manual 5-criteria contact-sheet loop and automated `pixelforge critic` scoring.
-- **Blind Visual Critic Subagent:** [../blind-critic/SKILL.md](../blind-critic/SKILL.md) — Read-only unbiased review protocol on compiled `.contact.png` / `.gif` / `.diff.png` without source-code leakage.
+| Asset / Task Domain | Reference Module | Scope |
+|---|---|---|
+| **Exteriors & Environments** | [references/exteriors.md](references/exteriors.md) | `iso-2:1` / `top-down` / `front-2.5d` trees, foliage, pitched roofs, facades, `tilemap` autotiling, `iso_y` scenes |
+| **Characters & Creatures** | [references/characters.md](references/characters.md) | `16×16`–`32×32` scale, `avatar_character`, `eval_character_cycle`, squash-and-stretch, `foot`/`core`/`hand` anchors |
+| **Weapons, Tools & Items** | [references/weapons_items.md](references/weapons_items.md) | `16×16` / `24×24` icons, 45° diagonal vs. orthogonal, value separation, `cleanup_jaggies`, anti-pillow-shading |
+| **Prefab Kits & Windows** | [references/prefabs.md](references/prefabs.md) | `architecture`, `furniture`, `details`, `atmosphere`, and `clipped_pane` window recipes |
+| **Scenes & Ergonomics** | [references/scenes.md](references/scenes.md) | `*.scene.py` (`SceneSpec` / `SceneMountSpec`), `pixelforge compose`, and room ergonomics |
+| **Visual Critic & Scoring** | [references/critic.md](references/critic.md) | Manual 5-criteria contact-sheet loop and automated `pixelforge critic` CLI |
+| **Blind Critic Subagent** | [../blind-critic/SKILL.md](../blind-critic/SKILL.md) | Read-only unbiased review protocol on `.contact.png` / `.gif` / `.diff.png` without source leakage |
 
 ---
 
