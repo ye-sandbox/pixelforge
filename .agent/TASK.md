@@ -8,12 +8,12 @@
 
 ## Active Task
 
-### `[58.1]` Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping
-Goal: Add `UiPalette.from_style(target, **overrides)` deriving all UI color tokens deterministically from `StylePack` aliases/ramps/flags, migrate `assets/ui/hud_*.asset.py`, and test portability across all built-in presets.
+### `[59.1]` Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives
+Goal: Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
 
-- [ ] Design and implement `UiPalette.from_style(target, **overrides)` deriving UI surface, border, text, accent, and state tokens deterministically from `StylePack` aliases, ramps, and palette flags.
-- [ ] Migrate `assets/ui/hud_*.asset.py` to use `UiPalette.from_style(...)` without manual per-theme color boilerplate.
-- [ ] Add hermetic unit and guard tests verifying `UiPalette.from_style()` portability across all built-in `StylePack` presets.
+- [ ] Design and implement synchronized `NineSliceMargins` computation/return and optional `content` hitbox emission on `ui_panel`, `ui_button`, and framed UI primitives.
+- [ ] Update `assets/ui/hud_panel_9slice.asset.py` and `assets/ui/hud_button_9slice.asset.py` to use auto-synced margins / `content` hitbox emission.
+- [ ] Add hermetic unit tests verifying `NineSliceMargins` and `content` hitbox alignment across sizes, `title_bar_h`, `beveled`, and `corner_cut` options.
 - [ ] Pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`) and update `.agent/NOTES.md` if contracts change.
 
 ---
@@ -22,6 +22,7 @@ Goal: Add `UiPalette.from_style(target, **overrides)` deriving all UI color toke
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[58.1]` Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping (`b880eee`)
 - `[57.1]` Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`) (`d5e9c56`)
 
 - `[56.1]` Pixel UI Rendering Modes ADR & Build-Time Boundary Contract (`30be435`)
@@ -75,7 +76,7 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track J — Pixel UI Architecture, Build Profiles & Core Foundations
-- `[59.1]` **Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives** *(Depends on: `[58.1]`)* — Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
+_All Track J items promoted or completed._
 
 ### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
 - `[60.1]` **Complete Game UI Controls Library (`prefabs/ui/`)** *(Depends on: `[58.1]`, `[59.1]`)* — Subdivide `src/pixelforge/core/prefabs/ui.py` into `prefabs/ui/` and add `ui_slot` (empty/hover/selected/locked), `ui_dialogue_box` (tail + portrait frame), `ui_tabs`, `ui_slider`, `ui_toggle`/`ui_checkbox`, `ui_scrollbar`, `ui_divider`, and `ui_cursor` (with `hotspot` anchor).
