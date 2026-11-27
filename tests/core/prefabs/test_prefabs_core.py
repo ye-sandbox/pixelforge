@@ -350,7 +350,7 @@ def test_prefabs_bounds_safety_and_layer_compatibility(make_asset: Callable[...,
 def test_prefabs_pass_core_ast_guard_rules() -> None:
     """Verify every module under `src/pixelforge/core/prefabs/` passes `core` AST guards."""
     py_files = sorted(PREFABS_DIR.rglob("*.py"))
-    assert len(py_files) == 32
+    assert len(py_files) == 35
     for path in py_files:
         assert infer_scope(path) == "core"
         violations = check_ast_file(path, scope="core")
