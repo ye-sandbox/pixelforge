@@ -8,13 +8,12 @@
 
 ## Active Task
 
-### `[62.1]` Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline
-Goal: Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD symbols (`♥ ★ → ← ↑ ↓ × •`), true per-glyph `proportional=True` (`x_advance`/`x_offset`) + `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), native 1px `outline=` pass, and optional BMFont (`.fnt`) export.
+### `[63.1]` Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet
+Goal: Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
 
-- [ ] Add Latin-1/PT-BR diacritics and HUD symbols (`♥ ★ → ← ↑ ↓ × •`) to `src/pixelforge/core/font.py`.
-- [ ] Implement true per-glyph `proportional=True` (`x_advance`/`x_offset`), `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), and native 1px `outline=` pass.
-- [ ] Add optional BMFont (`.fnt`) export support and hermetic unit tests.
-- [ ] Pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`) and update `.agent/NOTES.md` if contracts change.
+- [ ] Add `pixelforge new ui-kit` scaffolder parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`).
+- [ ] Generate a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
+- [ ] Add hermetic unit + CLI tests and pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`).
 
 ---
 
@@ -22,6 +21,7 @@ Goal: Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD 
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[62.1]` Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline (`e2a87b8`)
 - `[61.1]` Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`) (`b4dbe96`)
 - `[60.1]` Complete Game UI Controls Library (`prefabs/ui/`) (`6cf6be0`)
 
@@ -83,7 +83,7 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 _All Track J items promoted or completed._
 
 ### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
-- `[63.1]` **Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet** *(Depends on: `[57.1]`, `[58.1]`, `[59.1]`, `[60.1]`, `[61.1]`, `[62.1]`)* — Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
+_All Track K items promoted or completed._
 
 ### Track L — UI Guards, Design-System Export, HUD Critic & Runtime Bridge
 - `[64.1]` **Deterministic UI Quality Guards in `pixelforge check`** *(Depends on: `[59.1]`, `[60.1]`, `[63.1]`)* — Add UI runtime rules verifying minimum text/surface luminance contrast (reusing `_hex_luminance`), 9-slice margin integrity (`left + right < width`, `top + bottom < height`, clean >= 1px stretchable core without slicing bevels/title bars), and cursor `hotspot` anchor bounds.
