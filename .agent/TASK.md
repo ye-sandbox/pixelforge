@@ -8,7 +8,13 @@
 
 ## Active Task
 
-_None — all current roadmap tasks completed._
+### `[55.1]` Exterior Prefab Kit (`src/pixelforge/core/prefabs/exterior/`)
+Goal: Implement deterministic exterior prefab helpers (`iso_tree`, `foliage_cluster`, `pitched_roof`, `building_facade`) with unit/render tests and `prefabs.md` documentation.
+
+- [ ] Implement `src/pixelforge/core/prefabs/exterior/` helpers (`iso_tree`, `foliage_cluster`, `pitched_roof`, `building_facade`) and export via `pixelforge.prefabs`.
+- [ ] Add hermetic unit and render tests under `tests/core/prefabs/` covering `StylePack`-agnosticism, determinism, and `clip="opaque"` / `outline` behavior.
+- [ ] Document the new exterior prefabs in `.agent/skills/create-pixel-asset/references/prefabs.md` (and cross-link from `references/exteriors.md` if needed).
+- [ ] Verify all validation gates (`uv run ruff check . && uv run ruff format --check .`, `uv run pyright`, `uv run pytest`, `git diff --check`) and commit atomically.
 
 ---
 
@@ -16,6 +22,7 @@ _None — all current roadmap tasks completed._
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[54.1]` Modularize Domain-Specific Skill References (`create-pixel-asset`) (`238ca49`)
 - `[53.1]` Silhouette-First Authoring Skill Protocol & Reproducible Agent Eval Benchmark (`a8908b8`)
 
 - `[52.1]` Perceptual Reference Pipeline (`analyze-ref` OKLab, `--trim`, `--emit-spr`) (`dbf2630`)
@@ -62,6 +69,9 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ---
 
 ## Backlog (Upcoming, in priority order)
+
+### Track I — Exterior & Domain Authoring
+_All Track I items promoted or completed._
 
 ### Track H — Agent Visual Assertiveness & Pixel-Art Craft
 _All Track H items promoted or completed._
