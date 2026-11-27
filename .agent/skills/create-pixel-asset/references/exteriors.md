@@ -18,7 +18,7 @@ Author outdoor props, foliage, buildings, terrain sheets, and exterior scenes us
 
 ## 2. Organic Trees & Foliage Clusters
 
-Build trees and shrubs from **overlapping leaf clusters** rather than a single lollipop circle:
+For standard outdoor props, use `prefabs.iso_tree(...)` (`"oak"`, `"pine"`, `"cypress"`) and `prefabs.foliage_cluster(...)` (see [prefabs.md](prefabs.md)). When authoring bespoke foliage manually, build trees and shrubs from **overlapping leaf clusters** rather than a single lollipop circle:
 
 1. **Ground Contact Shadow:** Draw an `ellipse` (e.g. `p.VOID` or `p.INK`) at the base before the trunk.
 2. **Trunk & Branches:** Use `capsule` or `polygon` inside `with a.layer("trunk", outline=p.INK):`, shaded on one side with `clip="opaque"`.
@@ -32,7 +32,7 @@ Build trees and shrubs from **overlapping leaf clusters** rather than a single l
 
 ## 3. Pitched Roofs & Building Facades
 
-- **Pitched Roofs (`iso-2:1` / `front-2.5d`):**
+Use `prefabs.pitched_roof(...)` and `prefabs.building_facade(...)` (`iso-2:1` and `front-2.5d`, see [prefabs.md](prefabs.md)) for standard cottages and storefronts, or compose custom facades directly:
   - Construct walls first with `iso_box` or `bevel_rect`.
   - Project roof slopes using `with a.plane(p0, p1, p2) as roof:` (or `polygon` for gable triangles) with a `1–2px` **eave overhang** past the wall silhouette so the roof reads distinctly at `1×`.
   - Add shingle or seam lines with `roof.grid(...)` or `roof.line(...)`, keeping the sunlit slope brighter than the shaded slope.

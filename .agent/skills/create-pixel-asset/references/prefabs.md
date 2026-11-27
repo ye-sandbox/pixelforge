@@ -108,3 +108,12 @@ prefabs.iso_window(
 - **Pose & Cycles:** `eval_character_cycle(state, frame, frames, *, seed=0, seated=False) -> CharacterPose` (`"idle"`, `"walk"`, `"typing"`, `"alert"`).
 - **Parts:** `avatar_legs(...) -> LegsAnchors`, `avatar_torso(...) -> TorsoAnchors`, `avatar_head(...) -> HeadAnchors`, `avatar_hair(..., style="short"|"parted"|"spiky"|"bob"|"ponytail"|"buzz")`, `avatar_accessory(..., kind="none"|"glasses"|"visor"|"headphones"|"headset"|"cap"|"badge")`.
 - **Assembler & Palette Binding:** `CharacterPalette.from_lookup(pal, ...)` + `avatar_character(target, cx, foot_y, pal, *, state="idle", frame=0, frames=4, facing="front"|"iso-se"|"iso-sw", hair_style="parted", accessory="none")` (supports `PaletteLookup.with_overrides(...)` / `a.palette_override(...)` for skin/hair/outfit swaps).
+
+---
+
+## 6. Exterior Kit (`prefabs.exterior`)
+
+- `foliage_cluster(target, cx, cy, rx, ry, *, fill, highlight=None, shadow=None, outline=None, speckles=None, speckle_count=8, lobes=4, seed=0, lighting_angle=None, cleanup_jaggies=True)` — Multi-lobe organic shrub/canopy cluster with `clip="opaque"` directional volume shading, deterministic leaf speckles, jaggie cleanup, and optional outer ink contour.
+- `iso_tree(target, cx, foot_y, *, trunk, foliage, trunk_lit=None, foliage_light=None, foliage_dark=None, outline=None, shadow=None, species="oak"|"pine"|"cypress", height=28, canopy_rx=None, canopy_ry=None, sway=0, seed=0, lighting_angle=None, emit_anchor=True, emit_hitbox=False) -> IsoTreeAnchors` — Grounded isometric tree with optional contact shadow, lit trunk, species canopy, `sway` animation offset, and `foot` ground anchor for `iso_y` depth sorting.
+- `pitched_roof(target, x, y, w, d, pitch_h, *, lit_slope, shade_slope, ridge=None, gable=None, trim=None, outline=None, overhang=2, shingle_step=0, orientation="iso-left"|"iso-right"|"front", anchor="top") -> tuple[int, int]` — Gabled/pitched roof with eave overhang, directional lit/shaded slopes, optional shingle lines, and returns `(peak_x, peak_y)`.
+- `building_facade(target, x, y, w, h, *, wall, roof_lit, roof_shade, door_frame, door_fill, window_frame, window_sky, wall_shade=None, trim=None, outline=None, d=None, roof_h=None, overhang=2, perspective="iso-2:1"|"front-2.5d", windows=2, door_side="left"|"right"|"center", roof_orientation="iso-left", emit_anchor=True) -> BuildingFacadeAnchors` — Complete exterior building combining walls, `pitched_roof`, door, and windows with a `foot` ground anchor.
