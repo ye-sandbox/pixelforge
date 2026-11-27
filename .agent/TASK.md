@@ -8,7 +8,12 @@
 
 ## Active Task
 
-_None currently active (all queued roadmap items completed)._
+### `[56.1]` Pixel UI Rendering Modes ADR & Build-Time Boundary Contract
+Goal: Formalize the two canonical pixel-game UI consumption modes (Hybrid DOM+CSS `web-ui` vs 100% Indexed Framebuffer `framebuffer-ui`) and the build-time compiler vs runtime UI boundary so all downstream UI tasks share a single contract.
+
+- [ ] Append an ADR entry to `docs/adr/decisions.md` documenting Hybrid DOM+CSS (`web-ui`) vs 100% Framebuffer (`framebuffer-ui`) modes, integer scaling invariants, and why layout/focus/input stay in the game runtime while `pixelforge` compiles visual UI assets, fonts, tokens, CSS, and previews.
+- [ ] Update `.agent/NOTES.md` active contracts table with planned UI compiler outputs (`pixelforge.toml`, `theme.generated.css`, UI styleguide sheets, HUD screen previews) marked cleanly under active/target boundaries without task-specific headings.
+- [ ] Verify `git diff --check` and confirm no existing contracts or tests regress (`uv run pytest`).
 
 ---
 
@@ -64,6 +69,24 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ---
 
 ## Backlog (Upcoming, in priority order)
+
+### Track J — Pixel UI Architecture, Build Profiles & Core Foundations
+- `[57.1]` **Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`)** *(Depends on: `[56.1]`)* — Add TOML build profile configuration (`style`, `out`, `targets`, `variant`, `scale`, `emissive`, `indexed_ts`, `ui_css`, `atlas`) loaded via stdlib `tomllib` + `pydantic` in `cli/settings.py` with named profiles (`default`, `web-ui`, `framebuffer-ui`) so `render`/`watch`/`check` run without repetitive CLI flags while explicit CLI flags override config.
+- `[58.1]` **Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping** *(Depends on: none)* — Add `UiPalette.from_style(target, **overrides)` deriving all UI color tokens deterministically from `StylePack` aliases/ramps/flags, migrate `assets/ui/hud_*.asset.py`, and test portability across all built-in presets.
+- `[59.1]` **Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives** *(Depends on: `[58.1]`)* — Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
+
+### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
+- `[60.1]` **Complete Game UI Controls Library (`prefabs/ui/`)** *(Depends on: `[58.1]`, `[59.1]`)* — Subdivide `src/pixelforge/core/prefabs/ui.py` into `prefabs/ui/` and add `ui_slot` (empty/hover/selected/locked), `ui_dialogue_box` (tail + portrait frame), `ui_tabs`, `ui_slider`, `ui_toggle`/`ui_checkbox`, `ui_scrollbar`, `ui_divider`, and `ui_cursor` (with `hotspot` anchor).
+- `[61.1]` **Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`)** *(Depends on: `[58.1]`, `[60.1]`)* — Replace closed homelab-only `UiIconKind` with modular, extensible icon registries (`8x8`, `12x12`, `16x16`) spanning universal UI controls, RPG/game HUD glyphs, and tech/homelab icons while preserving `ui_icon_16` backwards compatibility.
+- `[62.1]` **Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline** *(Depends on: none)* — Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD symbols (`♥ ★ → ← ↑ ↓ × •`), true per-glyph `proportional=True` (`x_advance`/`x_offset`) + `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), native 1px `outline=` pass, and optional BMFont (`.fnt`) export.
+- `[63.1]` **Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet** *(Depends on: `[57.1]`, `[58.1]`, `[59.1]`, `[60.1]`, `[61.1]`, `[62.1]`)* — Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
+
+### Track L — UI Guards, Design-System Export, HUD Critic & Runtime Bridge
+- `[64.1]` **Deterministic UI Quality Guards in `pixelforge check`** *(Depends on: `[59.1]`, `[60.1]`, `[63.1]`)* — Add UI runtime rules verifying minimum text/surface luminance contrast (reusing `_hex_luminance`), 9-slice margin integrity (`left + right < width`, `top + bottom < height`, clean >= 1px stretchable core without slicing bevels/title bars), and cursor `hotspot` anchor bounds.
+- `[65.1]` **Pixel UI Design-System Exporter (`--ui-css`: `theme.generated.css`, 9-Slice Utilities & Cursors)** *(Depends on: `[56.1]`, `[57.1]`, `[59.1]`, `[60.1]`, `[62.1]`, `[64.1]`)* — Emit CSS custom properties (`--pf-*`) from `StylePack` + `[data-pf-variant="..."]` overrides, integer-scaled `border-image` 9-slice classes with `:hover`/`:active`/`:disabled` + `content` padding, cursor hotspot classes, and crisp bitmap font CSS helpers across `render`, `watch`, and `pixelforge.toml`.
+- `[66.1]` **HUD / UI Screen Composition & Visual Critic Loop (`*.ui.py` / `compose --hud`)** *(Depends on: `[60.1]`, `[62.1]`, `[63.1]`, `[64.1]`)* — Compose declarative full-screen HUD/modal previews anchored over a target viewport or compiled `*.scene.py` backdrop (`320x200`, etc.) with contact-sheet rendering and UI-aware `pixelforge critic` scoring (1x legibility, text contrast, pixel-grid alignment, HUD-to-gameplay ratio).
+- `[67.1]` **Preview Studio UI Playground (`watch --serve`: 9-Slice Live Resizer & Bitmap Font Tester)** *(Depends on: `[59.1]`, `[62.1]`, `[65.1]`)* — Add an interactive UI Playground view in `src/pixelforge/export/studio.py` with a live 9-Slice Resizer (width/height sliders, state switcher, integer zoom) and live Bitmap Font Tester (PT-BR text input, proportional/tabular toggle, panel contrast background preview).
+- `[68.1]` **Thin Runtime UI Primitives Kit (`--ui-svelte` / Typed Svelte 5 & Canvas Bridge)** *(Depends on: `[56.1]`, `[62.1]`, `[65.1]`, `[66.1]`)* — Provide an optional zero-dependency Svelte 5 / TypeScript UI starter/adapter (`PixelViewport`, `PixelPanel`, `PixelButton`, `PixelText`, `PixelBar`, `PixelSlot`, `PixelModal`) bound strictly to `manifest.d.ts`, `theme.generated.css`, and/or `--indexed-ts` with `tsc --noEmit` CI validation.
 
 ### Track I — Exterior & Domain Authoring
 _All Track I items promoted or completed._
