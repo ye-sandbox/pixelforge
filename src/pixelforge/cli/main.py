@@ -42,6 +42,7 @@ from pixelforge.cli.settings import (
     PixelforgeSettings,
     load_hydra_settings,
     load_pixelforge_settings,
+    resolve_build_profile,
     resolve_project_style_id,
 )
 from pixelforge.cli.watch_cmd import watch_loop
@@ -105,6 +106,11 @@ def _cmd_check(args: argparse.Namespace) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
+    try:
+        resolve_build_profile(root, args.profile)
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
     if getattr(args, "sync_stubs", False):
         sync_palette_stubs(root)
     report = run_checks(
@@ -122,28 +128,43 @@ def _cmd_render(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
+    try:
+        profile = resolve_build_profile(root, args.profile)
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
+
+    configured_out = Path(profile.out) if profile.out is not None else settings.out_dir
+    indexed_ts_lazy = (
+        profile.indexed_ts_lazy if args.indexed_ts_lazy is None else bool(args.indexed_ts_lazy)
+    )
+    indexed_ts = (
+        (profile.indexed_ts or indexed_ts_lazy)
+        if args.indexed_ts is None
+        else bool(args.indexed_ts)
+    ) or indexed_ts_lazy
     return render_once(
         root,
         asset_id=args.asset_id,
-        out_dir=_resolve_dir(root, settings.out_dir, args.out),
+        out_dir=_resolve_dir(root, configured_out, args.out),
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
         previews_dir=_resolve_dir(root, settings.previews_dir),
-        sheet=bool(args.sheet),
+        sheet=profile.sheet if args.sheet is None else bool(args.sheet),
         layers=bool(args.layers),
-        animate=bool(args.animate),
+        animate=profile.animate if args.animate is None else bool(args.animate),
         animate_format=args.animate_format,
-        emissive=args.emissive,
-        lut=bool(args.lut),
-        normals=bool(args.normals),
-        height=bool(args.height),
-        indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
-        indexed_ts_lazy=bool(args.indexed_ts_lazy),
-        atlas=args.atlas,
-        scale=int(args.scale),
-        variant=args.variant,
+        emissive=args.emissive if args.emissive is not None else profile.emissive,
+        lut=profile.lut if args.lut is None else bool(args.lut),
+        normals=profile.normals if args.normals is None else bool(args.normals),
+        height=profile.height if args.height is None else bool(args.height),
+        indexed_ts=indexed_ts,
+        indexed_ts_lazy=indexed_ts_lazy,
+        atlas=args.atlas if args.atlas is not None else profile.atlas,
+        scale=int(args.scale if args.scale is not None else profile.scale),
+        variant=args.variant if args.variant is not None else profile.variant,
         pack_sheet=bool(args.pack_sheet),
         dir_filter=args.dir,
-        pack_filter=args.pack,
+        pack_filter=args.pack if args.pack is not None else profile.style,
         ids_filter=args.ids,
         output_format=output_format,
         out=_out,
@@ -176,23 +197,37 @@ def _cmd_watch(args: argparse.Namespace, settings: PixelforgeSettings) -> int:
     if output_format is None:
         return 2
     root = _resolve_root(args.root)
-    emissive: bool | None = True if args.emissive else None
+    try:
+        profile = resolve_build_profile(root, args.profile)
+    except ValueError as exc:
+        _err(str(exc))
+        return 1
+
+    configured_out = Path(profile.out) if profile.out is not None else settings.out_dir
+    indexed_ts_lazy = (
+        profile.indexed_ts_lazy if args.indexed_ts_lazy is None else bool(args.indexed_ts_lazy)
+    )
+    indexed_ts = (
+        (profile.indexed_ts or indexed_ts_lazy)
+        if args.indexed_ts is None
+        else bool(args.indexed_ts)
+    ) or indexed_ts_lazy
     return watch_loop(
         root,
         asset_id=args.asset_id,
-        out_dir=_resolve_dir(root, settings.out_dir, args.out),
+        out_dir=_resolve_dir(root, configured_out, args.out),
         sheets_dir=_resolve_dir(root, settings.sheets_dir),
         previews_dir=_resolve_dir(root, settings.previews_dir),
-        sheet=bool(args.sheet),
-        emissive=emissive,
-        lut=bool(args.lut),
-        normals=bool(args.normals),
-        height=bool(args.height),
-        indexed_ts=bool(args.indexed_ts or args.indexed_ts_lazy),
-        indexed_ts_lazy=bool(args.indexed_ts_lazy),
-        atlas=args.atlas,
-        scale=int(args.scale),
-        variant=args.variant,
+        sheet=profile.sheet if args.sheet is None else bool(args.sheet),
+        emissive=args.emissive if args.emissive is not None else profile.emissive,
+        lut=profile.lut if args.lut is None else bool(args.lut),
+        normals=profile.normals if args.normals is None else bool(args.normals),
+        height=profile.height if args.height is None else bool(args.height),
+        indexed_ts=indexed_ts,
+        indexed_ts_lazy=indexed_ts_lazy,
+        atlas=args.atlas if args.atlas is not None else profile.atlas,
+        scale=int(args.scale if args.scale is not None else profile.scale),
+        variant=args.variant if args.variant is not None else profile.variant,
         output_format=output_format,
         out=_out,
         err=_err,
@@ -516,8 +551,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     render_p = sub.add_parser("render", help="Compile .asset.py modules into PNGs and manifests")
     render_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
+    render_p.add_argument(
+        "--profile",
+        default=None,
+        help="Build profile name from pixelforge.toml or [tool.pixelforge]",
+    )
     render_p.add_argument("--out", default=None, help="Output directory")
-    render_p.add_argument("--sheet", action="store_true", help="Generate diagnostic .contact.png")
+    render_p.add_argument(
+        "--sheet",
+        action="store_true",
+        default=None,
+        help="Generate diagnostic .contact.png",
+    )
     render_p.add_argument(
         "--layers",
         action="store_true",
@@ -526,6 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
     render_p.add_argument(
         "--animate",
         action="store_true",
+        default=None,
         help="Generate animated GIF/APNG previews",
     )
     render_p.add_argument(
@@ -540,25 +586,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Force or disable emissive mask emission",
     )
-    render_p.add_argument("--lut", action="store_true", help="Emit indexed PNGs + 1D LUT")
+    render_p.add_argument(
+        "--lut",
+        action="store_true",
+        default=None,
+        help="Emit indexed PNGs + 1D LUT",
+    )
     render_p.add_argument(
         "--normals",
         action="store_true",
+        default=None,
         help="Emit derived 2D normal map PNGs (_normal.png)",
     )
     render_p.add_argument(
         "--height",
         action="store_true",
+        default=None,
         help="Emit derived 2D height map PNGs (_height.png)",
     )
     render_p.add_argument(
         "--indexed-ts",
         action="store_true",
+        default=None,
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
     )
     render_p.add_argument(
         "--indexed-ts-lazy",
         action="store_true",
+        default=None,
         help="Defer RLE decoding in --indexed-ts sprites.generated.ts until frame access",
     )
     render_p.add_argument(
@@ -567,7 +622,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Emit Aseprite JSON and/or TexturePacker atlas metadata alongside sprites",
     )
-    render_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
+    render_p.add_argument("--scale", type=int, default=None, help="Integer nearest-neighbor scale")
     render_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
     render_p.add_argument(
         "--pack-sheet",
@@ -594,6 +649,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     check_p = sub.add_parser("check", help="Run AST static and runtime guard checks")
     check_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
+    check_p.add_argument(
+        "--profile",
+        default=None,
+        help="Build profile name from pixelforge.toml or [tool.pixelforge]",
+    )
     check_p.add_argument(
         "--strict-orphans",
         action="store_true",
@@ -628,28 +688,52 @@ def build_parser() -> argparse.ArgumentParser:
 
     watch_p = sub.add_parser("watch", help="Watch .asset.py/.style.py and hot-reload outputs")
     watch_p.add_argument("asset_id", nargs="?", default=None, help="Optional asset ID filter")
+    watch_p.add_argument(
+        "--profile",
+        default=None,
+        help="Build profile name from pixelforge.toml or [tool.pixelforge]",
+    )
     watch_p.add_argument("--out", default=None, help="Output directory")
-    watch_p.add_argument("--sheet", action="store_true", help="Generate diagnostic .contact.png")
-    watch_p.add_argument("--emissive", action="store_true", help="Force emissive mask emission")
-    watch_p.add_argument("--lut", action="store_true", help="Emit indexed PNGs + 1D LUT")
+    watch_p.add_argument(
+        "--sheet",
+        action="store_true",
+        default=None,
+        help="Generate diagnostic .contact.png",
+    )
+    watch_p.add_argument(
+        "--emissive",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Force or disable emissive mask emission",
+    )
+    watch_p.add_argument(
+        "--lut",
+        action="store_true",
+        default=None,
+        help="Emit indexed PNGs + 1D LUT",
+    )
     watch_p.add_argument(
         "--normals",
         action="store_true",
+        default=None,
         help="Emit derived 2D normal map PNGs (_normal.png)",
     )
     watch_p.add_argument(
         "--height",
         action="store_true",
+        default=None,
         help="Emit derived 2D height map PNGs (_height.png)",
     )
     watch_p.add_argument(
         "--indexed-ts",
         action="store_true",
+        default=None,
         help="Emit RLE Uint8Array + palette/manifest TypeScript modules",
     )
     watch_p.add_argument(
         "--indexed-ts-lazy",
         action="store_true",
+        default=None,
         help="Defer RLE decoding in --indexed-ts sprites.generated.ts until frame access",
     )
     watch_p.add_argument(
@@ -658,7 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Emit Aseprite JSON and/or TexturePacker atlas metadata alongside sprites",
     )
-    watch_p.add_argument("--scale", type=int, default=1, help="Integer nearest-neighbor scale")
+    watch_p.add_argument("--scale", type=int, default=None, help="Integer nearest-neighbor scale")
     watch_p.add_argument("--variant", default=None, help="Optional StylePack variant name")
     watch_p.add_argument("--interval", type=float, default=0.5, help="Poll interval in seconds")
     watch_p.add_argument("--max-cycles", type=int, default=None, help="Stop after N poll cycles")

@@ -100,16 +100,16 @@ Optional environment overrides declared in [`.env.example`](.env.example) (loade
 uv run pixelforge init [--style sweetie-16] [--force] [--root .]
 
 # Compile .asset.py modules into PNGs, spritesheets, emissive masks, manifests, and diagnostics
-uv run pixelforge render [asset_id] [--out dist] [--sheet] [--pack-sheet] [--dir <subdir>] [--pack <style_id>] [--ids <a,b>] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge render [asset_id] [--profile <name>] [--out dist] [--sheet] [--pack-sheet] [--dir <subdir>] [--pack <style_id>] [--ids <a,b>] [--animate] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Execute AST static and runtime guard checks (exit code 0 on pass)
-uv run pixelforge check [asset_id] [--strict-orphans] [--strict-craft] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge check [asset_id] [--profile <name>] [--strict-orphans] [--strict-craft] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Generate a side-by-side + magenta pixel-diff PNG against a git ref
 uv run pixelforge diff <asset_id> [--base HEAD] [--out .pixelforge/diffs] [--scale 1] [--variant <name>] [--summary-md <path>] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Watch .asset.py and .style.py files and hot-reload compiled outputs (optional --serve Preview Studio)
-uv run pixelforge watch [asset_id] [--out dist] [--sheet] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
+uv run pixelforge watch [asset_id] [--profile <name>] [--out dist] [--sheet] [--emissive] [--lut] [--normals] [--height] [--indexed-ts] [--indexed-ts-lazy] [--atlas {aseprite,texturepacker,all}] [--scale 1] [--variant <name>] [--interval 0.5] [--max-cycles N] [--serve] [--host 127.0.0.1] [--port 4173] [--format llm|json|human] [--json] [--human] [--root .]
 
 # Extract an ephemeral aspect ratio, palette histogram, and quantized ASCII sketch from a local reference image
 uv run pixelforge analyze-ref <image_path> [--style homelab-16bit] [--size 32x32] [--scaffold [--id ASSET_ID] [--out PATH] [--force]] [--format llm|json|human] [--json] [--human] [--root .]
