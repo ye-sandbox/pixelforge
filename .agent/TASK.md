@@ -8,15 +8,15 @@
 
 ## Active Task
 
-### `[53.1]` Silhouette-First Authoring Skill Protocol & Reproducible Agent Eval Benchmark
-- [ ] Upgrade `.agent/skills/create-pixel-asset/SKILL.md` with mandatory 2-phase blockout-first authoring, hybrid `spr()` vs `Plane`/`iso_box` guidance, 4 archetype few-shot recipes, and `blind-critic` handoff triggers
-- [ ] Add a reproducible multi-genre eval harness scoring craft lints and 5-axis critic verdicts
+_None — all current roadmap tasks completed._
 
 ---
 
 ## Completed Tasks Log
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
+
+- `[53.1]` Silhouette-First Authoring Skill Protocol & Reproducible Agent Eval Benchmark (`a8908b8`)
 
 - `[52.1]` Perceptual Reference Pipeline (`analyze-ref` OKLab, `--trim`, `--emit-spr`) (`dbf2630`)
 - `[51.1]` Deterministic Pixel-Art Craft Lints in `pixelforge check` (`52ad1d8`)
