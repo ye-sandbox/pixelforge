@@ -255,3 +255,46 @@ def test_asset_and_layer_ramp_primitives() -> None:
         count = layer.shade_volume("slate")
         assert count > 0
         assert slate.index(layer.get(10, 9)) > slate.index(layer.get(12, 13))
+
+
+def test_organic_primitives_bezier_arc_capsule_and_cleanup_jaggies() -> None:
+    """Verify `bezier`, `arc`, `capsule`, and `cleanup_jaggies` on `IndexedSurface`."""
+    s = IndexedSurface(32, 32, track_maps=True)
+
+    # Quadratic & cubic bezier
+    s.bezier([(2, 2), (10, 0), (14, 12)], 1)
+    assert s.get(2, 2) == 1
+    assert s.get(14, 12) == 1
+    assert np.count_nonzero(s.data == 1) >= 12
+
+    # Circular arc (top half of circle)
+    s.clear()
+    s.arc(16, 16, 6, 180.0, 360.0, 2)
+    assert s.get(10, 16) == 2
+    assert s.get(16, 10) == 2
+    assert s.get(22, 16) == 2
+    assert s.get(16, 22) == TRANSPARENT_INDEX
+
+    # Capsule (filled and stroked)
+    s.clear()
+    s.capsule(6, 16, 24, 16, 3, 3, fill=True)
+    assert s.get(6, 16) == 3
+    assert s.get(24, 16) == 3
+    assert s.get(15, 13) == 3
+    assert s.get(15, 19) == 3
+    assert s.get(15, 12) == TRANSPARENT_INDEX
+
+    s_stroke = IndexedSurface(32, 32)
+    s_stroke.capsule(6, 16, 24, 16, 3, 4, fill=False)
+    assert s_stroke.get(15, 13) == 4
+    assert s_stroke.get(15, 16) == TRANSPARENT_INDEX
+
+    # cleanup_jaggies removes 1px L-corner while preserving solid filled shapes
+    s_jag = IndexedSurface(16, 16, track_maps=True)
+    for pt in ((2, 2), (3, 2), (3, 3), (4, 3), (4, 4)):
+        s_jag.put(pt[0], pt[1], 1)
+    s_jag.rect(10, 10, 4, 4, 2, fill=True)
+    removed = s_jag.cleanup_jaggies(only_colors=(1,))
+    assert removed >= 1
+    assert s_jag.get(10, 10) == 2
+    assert np.count_nonzero(s_jag.data == 2) == 16

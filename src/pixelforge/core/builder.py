@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Self, cast
+from typing import Literal, Self, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -99,6 +99,9 @@ def _infer_layer_role(name: str) -> LayerRole:
     return "visual"
 
 
+LayerClip = Literal["none", "opaque"]
+
+
 @dataclass
 class _LayerFrame:
     name: str
@@ -111,6 +114,7 @@ class _LayerFrame:
     mirror_x: bool | MirrorSource
     layer: Layer
     z: float | None = None
+    clip: LayerClip = "none"
 
 
 class Layer(DrawingMixin):
@@ -435,10 +439,14 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         mirror_x: bool | MirrorSource = False,
         role: LayerRole | None = None,
         z: float | None = None,
+        clip: LayerClip = "none",
     ) -> Layer:
         """Push an isolated compositional layer composited onto its parent on exit."""
         if not name:
             msg = "Layer name must be non-empty"
+            raise ValueError(msg)
+        if clip not in ("none", "opaque"):
+            msg = f"Unsupported layer clip mode: {clip!r}"
             raise ValueError(msg)
         resolved_role = role if role is not None else _infer_layer_role(name)
         parent = self.surface
@@ -478,6 +486,7 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
                 mirror_x=mirror_x,
                 layer=layer_obj,
                 z=z,
+                clip=clip,
             )
         )
         return layer_obj
@@ -536,6 +545,10 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         if frame.sel_out is not None:
             _apply_sel_out(surf, frame.sel_out)
 
+        parent = self.surface
+        if frame.clip == "opaque":
+            _clip_surface_to_parent(surf, parent, frame.offset[0], frame.offset[1])
+
         if frame.role != "visual":
             self._record_layer_span(frame, surf)
         if self._track_layers:
@@ -543,7 +556,6 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
         if self._capture_layers:
             self._record_captured_layer(frame, surf, depth=len(self._layer_stack))
 
-        parent = self.surface
         z_offset = 0.0
         if parent.maps is not None and surf.maps is not None:
             z_offset = _compute_layer_z_offset(
@@ -776,6 +788,31 @@ def _compute_layer_z_offset(
     return 0.0
 
 
+def _clip_surface_to_parent(
+    surf: IndexedSurface,
+    parent: IndexedSurface,
+    ox: int,
+    oy: int,
+) -> None:
+    """Alpha-lock `surf` so only pixels overlapping opaque pixels of `parent` survive."""
+    keep = np.zeros((surf.height, surf.width), dtype=bool)
+    sx0 = max(0, -ox)
+    sy0 = max(0, -oy)
+    tx0 = max(0, ox)
+    ty0 = max(0, oy)
+    copy_w = min(surf.width - sx0, parent.width - tx0)
+    copy_h = min(surf.height - sy0, parent.height - ty0)
+    if copy_w > 0 and copy_h > 0:
+        parent_opaque = parent.data[ty0 : ty0 + copy_h, tx0 : tx0 + copy_w] != TRANSPARENT_INDEX
+        keep[sy0 : sy0 + copy_h, sx0 : sx0 + copy_w] = parent_opaque
+    erase_mask = (surf.data != TRANSPARENT_INDEX) & (~keep)
+    if not np.any(erase_mask):
+        return
+    surf.data[erase_mask] = TRANSPARENT_INDEX
+    if surf.maps is not None:
+        surf.maps.write_global_mask(erase_mask, erase=True)
+
+
 def _apply_sel_out(surf: IndexedSurface, spec: SelOutSpec) -> None:
     if isinstance(spec, int):
         surf.sel_out(spec)
@@ -789,6 +826,7 @@ __all__ = [
     "AnchorAlign",
     "Asset",
     "Layer",
+    "LayerClip",
     "LayerSemanticSpan",
     "ScatterMask",
     "SelOutSpec",

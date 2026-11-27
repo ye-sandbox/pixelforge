@@ -182,6 +182,13 @@ def test_inspect_api_formats_filtering_and_errors(
     assert "extrude_y(" in llm_out
     assert "autotile_walls(" in llm_out
     assert "draw_indexed_text(" in llm_out
+    assert "bezier(" in llm_out
+    assert "arc(" in llm_out
+    assert "capsule(" in llm_out
+    assert "cleanup_jaggies(" in llm_out
+    assert "iso_cylinder(" in llm_out
+    assert "iso_ramp(" in llm_out
+    assert "clip:" in llm_out
 
     # Section filtering (case-insensitive) + JSON output
     assert main(["inspect", "api", "plane", "--json"]) == 0

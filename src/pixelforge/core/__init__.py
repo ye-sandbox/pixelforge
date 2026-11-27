@@ -5,6 +5,7 @@ from pixelforge.core.builder import (
     AnchorAlign,
     Asset,
     Layer,
+    LayerClip,
     LayerDiagnostic,
     LayerSemanticSpan,
     ScatterMask,
@@ -20,7 +21,15 @@ from pixelforge.core.font import (
     measure_bitmap_text,
     render_font_atlas,
 )
-from pixelforge.core.iso import IsoAnchor, iso_box, iso_project, iso_tile
+from pixelforge.core.iso import (
+    IsoAnchor,
+    IsoRampDirection,
+    iso_box,
+    iso_cylinder,
+    iso_project,
+    iso_ramp,
+    iso_tile,
+)
 from pixelforge.core.palette import (
     PaletteLookup,
     PaletteLookupError,
@@ -133,7 +142,9 @@ __all__ = [
     "HitboxRect",
     "IndexedSurface",
     "IsoAnchor",
+    "IsoRampDirection",
     "Layer",
+    "LayerClip",
     "LayerDiagnostic",
     "LayerRole",
     "LayerSemanticSpan",
@@ -172,7 +183,9 @@ __all__ = [
     "hashf",
     "hex_to_rgb",
     "iso_box",
+    "iso_cylinder",
     "iso_project",
+    "iso_ramp",
     "iso_tile",
     "make_bitmap_font_spec",
     "measure_bitmap_text",

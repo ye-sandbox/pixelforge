@@ -311,3 +311,46 @@ def test_builder_validation_errors() -> None:
             inner = a.layer("inner")
             inner.__enter__()
             outer.__exit__(None, None, None)
+
+
+def test_layer_clip_opaque_prevents_bleed() -> None:
+    """Verify `clip='opaque'` alpha-locks child layers to the parent silhouette."""
+    style = _make_test_style()
+    spec = AssetSpec(
+        id="clip_test",
+        style_id="test-homelab",
+        width=16,
+        height=16,
+        perspective="side",
+        states=("idle",),
+    )
+    a = Asset(spec, style, track_maps=True, track_layers=True, capture_layers=True)
+    with pytest.raises(ValueError, match="Unsupported layer clip"):
+        a.layer("bad", clip="invalid")  # type: ignore[arg-type]
+
+    # Parent silhouette: 6x6 square at (4, 4)
+    a.rect(4, 4, 6, 6, 1)
+
+    # Child draws across entire 16x16 canvas, but clip="opaque" locks it to (4..9, 4..9).
+    with a.layer("shade", clip="opaque") as shade:
+        shade.rect(0, 0, 16, 16, 2)
+
+    assert a.get(0, 0) == TRANSPARENT_INDEX
+    assert a.get(3, 4) == TRANSPARENT_INDEX
+    assert a.get(10, 9) == TRANSPARENT_INDEX
+    assert a.get(4, 4) == 2
+    assert a.get(9, 9) == 2
+
+    # Offset + sized child layer also clips accurately to parent's opaque region.
+    with a.layer("highlight", offset=(2, 2), size=(6, 6), clip="opaque") as hl:
+        hl.rect(0, 0, 6, 6, 3)
+
+    assert a.get(2, 2) == TRANSPARENT_INDEX
+    assert a.get(4, 4) == 3
+    assert a.get(7, 7) == 3
+    assert a.get(8, 8) == 2
+
+    assert a.layer_diagnostics[0].pixel_count == 36
+    assert a.layer_diagnostics[0].opaque_bbox == (4, 4, 6, 6)
+    assert a.captured_layers[1].pixel_count == 16
+    assert a.captured_layers[1].opaque_bbox == (4, 4, 4, 4)

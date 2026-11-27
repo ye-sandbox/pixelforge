@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from pixelforge.core.iso import iso_box, iso_project, iso_tile
+from pixelforge.core.iso import iso_box, iso_cylinder, iso_project, iso_ramp, iso_tile
 from pixelforge.core.surface import IndexedSurface
 from pixelforge.core.types import TRANSPARENT_INDEX
 
@@ -80,3 +81,59 @@ def test_iso_box_three_faces_highlight_and_anchors() -> None:
     assert s_bottom.get(20, 30) in (3, 4)
     assert s_bottom.get(20, 31) == TRANSPARENT_INDEX
     assert np.count_nonzero(s_bottom.data == 2) > 0
+
+
+def test_iso_cylinder_and_iso_ramp() -> None:
+    """Verify `iso_cylinder` and `iso_ramp` render crisp 2:1 isometric geometry."""
+    s_cyl = IndexedSurface(32, 32, track_maps=True)
+    iso_cylinder(
+        s_cyl,
+        16,
+        10,
+        6,
+        10,
+        top=1,
+        side=2,
+        shade=3,
+        highlight=4,
+        outline=0,
+        anchor="top",
+    )
+    assert s_cyl.get(16, 10) == 1
+    assert np.count_nonzero(s_cyl.data == 2) > 0
+    assert np.count_nonzero(s_cyl.data == 3) > 0
+    assert np.count_nonzero(s_cyl.data == 4) > 0
+    assert np.count_nonzero(s_cyl.data == 0) > 0
+
+    for direction in ("right", "left", "front", "back"):
+        s_ramp = IndexedSurface(32, 32, track_maps=True)
+        iso_ramp(
+            s_ramp,
+            16,
+            8,
+            8,
+            8,
+            6,
+            slope=1,
+            left=2,
+            right=3,
+            direction=direction,
+            outline=0,
+            highlight=4,
+        )
+        assert np.count_nonzero(s_ramp.data == 1) > 0
+        assert np.count_nonzero(s_ramp.data == 0) > 0
+
+    with pytest.raises(ValueError, match="Unsupported iso_ramp direction"):
+        iso_ramp(
+            IndexedSurface(16, 16),
+            8,
+            4,
+            4,
+            4,
+            4,
+            slope=1,
+            left=2,
+            right=3,
+            direction="up",  # type: ignore[arg-type]
+        )

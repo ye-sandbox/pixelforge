@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from contextlib import nullcontext
 from typing import Literal
 
@@ -11,9 +12,11 @@ from pixelforge.core.surface_maps import (
     NORMAL_ISO_LEFT,
     NORMAL_ISO_RIGHT,
     NORMAL_ISO_TOP,
+    normalize_normal,
 )
 
 IsoAnchor = Literal["top", "center", "bottom"]
+IsoRampDirection = Literal["right", "left", "front", "back"]
 
 
 def iso_project(
@@ -218,6 +221,199 @@ def iso_box(
         if highlight is not None:
             target.line(_s(p_left)[0], _s(p_left)[1], _s(p_front)[0], _s(p_front)[1], highlight)
             target.line(_s(p_front)[0], _s(p_front)[1], _s(p_right)[0], _s(p_right)[1], highlight)
+
+    if outline is not None:
+        out_n = maps.normal_scope(NORMAL_FLAT) if maps is not None else nullcontext()
+        out_h = maps.height_scope(0.0) if maps is not None else nullcontext()
+        with out_n, out_h:
+            target.auto_outline(outline)
+        surface.blit_layer(target, ox, oy)
+
+
+def iso_cylinder(
+    surface: IndexedSurface,
+    cx: int | float,
+    cy: int | float,
+    radius: int,
+    h: int,
+    *,
+    top: int,
+    side: int,
+    shade: int | None = None,
+    ry: int | None = None,
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "top",
+) -> None:
+    """Draw a 2:1 isometric vertical cylinder with elliptical top cap and shaded body."""
+    irx = int(radius)
+    ih = int(h)
+    if irx <= 0 or ih < 0:
+        return
+    iry = max(1, irx // 2) if ry is None else max(1, int(ry))
+
+    if anchor == "top":
+        tcx, tcy = round(cx), round(cy)
+    elif anchor == "center":
+        tcx, tcy = round(cx), round(float(cy) - ih * 0.5)
+    elif anchor == "bottom":
+        tcx, tcy = round(cx), round(float(cy) - ih)
+    else:
+        msg = f"Unsupported iso_cylinder anchor: {anchor!r}"
+        raise ValueError(msg)
+
+    target, ox, oy = _draw_with_optional_outline(
+        surface,
+        tcx - irx,
+        tcy - iry,
+        tcx + irx,
+        tcy + iry + ih,
+        outline,
+    )
+    lx = tcx - ox
+    ly = tcy - oy
+    maps = target.maps
+
+    if ih > 0:
+        shade_cutoff = max(1, irx // 3)
+        for dx in range(-irx, irx + 1):
+            ratio = dx / float(irx)
+            col_dy = round(iry * math.sqrt(max(0.0, 1.0 - ratio * ratio)))
+            col_color = shade if (shade is not None and dx >= shade_cutoff) else side
+            if maps is not None:
+                nx = ratio * 0.85
+                ny = -0.15
+                nz = math.sqrt(max(0.05, 1.0 - nx * nx - ny * ny))
+                col_n = normalize_normal(nx, ny, nz)
+                with (
+                    maps.normal_scope(col_n),
+                    maps.height_plane_scope(0.0, -1.0, float(ih + ly), 0.0, float(ih)),
+                ):
+                    target.line(lx + dx, ly, lx + dx, ly + ih + col_dy, col_color)
+            else:
+                target.line(lx + dx, ly, lx + dx, ly + ih + col_dy, col_color)
+
+    top_n = maps.normal_scope(NORMAL_ISO_TOP) if maps is not None else nullcontext()
+    top_h = maps.height_scope(float(ih)) if maps is not None else nullcontext()
+    with top_n, top_h:
+        target.ellipse(lx, ly, irx, iry, top, fill=True)
+        if highlight is not None:
+            target.arc(lx, ly, irx, 0.0, 180.0, highlight, rx=irx, ry=iry)
+
+    if outline is not None:
+        out_n = maps.normal_scope(NORMAL_FLAT) if maps is not None else nullcontext()
+        out_h = maps.height_scope(0.0) if maps is not None else nullcontext()
+        with out_n, out_h:
+            target.auto_outline(outline)
+        surface.blit_layer(target, ox, oy)
+
+
+def iso_ramp(
+    surface: IndexedSurface,
+    x: int | float,
+    y: int | float,
+    w: int,
+    d: int,
+    h: int,
+    *,
+    slope: int,
+    left: int,
+    right: int,
+    direction: IsoRampDirection = "right",
+    outline: int | None = None,
+    highlight: int | None = None,
+    anchor: IsoAnchor = "top",
+) -> None:
+    """Draw a 2:1 isometric sloped wedge/ramp prism along `direction`."""
+    iw = int(w)
+    id_ = int(d)
+    ih = int(h)
+    if iw <= 0 or id_ <= 0 or ih < 0:
+        return
+
+    tx, ty = _box_top_origin(x, y, iw, id_, ih, anchor)
+    dy_r = iw // 2
+    dy_l = id_ // 2
+
+    p_top = (tx, ty)
+    p_right = (tx + iw, ty + dy_r)
+    p_left = (tx - id_, ty + dy_l)
+    p_front = (tx + iw - id_, ty + dy_r + dy_l)
+
+    p_top_bot = (p_top[0], p_top[1] + ih)
+    p_right_bot = (p_right[0], p_right[1] + ih)
+    p_left_bot = (p_left[0], p_left[1] + ih)
+    p_front_bot = (p_front[0], p_front[1] + ih)
+
+    all_pts = (
+        p_top,
+        p_right,
+        p_left,
+        p_front,
+        p_top_bot,
+        p_right_bot,
+        p_left_bot,
+        p_front_bot,
+    )
+    min_x = min(pt[0] for pt in all_pts)
+    max_x = max(pt[0] for pt in all_pts)
+    min_y = min(pt[1] for pt in all_pts)
+    max_y = max(pt[1] for pt in all_pts)
+
+    target, ox, oy = _draw_with_optional_outline(surface, min_x, min_y, max_x, max_y, outline)
+
+    def _s(pt: tuple[int, int]) -> tuple[int, int]:
+        return (pt[0] - ox, pt[1] - oy)
+
+    maps = target.maps
+    if direction == "right":
+        # Low at back-left (top_bot..left_bot), high at front-right (top..right/front)
+        slope_quad = (_s(p_top_bot), _s(p_right), _s(p_front), _s(p_left_bot))
+        high_edge = (_s(p_front), _s(p_right))
+        left_tri = (_s(p_left_bot), _s(p_front), _s(p_front_bot))
+        right_quad = (_s(p_front), _s(p_right), _s(p_right_bot), _s(p_front_bot))
+    elif direction == "left":
+        # High at back-left (top..left), low at front-right (right_bot..front_bot)
+        slope_quad = (_s(p_top), _s(p_right_bot), _s(p_front_bot), _s(p_left))
+        high_edge = (_s(p_top), _s(p_left))
+        left_tri = (_s(p_left), _s(p_front_bot), _s(p_left_bot))
+        right_quad = None
+    elif direction == "front":
+        # Low at back-right (top_bot..right_bot), high at front-left (left..front)
+        slope_quad = (_s(p_top_bot), _s(p_right_bot), _s(p_front), _s(p_left))
+        high_edge = (_s(p_left), _s(p_front))
+        left_tri = (_s(p_left), _s(p_front), _s(p_front_bot), _s(p_left_bot))
+        right_quad = (_s(p_front), _s(p_right_bot), _s(p_front_bot))
+    elif direction == "back":
+        # High at back-right (top..right), low at front-left (left_bot..front_bot)
+        slope_quad = (_s(p_top), _s(p_right), _s(p_front_bot), _s(p_left_bot))
+        high_edge = (_s(p_top), _s(p_right))
+        left_tri = None
+        right_quad = (_s(p_front_bot), _s(p_right), _s(p_right_bot))
+    else:
+        msg = f"Unsupported iso_ramp direction: {direction!r}"
+        raise ValueError(msg)
+
+    if ih > 0:
+        if left_tri is not None:
+            with maps.normal_scope(NORMAL_ISO_LEFT) if maps is not None else nullcontext():
+                target.polygon(left_tri, left, fill=True)
+        if right_quad is not None:
+            with maps.normal_scope(NORMAL_ISO_RIGHT) if maps is not None else nullcontext():
+                target.polygon(right_quad, right, fill=True)
+
+    slope_n = maps.normal_scope(NORMAL_ISO_TOP) if maps is not None else nullcontext()
+    slope_h = maps.height_scope(float(ih) * 0.5) if maps is not None else nullcontext()
+    with slope_n, slope_h:
+        target.polygon(slope_quad, slope, fill=True)
+        if highlight is not None:
+            target.line(
+                high_edge[0][0],
+                high_edge[0][1],
+                high_edge[1][0],
+                high_edge[1][1],
+                highlight,
+            )
 
     if outline is not None:
         out_n = maps.normal_scope(NORMAL_FLAT) if maps is not None else nullcontext()

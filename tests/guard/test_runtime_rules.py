@@ -265,3 +265,30 @@ def test_iso_portal_door_emits_clearance_hitbox() -> None:
         clearance_hitbox=False,
     )
     assert not any(hb.name.startswith("door_clearance_") for hb in a_without.hitboxes)
+
+
+def test_layer_clip_and_organic_primitives_pass_runtime_guards() -> None:
+    """Verify `clip='opaque'` and organic primitives pass runtime guards cleanly."""
+    style = _sample_style()
+    spec = AssetSpec(
+        id="organic_prop",
+        style_id="test-style",
+        perspective="iso-2:1",
+        width=32,
+        height=32,
+        states=("idle",),
+        frames=1,
+        fps=4,
+    )
+
+    def render_organic(a: Asset) -> None:
+        a.iso_cylinder(16, 10, 6, 8, top=1, side=1, shade=0, outline=0)
+        with a.layer("shading", clip="opaque") as shade:
+            shade.dither(0, 0, 32, 32, 0, 1, pattern="bayer2", ratio=0.5)
+        a.capsule(4, 24, 12, 24, 2, 1, fill=True)
+        a.bezier([(20, 20), (24, 16), (28, 22)], 1)
+        a.arc(24, 8, 4, 0.0, 180.0, 1)
+        a.cleanup_jaggies()
+
+    violations = check_asset_runtime(LoadedAsset(SPEC=spec, render=render_organic), style)
+    assert not [v for v in violations if v.severity == "error"]

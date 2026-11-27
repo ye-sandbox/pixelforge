@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Final, Literal
 
@@ -929,6 +930,258 @@ class IndexedSurface:
         bins = np.clip((t * len(ramp_idx)).astype(np.int64), 0, len(ramp_idx) - 1)
         patch[ys, xs] = ramp_idx[bins]
         return count
+
+    def _draw_curve_points(
+        self,
+        raw_points: Sequence[tuple[int, int]],
+        color: int,
+    ) -> None:
+        """Rasterize an 8-connected integer curve with L-corner jaggy thinning."""
+        if not raw_points:
+            return
+        dedup: list[tuple[int, int]] = []
+        for pt in raw_points:
+            if not dedup or dedup[-1] != pt:
+                dedup.append(pt)
+        if len(dedup) == 1:
+            self.put(dedup[0][0], dedup[0][1], color)
+            return
+
+        # Fill any gaps > 1px via Bresenham so the curve is strictly 8-connected.
+        connected: list[tuple[int, int]] = [dedup[0]]
+        for x1, y1 in dedup[1:]:
+            x0, y0 = connected[-1]
+            dx = abs(x1 - x0)
+            dy = abs(y1 - y0)
+            if dx <= 1 and dy <= 1:
+                connected.append((x1, y1))
+            else:
+                sx = 1 if x0 < x1 else -1
+                sy = 1 if y0 < y1 else -1
+                err = dx - dy
+                cx, cy = x0, y0
+                while cx != x1 or cy != y1:
+                    e2 = 2 * err
+                    if e2 > -dy:
+                        err -= dy
+                        cx += sx
+                    if e2 < dx:
+                        err += dx
+                        cy += sy
+                    connected.append((cx, cy))
+
+        # Thin redundant 4-connected L-corners into crisp 8-connected diagonals.
+        thinned: list[tuple[int, int]] = []
+        for pt in connected:
+            thinned.append(pt)
+            while len(thinned) >= 3:
+                ax, ay = thinned[-3]
+                bx, by = thinned[-2]
+                cx, cy = thinned[-1]
+                if (
+                    abs(cx - ax) == 1
+                    and abs(cy - ay) == 1
+                    and ((bx == ax and by == cy) or (bx == cx and by == ay))
+                ):
+                    thinned.pop(-2)
+                else:
+                    break
+
+        for px, py in thinned:
+            self.put(px, py, color)
+
+    def bezier(
+        self,
+        points: Sequence[tuple[int | float, int | float]],
+        color: int,
+        *,
+        steps: int | None = None,
+    ) -> None:
+        """Draw a crisp 1px quadratic/cubic (or N-point) Bezier curve."""
+        c = _normalize_index(color)
+        n = len(points)
+        if n == 0:
+            return
+        if n == 1:
+            self.put(round(points[0][0]), round(points[0][1]), c)
+            return
+        if n == 2:
+            self.line(
+                round(points[0][0]),
+                round(points[0][1]),
+                round(points[1][0]),
+                round(points[1][1]),
+                c,
+            )
+            return
+
+        ctrl = [(float(p[0]), float(p[1])) for p in points]
+        if steps is None:
+            chord = sum(
+                math.hypot(ctrl[i + 1][0] - ctrl[i][0], ctrl[i + 1][1] - ctrl[i][1])
+                for i in range(n - 1)
+            )
+            n_steps = max(8, math.ceil(chord * 3.0))
+        else:
+            n_steps = max(1, int(steps))
+
+        sampled: list[tuple[int, int]] = []
+        for i in range(n_steps + 1):
+            t = i / n_steps
+            work = list(ctrl)
+            for k in range(1, n):
+                for j in range(n - k):
+                    x = work[j][0] + (work[j + 1][0] - work[j][0]) * t
+                    y = work[j][1] + (work[j + 1][1] - work[j][1]) * t
+                    work[j] = (x, y)
+            sampled.append((round(work[0][0]), round(work[0][1])))
+        self._draw_curve_points(sampled, c)
+
+    def arc(
+        self,
+        cx: int | float,
+        cy: int | float,
+        radius: int,
+        start_deg: float,
+        end_deg: float,
+        color: int,
+        *,
+        rx: int | None = None,
+        ry: int | None = None,
+    ) -> None:
+        """Draw a crisp 1px circular or elliptical arc between `start_deg` and `end_deg`."""
+        c = _normalize_index(color)
+        irx = int(radius) if rx is None else int(rx)
+        iry = int(radius) if ry is None else int(ry)
+        if irx < 0 or iry < 0:
+            return
+        fcx = float(cx)
+        fcy = float(cy)
+        if irx == 0 and iry == 0:
+            self.put(round(fcx), round(fcy), c)
+            return
+
+        start_rad = math.radians(float(start_deg))
+        end_rad = math.radians(float(end_deg))
+        span = abs(end_rad - start_rad)
+        n_steps = max(8, math.ceil(max(irx, iry, 1) * span * 2.5))
+        sampled: list[tuple[int, int]] = []
+        for i in range(n_steps + 1):
+            t = i / n_steps
+            ang = start_rad + (end_rad - start_rad) * t
+            px = round(fcx + irx * math.cos(ang))
+            py = round(fcy + iry * math.sin(ang))
+            sampled.append((px, py))
+        self._draw_curve_points(sampled, c)
+
+    def capsule(
+        self,
+        x0: int | float,
+        y0: int | float,
+        x1: int | float,
+        y1: int | float,
+        radius: int,
+        color: int,
+        *,
+        fill: bool = True,
+    ) -> None:
+        """Draw a filled or 1px-stroked capsule (rounded segment) from `(x0, y0)` to `(x1, y1)`."""
+        c = _normalize_index(color)
+        r = int(radius)
+        if r < 0:
+            return
+        ix0, iy0 = round(x0), round(y0)
+        ix1, iy1 = round(x1), round(y1)
+        if r == 0:
+            self.line(ix0, iy0, ix1, iy1, c)
+            return
+        vx = float(ix1 - ix0)
+        vy = float(iy1 - iy0)
+        seg_len_sq = vx * vx + vy * vy
+        if seg_len_sq == 0.0:
+            self.circle(ix0, iy0, r, c, fill=fill)
+            return
+
+        bx0 = max(0, min(ix0, ix1) - r)
+        by0 = max(0, min(iy0, iy1) - r)
+        bx1 = min(self.width, max(ix0, ix1) + r + 1)
+        by1 = min(self.height, max(iy0, iy1) + r + 1)
+        if bx0 >= bx1 or by0 >= by1:
+            return
+
+        yy, xx = np.mgrid[by0:by1, bx0:bx1]
+        t = np.clip(((xx - ix0) * vx + (yy - iy0) * vy) / seg_len_sq, 0.0, 1.0)
+        dx = xx - (ix0 + t * vx)
+        dy = yy - (iy0 + t * vy)
+        inside = (dx * dx + dy * dy) <= (r * r + 1e-6)
+
+        if fill:
+            write_mask = inside
+        else:
+            padded = np.pad(inside, 1, mode="constant", constant_values=False)
+            interior = padded[:-2, 1:-1] & padded[2:, 1:-1] & padded[1:-1, :-2] & padded[1:-1, 2:]
+            write_mask = inside & (~interior)
+
+        self.data[by0:by1, bx0:bx1][write_mask] = c
+        if self._maps is not None:
+            self._maps.write_region_mask(
+                bx0, by0, bx1, by1, write_mask, erase=(c == TRANSPARENT_INDEX)
+            )
+
+    def cleanup_jaggies(
+        self,
+        *,
+        bounds: tuple[int, int, int, int] | None = None,
+        only_colors: Sequence[int] | None = None,
+    ) -> int:
+        """Remove redundant 1px L-corner jaggy pixels while preserving solid shapes."""
+        if bounds is None:
+            x0, y0, x1, y1 = 0, 0, self.width, self.height
+        else:
+            bx, by, bw, bh = bounds
+            x0 = max(0, int(bx))
+            y0 = max(0, int(by))
+            x1 = min(self.width, int(bx) + int(bw))
+            y1 = min(self.height, int(by) + int(bh))
+        if x0 >= x1 or y0 >= y1:
+            return 0
+
+        allowed: set[int] | None = None
+        if only_colors is not None:
+            allowed = {_normalize_index(c) for c in only_colors}
+
+        opaque = self.data != TRANSPARENT_INDEX
+        removed = 0
+        # INVARIANT: Remove a pixel only when two adjacent cardinal neighbors are opaque,
+        # the opposite two cardinal neighbors are transparent, and the diagonal between
+        # the two opaque cardinals is transparent (preserving all solid corners).
+        for py in range(y0, y1):
+            for px in range(x0, x1):
+                if not opaque[py, px]:
+                    continue
+                if allowed is not None and int(self.data[py, px]) not in allowed:
+                    continue
+                n = py > 0 and bool(opaque[py - 1, px])
+                s = py + 1 < self.height and bool(opaque[py + 1, px])
+                w = px > 0 and bool(opaque[py, px - 1])
+                e = px + 1 < self.width and bool(opaque[py, px + 1])
+                nw = py > 0 and px > 0 and bool(opaque[py - 1, px - 1])
+                ne = py > 0 and px + 1 < self.width and bool(opaque[py - 1, px + 1])
+                sw = py + 1 < self.height and px > 0 and bool(opaque[py + 1, px - 1])
+                se = py + 1 < self.height and px + 1 < self.width and bool(opaque[py + 1, px + 1])
+                is_l_corner = (
+                    (n and e and not s and not w and not ne)
+                    or (n and w and not s and not e and not nw)
+                    or (s and e and not n and not w and not se)
+                    or (s and w and not n and not e and not sw)
+                )
+                if is_l_corner:
+                    opaque[py, px] = False
+                    self.data[py, px] = TRANSPARENT_INDEX
+                    if self._maps is not None:
+                        self._maps.write_pixel(px, py, erase=True)
+                    removed += 1
+        return removed
 
 
 def orphan_pixel_mask(surface: IndexedSurface) -> NDArray[np.bool_]:

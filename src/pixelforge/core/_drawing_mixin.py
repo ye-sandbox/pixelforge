@@ -8,7 +8,14 @@ from typing import Literal
 import numpy as np
 
 from pixelforge.core.font import draw_indexed_text
-from pixelforge.core.iso import IsoAnchor, iso_box, iso_tile
+from pixelforge.core.iso import (
+    IsoAnchor,
+    IsoRampDirection,
+    iso_box,
+    iso_cylinder,
+    iso_ramp,
+    iso_tile,
+)
 from pixelforge.core.plane import Plane, Point2D
 from pixelforge.core.surface import (
     DitherMask,
@@ -198,6 +205,54 @@ class DrawingMixin:
         """Draw a quadrilateral onto the active surface."""
         self.surface.quad(p0, p1, p2, p3, color, fill=fill)
 
+    def bezier(
+        self,
+        points: Sequence[Point2D],
+        color: int,
+        *,
+        steps: int | None = None,
+    ) -> None:
+        """Draw a crisp 1px quadratic/cubic (or N-point) Bezier curve onto the active surface."""
+        self.surface.bezier(points, color, steps=steps)
+
+    def arc(
+        self,
+        cx: int | float,
+        cy: int | float,
+        radius: int,
+        start_deg: float,
+        end_deg: float,
+        color: int,
+        *,
+        rx: int | None = None,
+        ry: int | None = None,
+    ) -> None:
+        """Draw a crisp 1px circular or elliptical arc onto the active surface."""
+        self.surface.arc(cx, cy, radius, start_deg, end_deg, color, rx=rx, ry=ry)
+
+    def capsule(
+        self,
+        x0: int | float,
+        y0: int | float,
+        x1: int | float,
+        y1: int | float,
+        radius: int,
+        color: int,
+        *,
+        fill: bool = True,
+    ) -> None:
+        """Draw a filled or 1px-stroked capsule onto the active surface."""
+        self.surface.capsule(x0, y0, x1, y1, radius, color, fill=fill)
+
+    def cleanup_jaggies(
+        self,
+        *,
+        bounds: tuple[int, int, int, int] | None = None,
+        only_colors: Sequence[int] | None = None,
+    ) -> int:
+        """Remove redundant 1px L-corner jaggy pixels on the active surface."""
+        return self.surface.cleanup_jaggies(bounds=bounds, only_colors=only_colors)
+
     def fill(self, x: int | float, y: int | float, color: int) -> None:
         """Scanline 4-connected flood fill on the active surface."""
         self.surface.fill(x, y, color)
@@ -382,6 +437,70 @@ class DrawingMixin:
             top=top,
             left=left,
             right=right,
+            outline=outline,
+            highlight=highlight,
+            anchor=anchor,
+        )
+
+    def iso_cylinder(
+        self,
+        cx: int | float,
+        cy: int | float,
+        radius: int,
+        h: int,
+        *,
+        top: int,
+        side: int,
+        shade: int | None = None,
+        ry: int | None = None,
+        outline: int | None = None,
+        highlight: int | None = None,
+        anchor: IsoAnchor = "top",
+    ) -> None:
+        """Draw a 2:1 isometric vertical cylinder onto the active surface."""
+        iso_cylinder(
+            self.surface,
+            cx,
+            cy,
+            radius,
+            h,
+            top=top,
+            side=side,
+            shade=shade,
+            ry=ry,
+            outline=outline,
+            highlight=highlight,
+            anchor=anchor,
+        )
+
+    def iso_ramp(
+        self,
+        x: int | float,
+        y: int | float,
+        w: int,
+        d: int,
+        h: int,
+        *,
+        slope: int,
+        left: int,
+        right: int,
+        direction: IsoRampDirection = "right",
+        outline: int | None = None,
+        highlight: int | None = None,
+        anchor: IsoAnchor = "top",
+    ) -> None:
+        """Draw a 2:1 isometric sloped wedge/ramp prism onto the active surface."""
+        iso_ramp(
+            self.surface,
+            x,
+            y,
+            w,
+            d,
+            h,
+            slope=slope,
+            left=left,
+            right=right,
+            direction=direction,
             outline=outline,
             highlight=highlight,
             anchor=anchor,
