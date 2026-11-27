@@ -8,19 +8,21 @@
 
 ## Active Task
 
-### `[57.1]` Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`)
-Goal: Load declarative TOML build profiles (`pixelforge.toml` or `[tool.pixelforge]` in `pyproject.toml`) via stdlib `tomllib` + `pydantic` in `src/pixelforge/cli/settings.py` with named profiles (`default`, `web-ui`, `framebuffer-ui`) so `render`, `watch`, and `check` run without repetitive CLI flags while explicit CLI flags always override profile defaults.
+### `[58.1]` Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping
+Goal: Add `UiPalette.from_style(target, **overrides)` deriving all UI color tokens deterministically from `StylePack` aliases/ramps/flags, migrate `assets/ui/hud_*.asset.py`, and test portability across all built-in presets.
 
-- [ ] Define typed `pydantic` build-profile models and TOML loader (`pixelforge.toml` / `[tool.pixelforge]`) in `src/pixelforge/cli/settings.py` supporting `style`, `out`, `targets`, `variant`, `scale`, `emissive`, `indexed_ts`, `ui_css`, and `atlas`, plus named profiles (`default`, `web-ui`, `framebuffer-ui`).
-- [ ] Wire `--profile` and config resolution into `render`, `watch`, and `check` CLI handlers so explicit CLI flags override profile settings and profile settings override fallback defaults.
-- [ ] Add hermetic unit & CLI tests covering `pixelforge.toml`, `[tool.pixelforge]`, named profiles (`default`, `web-ui`, `framebuffer-ui`), validation errors, and CLI-override precedence.
-- [ ] Update `.agent/NOTES.md` and `README.md` / `README.pt-br.md` if CLI flags or config contracts are live, and pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`).
+- [ ] Design and implement `UiPalette.from_style(target, **overrides)` deriving UI surface, border, text, accent, and state tokens deterministically from `StylePack` aliases, ramps, and palette flags.
+- [ ] Migrate `assets/ui/hud_*.asset.py` to use `UiPalette.from_style(...)` without manual per-theme color boilerplate.
+- [ ] Add hermetic unit and guard tests verifying `UiPalette.from_style()` portability across all built-in `StylePack` presets.
+- [ ] Pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`) and update `.agent/NOTES.md` if contracts change.
 
 ---
 
 ## Completed Tasks Log
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
+
+- `[57.1]` Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`) (`d5e9c56`)
 
 - `[56.1]` Pixel UI Rendering Modes ADR & Build-Time Boundary Contract (`30be435`)
 - `[55.1]` Exterior Prefab Kit (`src/pixelforge/core/prefabs/exterior/`) (`a1f7ca0`)
@@ -73,7 +75,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track J — Pixel UI Architecture, Build Profiles & Core Foundations
-- `[58.1]` **Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping** *(Depends on: none)* — Add `UiPalette.from_style(target, **overrides)` deriving all UI color tokens deterministically from `StylePack` aliases/ramps/flags, migrate `assets/ui/hud_*.asset.py`, and test portability across all built-in presets.
 - `[59.1]` **Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives** *(Depends on: `[58.1]`)* — Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
 
 ### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
