@@ -8,12 +8,13 @@
 
 ## Active Task
 
-### `[56.1]` Pixel UI Rendering Modes ADR & Build-Time Boundary Contract
-Goal: Formalize the two canonical pixel-game UI consumption modes (Hybrid DOM+CSS `web-ui` vs 100% Indexed Framebuffer `framebuffer-ui`) and the build-time compiler vs runtime UI boundary so all downstream UI tasks share a single contract.
+### `[57.1]` Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`)
+Goal: Load declarative TOML build profiles (`pixelforge.toml` or `[tool.pixelforge]` in `pyproject.toml`) via stdlib `tomllib` + `pydantic` in `src/pixelforge/cli/settings.py` with named profiles (`default`, `web-ui`, `framebuffer-ui`) so `render`, `watch`, and `check` run without repetitive CLI flags while explicit CLI flags always override profile defaults.
 
-- [ ] Append an ADR entry to `docs/adr/decisions.md` documenting Hybrid DOM+CSS (`web-ui`) vs 100% Framebuffer (`framebuffer-ui`) modes, integer scaling invariants, and why layout/focus/input stay in the game runtime while `pixelforge` compiles visual UI assets, fonts, tokens, CSS, and previews.
-- [ ] Update `.agent/NOTES.md` active contracts table with planned UI compiler outputs (`pixelforge.toml`, `theme.generated.css`, UI styleguide sheets, HUD screen previews) marked cleanly under active/target boundaries without task-specific headings.
-- [ ] Verify `git diff --check` and confirm no existing contracts or tests regress (`uv run pytest`).
+- [ ] Define typed `pydantic` build-profile models and TOML loader (`pixelforge.toml` / `[tool.pixelforge]`) in `src/pixelforge/cli/settings.py` supporting `style`, `out`, `targets`, `variant`, `scale`, `emissive`, `indexed_ts`, `ui_css`, and `atlas`, plus named profiles (`default`, `web-ui`, `framebuffer-ui`).
+- [ ] Wire `--profile` and config resolution into `render`, `watch`, and `check` CLI handlers so explicit CLI flags override profile settings and profile settings override fallback defaults.
+- [ ] Add hermetic unit & CLI tests covering `pixelforge.toml`, `[tool.pixelforge]`, named profiles (`default`, `web-ui`, `framebuffer-ui`), validation errors, and CLI-override precedence.
+- [ ] Update `.agent/NOTES.md` and `README.md` / `README.pt-br.md` if CLI flags or config contracts are live, and pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`).
 
 ---
 
@@ -21,6 +22,7 @@ Goal: Formalize the two canonical pixel-game UI consumption modes (Hybrid DOM+CS
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[56.1]` Pixel UI Rendering Modes ADR & Build-Time Boundary Contract (`30be435`)
 - `[55.1]` Exterior Prefab Kit (`src/pixelforge/core/prefabs/exterior/`) (`a1f7ca0`)
 - `[54.1]` Modularize Domain-Specific Skill References (`create-pixel-asset`) (`238ca49`)
 - `[53.1]` Silhouette-First Authoring Skill Protocol & Reproducible Agent Eval Benchmark (`a8908b8`)
@@ -71,7 +73,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track J — Pixel UI Architecture, Build Profiles & Core Foundations
-- `[57.1]` **Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`)** *(Depends on: `[56.1]`)* — Add TOML build profile configuration (`style`, `out`, `targets`, `variant`, `scale`, `emissive`, `indexed_ts`, `ui_css`, `atlas`) loaded via stdlib `tomllib` + `pydantic` in `cli/settings.py` with named profiles (`default`, `web-ui`, `framebuffer-ui`) so `render`/`watch`/`check` run without repetitive CLI flags while explicit CLI flags override config.
 - `[58.1]` **Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping** *(Depends on: none)* — Add `UiPalette.from_style(target, **overrides)` deriving all UI color tokens deterministically from `StylePack` aliases/ramps/flags, migrate `assets/ui/hud_*.asset.py`, and test portability across all built-in presets.
 - `[59.1]` **Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives** *(Depends on: `[58.1]`)* — Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
 
