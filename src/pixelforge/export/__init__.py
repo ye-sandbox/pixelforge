@@ -114,8 +114,15 @@ from pixelforge.export.tilemap import (
     build_tiled_tileset,
     serialize_tilemap_json,
 )
+from pixelforge.export.ui_styleguide import (
+    UI_STYLEGUIDE_SECTIONS,
+    UiStyleguideOptions,
+    UiStyleguideResult,
+    generate_ui_styleguide_sheet,
+)
 
 __all__ = [
+    "UI_STYLEGUIDE_SECTIONS",
     "AnchorDelta",
     "AssetDiffReport",
     "AssetModule",
@@ -156,6 +163,8 @@ __all__ = [
     "StudioState",
     "TileAtlasFormat",
     "TileEntry",
+    "UiStyleguideOptions",
+    "UiStyleguideResult",
     "assert_binary_alpha",
     "build_aseprite_atlas",
     "build_godot_tileset",
@@ -194,6 +203,7 @@ __all__ = [
     "generate_sprites_ts",
     "generate_surface_diff",
     "generate_svelte_manifest_dts",
+    "generate_ui_styleguide_sheet",
     "make_studio_handler",
     "render_asset_frames",
     "resolve_atlas_image_name",

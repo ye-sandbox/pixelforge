@@ -45,7 +45,9 @@ from pixelforge.cli.settings import (
     resolve_build_profile,
     resolve_project_style_id,
 )
+from pixelforge.cli.ui_kit_cmd import emit_ui_kit_result, scaffold_new_ui_kit
 from pixelforge.cli.watch_cmd import watch_loop
+from pixelforge.core.prefabs.ui import UI_THEME_NAMES
 from pixelforge.export.analyze_ref import (
     analyze_reference_image,
     emit_spr_snippet,
@@ -517,6 +519,23 @@ def _cmd_new(
                 out=args.out,
                 force=bool(args.force),
             )
+        elif target == "ui-kit":
+            try:
+                kit_result = scaffold_new_ui_kit(
+                    root,
+                    name=str(args.name),
+                    theme=str(args.theme),
+                    style=args.style,
+                    out=args.out,
+                    sheet=not bool(args.no_sheet),
+                    force=bool(args.force),
+                    settings=settings,
+                )
+            except (ValueError, FileExistsError, FileNotFoundError) as exc:
+                _err(f"Error: {exc}")
+                return 2
+            emit_ui_kit_result(kit_result, output_format=output_format, out=_out)
+            return 0
         else:
             new_parser.print_help()
             return 2
@@ -1035,6 +1054,28 @@ def build_parser() -> argparse.ArgumentParser:
     new_style_p.add_argument("--force", action="store_true", help="Overwrite existing file")
     add_format_arguments(new_style_p)
     new_style_p.add_argument("--root", default=None, help="Project root directory")
+
+    new_kit_p = new_sub.add_parser(
+        "ui-kit",
+        help="Scaffold a themed UI component kit and comparative styleguide sheet",
+    )
+    new_kit_p.add_argument("name", help="Kit ID or directory name")
+    new_kit_p.add_argument(
+        "--theme",
+        choices=UI_THEME_NAMES,
+        default="pixel_chamfer",
+        help="UI theme preset (default: pixel_chamfer)",
+    )
+    new_kit_p.add_argument("--style", default=None, help="Target StylePack ID")
+    new_kit_p.add_argument("--out", default=None, help="Output directory")
+    new_kit_p.add_argument(
+        "--no-sheet",
+        action="store_true",
+        help="Skip generating .pixelforge/sheets/<kit>_styleguide.contact.png",
+    )
+    new_kit_p.add_argument("--force", action="store_true", help="Overwrite existing files")
+    add_format_arguments(new_kit_p)
+    new_kit_p.add_argument("--root", default=None, help="Project root directory")
 
     doctor_p = sub.add_parser(
         "doctor",

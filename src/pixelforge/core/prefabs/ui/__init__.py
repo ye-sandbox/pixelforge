@@ -52,8 +52,17 @@ from pixelforge.core.prefabs.ui.margins import (
     ui_slot_margins,
 )
 from pixelforge.core.prefabs.ui.palette import UiPalette, UiStyleTarget, UiTarget
+from pixelforge.core.prefabs.ui.themes import (
+    UI_THEME_NAMES,
+    UI_THEME_PRESETS,
+    UiThemeConfig,
+    UiThemeName,
+    get_ui_theme_config,
+)
 
 __all__ = [
+    "UI_THEME_NAMES",
+    "UI_THEME_PRESETS",
     "UiBadgeTone",
     "UiButtonState",
     "UiCursorKind",
@@ -68,7 +77,10 @@ __all__ = [
     "UiStyleTarget",
     "UiTabPlacement",
     "UiTarget",
+    "UiThemeConfig",
+    "UiThemeName",
     "get_icon_grid",
+    "get_ui_theme_config",
     "list_icon_packs",
     "list_icons",
     "register_icon",
