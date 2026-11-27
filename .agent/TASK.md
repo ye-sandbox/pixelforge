@@ -8,12 +8,12 @@
 
 ## Active Task
 
-### `[63.1]` Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet
-Goal: Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
+### `[64.1]` Deterministic UI Quality Guards in `pixelforge check`
+Goal: Add UI runtime rules verifying minimum text/surface luminance contrast (reusing `_hex_luminance`), 9-slice margin integrity (`left + right < width`, `top + bottom < height`, clean >= 1px stretchable core without slicing bevels/title bars), and cursor `hotspot` anchor bounds.
 
-- [ ] Add `pixelforge new ui-kit` scaffolder parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`).
-- [ ] Generate a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
-- [ ] Add hermetic unit + CLI tests and pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`).
+- [ ] Add UI contrast, 9-slice margin integrity, and cursor `hotspot` anchor bounds checks in `pixelforge.guard`.
+- [ ] Wire rules into `pixelforge check` and verify `ui-kit` / UI prefabs pass cleanly.
+- [ ] Add hermetic unit + guard tests and pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`).
 
 ---
 
@@ -21,6 +21,7 @@ Goal: Scaffold a unified UI component kit parameterized by theme style (`pixel_c
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[63.1]` Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet (`1ba516e`)
 - `[62.1]` Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline (`e2a87b8`)
 - `[61.1]` Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`) (`b4dbe96`)
 - `[60.1]` Complete Game UI Controls Library (`prefabs/ui/`) (`6cf6be0`)
@@ -86,7 +87,6 @@ _All Track J items promoted or completed._
 _All Track K items promoted or completed._
 
 ### Track L — UI Guards, Design-System Export, HUD Critic & Runtime Bridge
-- `[64.1]` **Deterministic UI Quality Guards in `pixelforge check`** *(Depends on: `[59.1]`, `[60.1]`, `[63.1]`)* — Add UI runtime rules verifying minimum text/surface luminance contrast (reusing `_hex_luminance`), 9-slice margin integrity (`left + right < width`, `top + bottom < height`, clean >= 1px stretchable core without slicing bevels/title bars), and cursor `hotspot` anchor bounds.
 - `[65.1]` **Pixel UI Design-System Exporter (`--ui-css`: `theme.generated.css`, 9-Slice Utilities & Cursors)** *(Depends on: `[56.1]`, `[57.1]`, `[59.1]`, `[60.1]`, `[62.1]`, `[64.1]`)* — Emit CSS custom properties (`--pf-*`) from `StylePack` + `[data-pf-variant="..."]` overrides, integer-scaled `border-image` 9-slice classes with `:hover`/`:active`/`:disabled` + `content` padding, cursor hotspot classes, and crisp bitmap font CSS helpers across `render`, `watch`, and `pixelforge.toml`.
 - `[66.1]` **HUD / UI Screen Composition & Visual Critic Loop (`*.ui.py` / `compose --hud`)** *(Depends on: `[60.1]`, `[62.1]`, `[63.1]`, `[64.1]`)* — Compose declarative full-screen HUD/modal previews anchored over a target viewport or compiled `*.scene.py` backdrop (`320x200`, etc.) with contact-sheet rendering and UI-aware `pixelforge critic` scoring (1x legibility, text contrast, pixel-grid alignment, HUD-to-gameplay ratio).
 - `[67.1]` **Preview Studio UI Playground (`watch --serve`: 9-Slice Live Resizer & Bitmap Font Tester)** *(Depends on: `[59.1]`, `[62.1]`, `[65.1]`)* — Add an interactive UI Playground view in `src/pixelforge/export/studio.py` with a live 9-Slice Resizer (width/height sliders, state switcher, integer zoom) and live Bitmap Font Tester (PT-BR text input, proportional/tabular toggle, panel contrast background preview).
