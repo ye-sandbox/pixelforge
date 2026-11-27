@@ -8,12 +8,12 @@
 
 ## Active Task
 
-### `[61.1]` Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`)
-Goal: Replace closed homelab-only `UiIconKind` with modular, extensible icon registries (`8x8`, `12x12`, `16x16`) spanning universal UI controls, RPG/game HUD glyphs, and tech/homelab icons while preserving `ui_icon_16` backwards compatibility.
+### `[62.1]` Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline
+Goal: Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD symbols (`♥ ★ → ← ↑ ↓ × •`), true per-glyph `proportional=True` (`x_advance`/`x_offset`) + `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), native 1px `outline=` pass, and optional BMFont (`.fnt`) export.
 
-- [ ] Design and implement modular icon registries (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`) supporting `8x8`, `12x12`, and `16x16` sizes under `src/pixelforge/core/prefabs/ui/`.
-- [ ] Preserve `ui_icon_16` and `UiIconKind` backwards compatibility while exposing extensible lookup/registration APIs.
-- [ ] Add hermetic unit tests covering all icon packs, sizes, and backwards compatibility.
+- [ ] Add Latin-1/PT-BR diacritics and HUD symbols (`♥ ★ → ← ↑ ↓ × •`) to `src/pixelforge/core/font.py`.
+- [ ] Implement true per-glyph `proportional=True` (`x_advance`/`x_offset`), `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), and native 1px `outline=` pass.
+- [ ] Add optional BMFont (`.fnt`) export support and hermetic unit tests.
 - [ ] Pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`) and update `.agent/NOTES.md` if contracts change.
 
 ---
@@ -22,6 +22,7 @@ Goal: Replace closed homelab-only `UiIconKind` with modular, extensible icon reg
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[61.1]` Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`) (`b4dbe96`)
 - `[60.1]` Complete Game UI Controls Library (`prefabs/ui/`) (`6cf6be0`)
 
 - `[59.1]` Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives (`bcb1462`)
@@ -82,7 +83,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 _All Track J items promoted or completed._
 
 ### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
-- `[62.1]` **Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline** *(Depends on: none)* — Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD symbols (`♥ ★ → ← ↑ ↓ × •`), true per-glyph `proportional=True` (`x_advance`/`x_offset`) + `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), native 1px `outline=` pass, and optional BMFont (`.fnt`) export.
 - `[63.1]` **Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet** *(Depends on: `[57.1]`, `[58.1]`, `[59.1]`, `[60.1]`, `[61.1]`, `[62.1]`)* — Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
 
 ### Track L — UI Guards, Design-System Export, HUD Critic & Runtime Bridge
