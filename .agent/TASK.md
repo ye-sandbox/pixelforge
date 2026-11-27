@@ -8,12 +8,12 @@
 
 ## Active Task
 
-### `[59.1]` Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives
-Goal: Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` directly from `ui_panel`/`ui_button` and framed UI primitives so spec margins, drawn bevels, and inner content padding cannot drift.
+### `[60.1]` Complete Game UI Controls Library (`prefabs/ui/`)
+Goal: Subdivide `src/pixelforge/core/prefabs/ui.py` into `prefabs/ui/` and add `ui_slot` (empty/hover/selected/locked), `ui_dialogue_box` (tail + portrait frame), `ui_tabs`, `ui_slider`, `ui_toggle`/`ui_checkbox`, `ui_scrollbar`, `ui_divider`, and `ui_cursor` (with `hotspot` anchor).
 
-- [ ] Design and implement synchronized `NineSliceMargins` computation/return and optional `content` hitbox emission on `ui_panel`, `ui_button`, and framed UI primitives.
-- [ ] Update `assets/ui/hud_panel_9slice.asset.py` and `assets/ui/hud_button_9slice.asset.py` to use auto-synced margins / `content` hitbox emission.
-- [ ] Add hermetic unit tests verifying `NineSliceMargins` and `content` hitbox alignment across sizes, `title_bar_h`, `beveled`, and `corner_cut` options.
+- [ ] Subdivide `src/pixelforge/core/prefabs/ui.py` into `src/pixelforge/core/prefabs/ui/` package preserving all existing public re-exports.
+- [ ] Implement `ui_slot`, `ui_dialogue_box`, `ui_tabs`, `ui_slider`, `ui_toggle`/`ui_checkbox`, `ui_scrollbar`, `ui_divider`, and `ui_cursor` (with `hotspot` anchor) using `UiPalette` and synchronized `NineSliceMargins` / `content` hitboxes where applicable.
+- [ ] Add hermetic unit tests covering all new UI controls, states, and `hotspot` / `content` metadata.
 - [ ] Pass full DoD (`ruff`, `pyright`, `pytest`, `git diff --check`) and update `.agent/NOTES.md` if contracts change.
 
 ---
@@ -22,6 +22,7 @@ Goal: Return/emit synchronized `NineSliceMargins` and `hitbox("content", ...)` d
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[59.1]` Auto-Synced `NineSliceMargins` & `content` Hitbox Emission for UI Primitives (`bcb1462`)
 - `[58.1]` Zero-Boilerplate `UiPalette.from_style()` & StylePack UI Semantic Mapping (`b880eee`)
 - `[57.1]` Project Build Profiles (`pixelforge.toml` / `[tool.pixelforge]`) (`d5e9c56`)
 
@@ -79,7 +80,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 _All Track J items promoted or completed._
 
 ### Track K — Complete Pixel UI Controls, Multi-Genre Icons & PT-BR Typography
-- `[60.1]` **Complete Game UI Controls Library (`prefabs/ui/`)** *(Depends on: `[58.1]`, `[59.1]`)* — Subdivide `src/pixelforge/core/prefabs/ui.py` into `prefabs/ui/` and add `ui_slot` (empty/hover/selected/locked), `ui_dialogue_box` (tail + portrait frame), `ui_tabs`, `ui_slider`, `ui_toggle`/`ui_checkbox`, `ui_scrollbar`, `ui_divider`, and `ui_cursor` (with `hotspot` anchor).
 - `[61.1]` **Multi-Genre Pixel Icon Packs (`ui_icons_core`, `ui_icons_rpg`, `ui_icons_tech`)** *(Depends on: `[58.1]`, `[60.1]`)* — Replace closed homelab-only `UiIconKind` with modular, extensible icon registries (`8x8`, `12x12`, `16x16`) spanning universal UI controls, RPG/game HUD glyphs, and tech/homelab icons while preserving `ui_icon_16` backwards compatibility.
 - `[62.1]` **Production Bitmap Fonts: PT-BR/Latin-1, Proportional Metrics, Title Presets & Native Outline** *(Depends on: none)* — Upgrade `src/pixelforge/core/font.py` with Latin-1/PT-BR diacritics + HUD symbols (`♥ ★ → ← ↑ ↓ × •`), true per-glyph `proportional=True` (`x_advance`/`x_offset`) + `tabular_digits=True`, display/title presets (`6x8`/`8x10` bold), native 1px `outline=` pass, and optional BMFont (`.fnt`) export.
 - `[63.1]` **Cohesive UI Theme Kit Generator (`pixelforge new ui-kit`) & UI Styleguide Sheet** *(Depends on: `[57.1]`, `[58.1]`, `[59.1]`, `[60.1]`, `[61.1]`, `[62.1]`)* — Scaffold a unified UI component kit parameterized by theme style (`pixel_chamfer`, `rpg_wood`, `flat_crt`, `minimal_1bit`) plus a single comparative UI Styleguide `.contact.png` showcasing panels, button states, bars, slots, badges, cursors, icons, and font samples together.
