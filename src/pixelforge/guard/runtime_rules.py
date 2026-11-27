@@ -11,6 +11,7 @@ from pixelforge.core.surface import orphan_pixel_mask
 from pixelforge.core.types import TRANSPARENT_INDEX, AssetSpec, StylePack
 from pixelforge.export.bundle import AssetModule, RenderedFrame, render_asset_frames
 from pixelforge.export.png import surface_to_rgba
+from pixelforge.guard.craft_rules import check_asset_craft
 from pixelforge.guard.types import GuardSeverity, GuardViolation
 
 ADVISORY_EMISSIVE_BLEED_RATIO: Final[float] = 0.25
@@ -351,6 +352,7 @@ def check_asset_runtime(
     *,
     file_path: str = "<asset>",
     strict_orphans: bool = False,
+    strict_craft: bool = False,
 ) -> list[GuardViolation]:
     """Validate runtime invariants and orphan-pixel diagnostics on an asset."""
     spec = asset.SPEC
@@ -383,4 +385,13 @@ def check_asset_runtime(
                 strict_orphans=strict_orphans,
             )
         )
+    violations.extend(
+        check_asset_craft(
+            asset,
+            first_pass,
+            style,
+            file_path=file_path,
+            strict_craft=strict_craft,
+        )
+    )
     return violations

@@ -110,6 +110,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         root,
         asset_id=args.asset_id,
         strict_orphans=bool(args.strict_orphans),
+        strict_craft=bool(args.strict_craft),
     )
     emit_check_report(report, output_format=output_format, out=_out, err=_err)
     return 0 if report.passed else 1
@@ -585,6 +586,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict-orphans",
         action="store_true",
         help="Treat isolated 1x1 orphan pixels as errors",
+    )
+    check_p.add_argument(
+        "--strict-craft",
+        action="store_true",
+        help="Treat pixel-art craft lint warnings as errors",
     )
     check_p.add_argument(
         "--sync-stubs",

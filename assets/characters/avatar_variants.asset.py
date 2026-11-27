@@ -16,7 +16,7 @@ SPEC = AssetSpec(
     height=32,
     perspective="front-2.5d",
     states=("engineer", "architect", "nightshift"),
-    frames=2,
+    frames=1,
     fps=2,
     seed=603,
 )

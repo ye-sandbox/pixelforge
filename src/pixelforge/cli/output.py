@@ -90,6 +90,22 @@ _VIOLATION_HINTS: dict[str, str] = {
     ),
     "door-obstruction": "Move furniture or mounted props out of the doorway clearance zone.",
     "furniture-overlap": ("Separate overlapping furniture hitboxes or adjust furniture placement."),
+    "craft-jaggies": (
+        "Smooth double-pixel L-corner jaggies on outlines into clean 1px curves/diagonals."
+    ),
+    "craft-pillow-shading": (
+        "Replace concentric edge-following shading with directional volume shading."
+    ),
+    "craft-lighting": ("Align highlight and shadow placement with StylePack.lighting_angle."),
+    "craft-contrast": (
+        "Add outline or midtone contrast so 1x silhouette reads on dark and light backgrounds."
+    ),
+    "craft-noop-delta": (
+        "Ensure distinct states and animation frames produce visible pixel differences."
+    ),
+    "craft-anchor-fidelity": (
+        "Keep anchors near the opaque silhouette and hitboxes aligned over actual geometry."
+    ),
 }
 
 

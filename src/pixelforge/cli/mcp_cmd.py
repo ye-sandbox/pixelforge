@@ -238,6 +238,7 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
     def check_asset(
         asset_id: str | None = None,
         strict_orphans: bool = False,
+        strict_craft: bool = False,
         root: str | None = None,
     ) -> CallToolResult:
         out_lines, err_lines, out, err = _capture()
@@ -245,6 +246,7 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
             _resolve_root(root, base_root),
             asset_id=asset_id,
             strict_orphans=strict_orphans,
+            strict_craft=strict_craft,
         )
         emit_check_report(report, output_format="llm", out=out, err=err)
         return _text_result(0 if report.passed else 1, out_lines, err_lines)

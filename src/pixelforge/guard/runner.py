@@ -397,6 +397,7 @@ def _check_single_asset(
     target_paths: set[Path] | None,
     asset_id: str | None,
     strict_orphans: bool,
+    strict_craft: bool,
     asset_origins: dict[str, Path],
     loaded_assets_by_id: dict[str, LoadedAsset],
 ) -> tuple[int, list[GuardViolation]]:
@@ -432,6 +433,7 @@ def _check_single_asset(
         style,
         file_path=str(asset_path),
         strict_orphans=strict_orphans,
+        strict_craft=strict_craft,
     )
 
 
@@ -497,6 +499,7 @@ def run_checks(
     asset_id: str | None = None,
     asset_paths: Collection[Path] | None = None,
     strict_orphans: bool = False,
+    strict_craft: bool = False,
 ) -> CheckReport:
     """Run AST static guards and runtime invariant checks across the project."""
     target_paths = {p.resolve() for p in asset_paths} if asset_paths is not None else None
@@ -515,6 +518,7 @@ def run_checks(
             target_paths,
             asset_id,
             strict_orphans,
+            strict_craft,
             asset_origins,
             loaded_assets_by_id,
         )
