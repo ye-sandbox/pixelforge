@@ -8,10 +8,8 @@
 
 ## Active Task
 
-### `[50.1]` Layer Alpha-Lock (`clip="opaque"`) & Organic Pixel Primitives
-- [ ] Support `clip="opaque"` on `Asset.layer(...)` so shading/texture passes never bleed outside the parent silhouette
-- [ ] Add crisp organic primitives (`bezier`, `arc`, `capsule`, `iso_cylinder`, `iso_ramp`) and `cleanup_jaggies()` post-pass in `core/surface.py` and `core/iso.py`
-- [ ] Expose new primitives and layer clipping in `inspect api`
+### `[51.1]` Deterministic Pixel-Art Craft Lints in `pixelforge check`
+- [ ] Add fast `numpy` craft diagnostics (advisory by default + `--strict-craft`) for double-pixel L-corner jaggies, concentric pillow-shading/banding, directional lighting balance vs `style.lighting_angle`, `1x` silhouette contrast against `#0d1117`/`#e6edf3`, state/frame no-op SHA-256 delta guard, and anchor/hitbox fidelity
 - [ ] Add unit, guard, and CLI tests in `tests/`
 
 ---
@@ -20,6 +18,7 @@
 
 _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 
+- `[50.1]` Layer Alpha-Lock (`clip="opaque"`) & Organic Pixel Primitives (`a25f3c7`)
 - `[49.1]` First-Class Color Ramps (`StylePack.ramps`) & Directional Volume Shading (`51dd689`)
 - `[48.1]` Category-Aware 5-Axis Visual Critic (`pixelforge critic` & `blind-critic` Alignment) (`7cacf39`)
 - `[47.1]` Upgraded Diagnostic Contact Sheet & Enriched MCP Visual Loop (`e3a4747`)
@@ -62,7 +61,6 @@ _Archived under `v0.2.0` and `v0.3.0` in [`.agent/ARCHIVE.md`](ARCHIVE.md)._
 ## Backlog (Upcoming, in priority order)
 
 ### Track H — Agent Visual Assertiveness & Pixel-Art Craft
-- `[51.1]` **Deterministic Pixel-Art Craft Lints in `pixelforge check`:** Add fast `numpy` craft diagnostics (advisory by default + `--strict-craft`) for double-pixel L-corner jaggies, concentric pillow-shading/banding, directional lighting balance vs `style.lighting_angle`, `1x` silhouette contrast against `#0d1117`/`#e6edf3`, state/frame no-op SHA-256 delta guard, and anchor/hitbox fidelity.
 - `[52.1]` **Perceptual Reference Pipeline (`analyze-ref` OKLab, `--trim`, `--emit-spr`):** Upgrade `export/analyze_ref.py` from `BILINEAR` + Euclidean RGB to perceptual OKLab quantization (excluding `emissive` tokens by default), `--trim` auto-crop, edge-preserving downscaling, and `--emit-spr` clean ASCII `spr()` scaffolding for ephemeral reference/image-gen blueprints.
 - `[53.1]` **Silhouette-First Authoring Skill Protocol & Reproducible Agent Eval Benchmark:** Upgrade `.agent/skills/create-pixel-asset/SKILL.md` with mandatory 2-phase blockout-first authoring, hybrid `spr()` vs `Plane`/`iso_box` guidance, 4 archetype few-shot recipes, and `blind-critic` handoff triggers; add a reproducible multi-genre eval harness scoring craft lints and 5-axis critic verdicts.
 
