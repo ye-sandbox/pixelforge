@@ -9,7 +9,7 @@ from typing import cast, get_args
 import numpy as np
 import pytest
 
-from pixelforge import TRANSPARENT_INDEX, Asset, AssetSpec, StylePack, prefabs
+from pixelforge import TRANSPARENT_INDEX, Asset, AssetSpec, NineSliceMargins, StylePack, prefabs
 from pixelforge.core.palette import PaletteLookupError
 from pixelforge.guard.runner import load_all_styles, load_asset_module
 
@@ -191,3 +191,190 @@ def test_ui_palette_from_style_overrides_and_errors(
 
     with pytest.raises(AttributeError):
         prefabs.UiPalette.from_style(cast(StylePack, cast(object, "not_a_style")))
+
+
+@pytest.mark.parametrize(
+    ("canvas_w", "canvas_h", "x", "y", "w", "h", "title_bar_h", "beveled", "corner_cut", "pad"),
+    [
+        (28, 28, 2, 2, 24, 24, 3, True, 1, 0),
+        (32, 24, 2, 2, 28, 20, 0, True, 1, 1),
+        (24, 20, 0, 0, 24, 20, 0, False, 0, 0),
+        (24, 20, 1, 2, 20, 16, 4, False, 1, 0),
+        (24, 20, 2, 1, 18, 16, 4, False, 0, 1),
+        (16, 12, 0, 0, 5, 5, 0, True, 0, 0),
+    ],
+)
+def test_ui_panel_margins_and_content_hitbox_sync(
+    make_asset: Callable[[int, int], Asset],
+    canvas_w: int,
+    canvas_h: int,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    title_bar_h: int,
+    beveled: bool,
+    corner_cut: int,
+    pad: int,
+) -> None:
+    """Verify `ui_panel` return margins, `ui_panel_margins`, and `content` hitbox never drift."""
+    a = make_asset(canvas_w, canvas_h)
+    pal = _ui_palette(a)
+    expected = prefabs.ui_panel_margins(
+        x,
+        y,
+        w,
+        h,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        title_bar_h=title_bar_h,
+        beveled=beveled,
+        corner_cut=corner_cut,
+        content_padding=pad,
+    )
+    returned = prefabs.ui_panel(
+        a,
+        x,
+        y,
+        w,
+        h,
+        pal,
+        title_bar_h=title_bar_h,
+        beveled=beveled,
+        corner_cut=corner_cut,
+        emit_content_hitbox=True,
+        content_padding=pad,
+    )
+    assert returned == expected
+    assert len(a.hitboxes) == 1
+    hb = a.hitboxes[0]
+    assert hb.name == "content"
+    assert hb.kind == "ui_content"
+    assert hb.x == returned.left
+    assert hb.y == returned.top
+    assert hb.w == canvas_w - returned.left - returned.right
+    assert hb.h == canvas_h - returned.top - returned.bottom
+
+
+@pytest.mark.parametrize(
+    ("canvas_w", "canvas_h", "x", "y", "w", "h", "corner_cut", "pad"),
+    [
+        (28, 20, 2, 2, 24, 16, 1, 1),
+        (24, 16, 0, 0, 24, 16, 0, 0),
+        (20, 14, 1, 2, 16, 10, 1, 0),
+        (12, 10, 0, 0, 5, 4, 0, 0),
+    ],
+)
+def test_ui_button_margins_and_content_hitbox_sync(
+    make_asset: Callable[[int, int], Asset],
+    canvas_w: int,
+    canvas_h: int,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    corner_cut: int,
+    pad: int,
+) -> None:
+    """Verify `ui_button` return margins, `ui_button_margins`, and `content` hitbox align."""
+    a = make_asset(canvas_w, canvas_h)
+    pal = _ui_palette(a)
+    expected = prefabs.ui_button_margins(
+        x,
+        y,
+        w,
+        h,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        corner_cut=corner_cut,
+        content_padding=pad,
+    )
+    returned = prefabs.ui_button(
+        a,
+        x,
+        y,
+        w,
+        h,
+        pal,
+        corner_cut=corner_cut,
+        emit_content_hitbox=True,
+        content_padding=pad,
+    )
+    assert returned == expected
+    assert len(a.hitboxes) == 1
+    hb = a.hitboxes[0]
+    assert hb.name == "content"
+    assert hb.x == returned.left
+    assert hb.y == returned.top
+    assert hb.w == canvas_w - returned.left - returned.right
+    assert hb.h == canvas_h - returned.top - returned.bottom
+
+
+def test_ui_progress_bar_and_badge_margins_sync(
+    make_asset: Callable[[int, int], Asset],
+) -> None:
+    """Verify `ui_progress_bar` and `ui_badge` emit synchronized margins and content hitboxes."""
+    bar_asset = make_asset(28, 10)
+    bar_pal = _ui_palette(bar_asset)
+    bar_expected = prefabs.ui_progress_bar_margins(2, 2, 24, 6, canvas_w=28, canvas_h=10)
+    bar_ret = prefabs.ui_progress_bar(
+        bar_asset,
+        2,
+        2,
+        24,
+        6,
+        bar_pal,
+        emit_content_hitbox=True,
+    )
+    assert bar_ret == bar_expected == NineSliceMargins(left=3, right=3, top=3, bottom=3)
+    assert bar_asset.hitboxes[0].x == 3
+    assert bar_asset.hitboxes[0].y == 3
+    assert bar_asset.hitboxes[0].w == 22
+    assert bar_asset.hitboxes[0].h == 4
+
+    badge_asset = make_asset(24, 11)
+    badge_pal = _ui_palette(badge_asset)
+    badge_expected = prefabs.ui_badge_margins(2, 2, 20, 7, canvas_w=24, canvas_h=11, pill=True)
+    badge_ret = prefabs.ui_badge(
+        badge_asset,
+        2,
+        2,
+        20,
+        7,
+        badge_pal,
+        pill=True,
+        emit_content_hitbox=True,
+    )
+    assert badge_ret == badge_expected == NineSliceMargins(left=4, right=4, top=4, bottom=4)
+    assert badge_asset.hitboxes[0].w == 16
+    assert badge_asset.hitboxes[0].h == 3
+
+    # Default emit_content_hitbox=False emits no hitboxes; negative padding fails loudly.
+    plain = make_asset(24, 16)
+    prefabs.ui_panel(plain, 2, 2, 20, 12, _ui_palette(plain))
+    assert plain.hitboxes == ()
+    with pytest.raises(ValueError, match="content_padding"):
+        prefabs.ui_panel_margins(2, 2, 20, 12, content_padding=-1)
+
+
+@pytest.mark.parametrize(
+    "rel_path",
+    [
+        "assets/ui/hud_panel_9slice.asset.py",
+        "assets/ui/hud_button_9slice.asset.py",
+    ],
+)
+def test_showcase_9slice_assets_sync_spec_and_content_hitbox(rel_path: str) -> None:
+    """Verify showcase 9-slice assets keep `SPEC.nine_slice` and `content` hitbox in lockstep."""
+    styles = load_all_styles(_REPO_ROOT / "styles")
+    asset_mod = load_asset_module(_REPO_ROOT / rel_path)
+    spec = asset_mod.SPEC
+    assert spec.nine_slice is not None
+    style = styles[spec.style_id]
+    a = Asset(spec, style, state=spec.states[0], frame=0)
+    asset_mod.render(a)
+    content = next(hb for hb in a.hitboxes if hb.name == "content")
+    assert content.x == spec.nine_slice.left
+    assert content.y == spec.nine_slice.top
+    assert content.w == spec.width - spec.nine_slice.left - spec.nine_slice.right
+    assert content.h == spec.height - spec.nine_slice.top - spec.nine_slice.bottom

@@ -8,7 +8,7 @@ from typing import Final
 import numpy as np
 
 from pixelforge.core.surface import orphan_pixel_mask
-from pixelforge.core.types import TRANSPARENT_INDEX, AssetSpec, StylePack
+from pixelforge.core.types import TRANSPARENT_INDEX, AssetSpec, HitboxRect, StylePack
 from pixelforge.export.bundle import AssetModule, RenderedFrame, render_asset_frames
 from pixelforge.export.png import surface_to_rgba
 from pixelforge.guard.craft_rules import check_asset_craft
@@ -20,8 +20,10 @@ ADVISORY_MAX_COVERAGE_RATIO: Final[float] = 0.95
 FURNITURE_OVERLAP_WARN_RATIO: Final[float] = 0.25
 
 
-def _is_container_hitbox(name: str) -> bool:
-    return name == "room" or name.endswith("_zone") or name.startswith("door_")
+def _is_container_hitbox(hb: HitboxRect) -> bool:
+    if hb.kind is not None and hb.kind.startswith("ui_"):
+        return True
+    return hb.name == "room" or hb.name.endswith("_zone") or hb.name.startswith("door_")
 
 
 def find_orphan_pixel_coords(frame: RenderedFrame) -> list[tuple[int, int]]:
@@ -216,7 +218,7 @@ def _check_spatial_ergonomics(frame: RenderedFrame, file_path: str) -> list[Guar
     violations: list[GuardViolation] = []
     label = f"({frame.state!r}, frame={frame.frame})"
     clearances = [hb for hb in frame.hitboxes if hb.name.startswith("door_clearance_")]
-    furniture = [hb for hb in frame.hitboxes if not _is_container_hitbox(hb.name)]
+    furniture = [hb for hb in frame.hitboxes if not _is_container_hitbox(hb)]
 
     for clr in clearances:
         for hb in furniture:

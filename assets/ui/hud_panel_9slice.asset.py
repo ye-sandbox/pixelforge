@@ -4,21 +4,38 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pixelforge import Asset, AssetSpec, NineSliceMargins, prefabs
+from pixelforge import Asset, AssetSpec, prefabs
 
 if TYPE_CHECKING:
     from styles.homelab_16bit_palette import Homelab16bitPalette
 
+_CANVAS_W = 28
+_CANVAS_H = 28
+_PANEL_X = 2
+_PANEL_Y = 2
+_PANEL_W = 24
+_PANEL_H = 24
+
 SPEC = AssetSpec(
     id="hud_panel_9slice",
     style_id="homelab-16bit",
-    width=28,
-    height=28,
+    width=_CANVAS_W,
+    height=_CANVAS_H,
     perspective="front-2.5d",
     states=("default", "alert"),
     frames=1,
     seed=801,
-    nine_slice=NineSliceMargins(left=8, right=8, top=8, bottom=8),
+    nine_slice=prefabs.ui_panel_margins(
+        _PANEL_X,
+        _PANEL_Y,
+        _PANEL_W,
+        _PANEL_H,
+        canvas_w=_CANVAS_W,
+        canvas_h=_CANVAS_H,
+        title_bar_h=3,
+        beveled=True,
+        corner_cut=1,
+    ),
 )
 
 
@@ -34,5 +51,15 @@ def render(a: Asset[Homelab16bitPalette]) -> None:
         )
     else:
         pal = prefabs.UiPalette.from_style(a)
-    prefabs.ui_panel(a, 2, 2, 24, 24, pal, title_bar_h=3, beveled=True, corner_cut=1)
-    a.hitbox("content", 8, 8, 12, 12, kind="ui_content")
+    prefabs.ui_panel(
+        a,
+        _PANEL_X,
+        _PANEL_Y,
+        _PANEL_W,
+        _PANEL_H,
+        pal,
+        title_bar_h=3,
+        beveled=True,
+        corner_cut=1,
+        emit_content_hitbox=True,
+    )

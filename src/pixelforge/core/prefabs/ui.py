@@ -8,7 +8,7 @@ from typing import Final, Literal
 
 from pixelforge.core.builder import Asset, Layer
 from pixelforge.core.palette import PaletteLookup, hex_to_rgb
-from pixelforge.core.types import MAX_PALETTE_INDEX, PaletteColor, StylePack
+from pixelforge.core.types import MAX_PALETTE_INDEX, NineSliceMargins, PaletteColor, StylePack
 
 UiTarget = Asset[object] | Layer
 UiStyleTarget = StylePack | Asset[object] | Layer
@@ -590,6 +590,229 @@ def _draw_chamfer_border(
     a.put(x + w - 2, y + h - 2, color)
 
 
+def _build_nine_slice_margins(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    frame_left: int,
+    frame_right: int,
+    frame_top: int,
+    frame_bottom: int,
+    *,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
+    content_padding: int = 0,
+) -> NineSliceMargins:
+    if content_padding < 0:
+        msg = f"content_padding must be >= 0 (got {content_padding})"
+        raise ValueError(msg)
+    pad_left = max(0, x)
+    pad_top = max(0, y)
+    pad_right = pad_left if canvas_w is None else max(0, canvas_w - (x + w))
+    pad_bottom = pad_top if canvas_h is None else max(0, canvas_h - (y + h))
+    return NineSliceMargins(
+        left=pad_left + frame_left + content_padding,
+        right=pad_right + frame_right + content_padding,
+        top=pad_top + frame_top + content_padding,
+        bottom=pad_bottom + frame_bottom + content_padding,
+    )
+
+
+def _maybe_emit_content_hitbox(
+    a: UiTarget,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    frame_left: int,
+    frame_right: int,
+    frame_top: int,
+    frame_bottom: int,
+    *,
+    emit_content_hitbox: bool,
+    content_padding: int,
+) -> None:
+    if not emit_content_hitbox:
+        return
+    cx = x + frame_left + content_padding
+    cy = y + frame_top + content_padding
+    cw = w - frame_left - frame_right - (content_padding * 2)
+    ch = h - frame_top - frame_bottom - (content_padding * 2)
+    if cw > 0 and ch > 0:
+        a.hitbox("content", cx, cy, cw, ch, kind="ui_content")
+
+
+def _panel_frame_insets(
+    w: int,
+    h: int,
+    *,
+    title_bar_h: int = 0,
+    beveled: bool = True,
+    corner_cut: int = 1,
+) -> tuple[int, int, int, int]:
+    if w < 4 or h < 4:
+        return (0, 0, 0, 0)
+    has_bevel = beveled and w >= 6 and h >= 6
+    has_chamfer = corner_cut > 0
+    # INVARIANT: Chamfered 1px corners occupy (x+1, y+1); slicing at inset < 2
+    # would stretch the corner pixel.
+    side = 2 if (has_bevel or has_chamfer) else 1
+    top = side
+    if title_bar_h > 0 and h > title_bar_h + 4:
+        bar_h = min(title_bar_h, h - 4)
+        top = 3 + bar_h
+    return (side, side, top, side)
+
+
+def _button_frame_insets(
+    w: int,
+    h: int,
+    *,
+    corner_cut: int = 1,
+) -> tuple[int, int, int, int]:
+    if w < 4 or h < 4:
+        return (0, 0, 0, 0)
+    has_chamfer = corner_cut > 0
+    has_edges = w >= 6 and h >= 5
+    lr = 2 if has_chamfer else 1
+    tb = 2 if (has_chamfer or has_edges) else 1
+    return (lr, lr, tb, tb)
+
+
+def _progress_bar_frame_insets(w: int, h: int) -> tuple[int, int, int, int]:
+    if w < 4 or h < 3:
+        return (0, 0, 0, 0)
+    return (1, 1, 1, 1)
+
+
+def _badge_frame_insets(w: int, h: int, *, pill: bool = True) -> tuple[int, int, int, int]:
+    if w < 4 or h < 3:
+        return (0, 0, 0, 0)
+    cut = 1 if (pill and w >= 6 and h >= 5) else 0
+    margin = 2 if cut > 0 else 1
+    return (margin, margin, margin, margin)
+
+
+def ui_panel_margins(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    *,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
+    title_bar_h: int = 0,
+    beveled: bool = True,
+    corner_cut: int = 1,
+    content_padding: int = 0,
+) -> NineSliceMargins:
+    """Compute synchronized `NineSliceMargins` for a `ui_panel` call."""
+    fl, fr, ft, fb = _panel_frame_insets(
+        w,
+        h,
+        title_bar_h=title_bar_h,
+        beveled=beveled,
+        corner_cut=corner_cut,
+    )
+    return _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        content_padding=content_padding,
+    )
+
+
+def ui_button_margins(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    *,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
+    corner_cut: int = 1,
+    content_padding: int = 0,
+) -> NineSliceMargins:
+    """Compute synchronized `NineSliceMargins` for a `ui_button` call."""
+    fl, fr, ft, fb = _button_frame_insets(w, h, corner_cut=corner_cut)
+    return _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        content_padding=content_padding,
+    )
+
+
+def ui_progress_bar_margins(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    *,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
+    content_padding: int = 0,
+) -> NineSliceMargins:
+    """Compute synchronized `NineSliceMargins` for a `ui_progress_bar` call."""
+    fl, fr, ft, fb = _progress_bar_frame_insets(w, h)
+    return _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        content_padding=content_padding,
+    )
+
+
+def ui_badge_margins(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    *,
+    canvas_w: int | None = None,
+    canvas_h: int | None = None,
+    pill: bool = True,
+    content_padding: int = 0,
+) -> NineSliceMargins:
+    """Compute synchronized `NineSliceMargins` for a `ui_badge` call."""
+    fl, fr, ft, fb = _badge_frame_insets(w, h, pill=pill)
+    return _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=canvas_w,
+        canvas_h=canvas_h,
+        content_padding=content_padding,
+    )
+
+
 def ui_panel(
     a: UiTarget,
     x: int,
@@ -602,10 +825,32 @@ def ui_panel(
     beveled: bool = True,
     corner_cut: int = 1,
     recessed: bool = False,
-) -> None:
+    emit_content_hitbox: bool = False,
+    content_padding: int = 0,
+) -> NineSliceMargins:
     """Draw a 9-slice-ready beveled pixel UI panel with optional title bar."""
+    fl, fr, ft, fb = _panel_frame_insets(
+        w,
+        h,
+        title_bar_h=title_bar_h,
+        beveled=beveled,
+        corner_cut=corner_cut,
+    )
+    margins = _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=a.surface.width,
+        canvas_h=a.surface.height,
+        content_padding=content_padding,
+    )
     if w < 4 or h < 4:
-        return
+        return margins
 
     fill_color = pal.bg_dark if recessed else pal.bg
     a.rect(x, y, w, h, fill_color)
@@ -631,6 +876,20 @@ def ui_panel(
             a.put(x + 3, bar_y + 1, pal.accent)
 
     _cut_rect_corners(a, x, y, w, h, min(corner_cut, 1))
+    _maybe_emit_content_hitbox(
+        a,
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        emit_content_hitbox=emit_content_hitbox,
+        content_padding=content_padding,
+    )
+    return margins
 
 
 def ui_button(
@@ -644,10 +903,26 @@ def ui_button(
     state: UiButtonState = "normal",
     accent: bool = False,
     corner_cut: int = 1,
-) -> None:
+    emit_content_hitbox: bool = False,
+    content_padding: int = 0,
+) -> NineSliceMargins:
     """Draw a tactile pixel UI button across normal, hover, pressed, and disabled states."""
+    fl, fr, ft, fb = _button_frame_insets(w, h, corner_cut=corner_cut)
+    margins = _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=a.surface.width,
+        canvas_h=a.surface.height,
+        content_padding=content_padding,
+    )
     if w < 4 or h < 4:
-        return
+        return margins
 
     if state == "disabled":
         fill = pal.bg_dark
@@ -680,6 +955,20 @@ def ui_button(
         a.rect(x + inset, y + h - 2, span_w, 1, bot_edge)
 
     _cut_rect_corners(a, x, y, w, h, min(corner_cut, 1))
+    _maybe_emit_content_hitbox(
+        a,
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        emit_content_hitbox=emit_content_hitbox,
+        content_padding=content_padding,
+    )
+    return margins
 
 
 def ui_progress_bar(
@@ -694,10 +983,26 @@ def ui_progress_bar(
     fill_color: int | None = None,
     segments: int = 0,
     show_specular: bool = True,
-) -> None:
+    emit_content_hitbox: bool = False,
+    content_padding: int = 0,
+) -> NineSliceMargins:
     """Draw a recessed pixel progress bar with optional specular strip and segments."""
+    fl, fr, ft, fb = _progress_bar_frame_insets(w, h)
+    margins = _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=a.surface.width,
+        canvas_h=a.surface.height,
+        content_padding=content_padding,
+    )
     if w < 4 or h < 3:
-        return
+        return margins
 
     clamped = max(0.0, min(1.0, value))
     a.rect(x, y, w, h, pal.border_outer)
@@ -721,6 +1026,21 @@ def ui_progress_bar(
             if inner_x < div_x < inner_x + inner_w:
                 a.rect(div_x, inner_y, 1, inner_h, pal.border_outer)
 
+    _maybe_emit_content_hitbox(
+        a,
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        emit_content_hitbox=emit_content_hitbox,
+        content_padding=content_padding,
+    )
+    return margins
+
 
 def ui_badge(
     a: UiTarget,
@@ -732,10 +1052,26 @@ def ui_badge(
     *,
     tone: UiBadgeTone = "neutral",
     pill: bool = True,
-) -> None:
+    emit_content_hitbox: bool = False,
+    content_padding: int = 0,
+) -> NineSliceMargins:
     """Draw a compact status badge or pill tag using semantic tone colors."""
+    fl, fr, ft, fb = _badge_frame_insets(w, h, pill=pill)
+    margins = _build_nine_slice_margins(
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        canvas_w=a.surface.width,
+        canvas_h=a.surface.height,
+        content_padding=content_padding,
+    )
     if w < 4 or h < 3:
-        return
+        return margins
 
     tone_colors: dict[UiBadgeTone, tuple[int, int]] = {
         "neutral": (pal.bg_light, pal.text_muted),
@@ -754,6 +1090,20 @@ def ui_badge(
         if w >= 12:
             a.rect(x + 4, y + h // 2, w - 7, 1, dot_color)
     _cut_rect_corners(a, x, y, w, h, cut)
+    _maybe_emit_content_hitbox(
+        a,
+        x,
+        y,
+        w,
+        h,
+        fl,
+        fr,
+        ft,
+        fb,
+        emit_content_hitbox=emit_content_hitbox,
+        content_padding=content_padding,
+    )
+    return margins
 
 
 def ui_icon_16(
