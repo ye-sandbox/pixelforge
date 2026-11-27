@@ -9,6 +9,7 @@ from pixelforge import (
     AssetSpec,
     compute_font_atlas_size,
     make_bitmap_font_spec,
+    prefabs,
     render_font_atlas,
 )
 
@@ -33,6 +34,6 @@ SPEC = AssetSpec(
 
 def render(a: Asset[Homelab16bitPalette]) -> None:
     """Render the deterministic 4x6 ASCII glyph atlas at 1x resolution."""
-    p = a.pal
-    render_font_atlas(a, _FONT_SPEC, p.WHITE)
+    pal = prefabs.UiPalette.from_style(a)
+    render_font_atlas(a, _FONT_SPEC, pal.text)
     a.anchor("origin", 0, 0, kind="font_atlas")

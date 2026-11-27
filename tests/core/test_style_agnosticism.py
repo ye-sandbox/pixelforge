@@ -232,21 +232,7 @@ def test_prefabs_work_with_foreign_style_pack() -> None:
         68,
         36,
         14,
-        prefabs.UiPalette(
-            bg=p.F_METAL,
-            bg_dark=p.F_WALL,
-            bg_light=p.F_METAL_H,
-            border_outer=p.F_OUTLINE,
-            border_highlight=p.F_METAL_H,
-            border_shadow=p.F_FLOOR,
-            accent=p.F_ACCENT,
-            accent_bright=p.F_GLOW,
-            text=p.F_METAL_H,
-            text_muted=p.F_FLOOR,
-            success=p.F_GLOW,
-            warning=p.F_ACCENT,
-            danger=p.F_ACCENT,
-        ),
+        prefabs.UiPalette.from_style(asset),
     )
     prefabs.ui_icon_16(asset, 108, 4, "bolt", p.F_METAL_H, accent=p.F_GLOW, outline=p.F_OUTLINE)
 

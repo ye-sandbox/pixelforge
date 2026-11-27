@@ -128,6 +128,7 @@ class Layer(DrawingMixin):
     _resolve_ramp_cb: Callable[[str | Sequence[int]], tuple[int, ...]] | None
     _lighting_angle: LightingAngle
     _outline_index: int | None
+    _style: StylePack | None
     _emit_anchor_cb: Callable[
         [Layer, str, int | float, int | float, str | None, tuple[int, int] | None],
         AnchorPoint,
@@ -160,6 +161,7 @@ class Layer(DrawingMixin):
         resolve_ramp: Callable[[str | Sequence[int]], tuple[int, ...]] | None = None,
         lighting_angle: LightingAngle = "top-left",
         outline_index: int | None = None,
+        style: StylePack | None = None,
     ) -> None:
         self.name = name
         self.offset = offset
@@ -169,6 +171,7 @@ class Layer(DrawingMixin):
         self._resolve_ramp_cb = resolve_ramp
         self._lighting_angle = lighting_angle
         self._outline_index = outline_index
+        self._style = style
         self._emit_anchor_cb = emit_anchor
         self._emit_hitbox_cb = emit_hitbox
         self._on_enter = on_enter
@@ -177,6 +180,11 @@ class Layer(DrawingMixin):
     @property
     def surface(self) -> IndexedSurface:
         return self._surface
+
+    @property
+    def style(self) -> StylePack | None:
+        """Bound `StylePack` for this layer when created from an `Asset`."""
+        return self._style
 
     def _next_rng(self) -> float:
         return self._rng()
@@ -471,6 +479,7 @@ class Asset[PalT = PaletteLookup](DrawingMixin):
             resolve_ramp=self._resolve_pal_ramp,
             lighting_angle=self.style.lighting_angle,
             outline_index=self.style.outline_index,
+            style=self.style,
         )
         # INVARIANT: Push onto `_layer_stack` only inside `Layer.__enter__` so unentered
         # `a.layer(...)` handles cannot leak onto the stack and corrupt subsequent draws.

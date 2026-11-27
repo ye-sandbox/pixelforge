@@ -47,22 +47,22 @@ _ICON_MAP: dict[str, prefabs.UiIconKind] = {
 
 def render(a: Asset[Homelab16bitPalette]) -> None:
     """Render each semantic 16x16 HUD icon state."""
-    p = a.pal
-    accent = p.SHIRT_BLUE
+    pal = prefabs.UiPalette.from_style(a)
+    accent = pal.accent
     if a.state == "alert":
-        accent = p.ORANGE
+        accent = pal.danger
     elif a.state == "bolt":
-        accent = p.SHIRT_YEL
+        accent = pal.warning
     elif a.state in ("check", "power"):
-        accent = p.SHIRT_EMER
+        accent = pal.success
 
     prefabs.ui_icon_16(
         a,
         0,
         0,
         _ICON_MAP[a.state],
-        p.METAL_H,
+        pal.border_highlight,
         accent=accent,
-        outline=p.INK,
+        outline=pal.border_outer,
     )
     a.anchor("center", 8, 8, kind="ui_icon")
