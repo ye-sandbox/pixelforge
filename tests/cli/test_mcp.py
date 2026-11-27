@@ -131,6 +131,8 @@ def test_mcp_analyze_ref_and_critic_asset(tmp_path: Path, monkeypatch: MonkeyPat
             "image_path": str(ref_path),
             "width": 8,
             "height": 8,
+            "trim": True,
+            "emit_spr": True,
             "scaffold": True,
             "asset_id": "red_box",
         },
@@ -139,6 +141,7 @@ def test_mcp_analyze_ref_and_critic_asset(tmp_path: Path, monkeypatch: MonkeyPat
     assert isinstance(ref_res.content[0], TextContent)
     assert "red_box" in ref_res.content[0].text
     assert "SPEC = AssetSpec" in ref_res.content[0].text
+    assert "a.spr(grid, 0, 0, color_map)" in ref_res.content[0].text
     assert not (tmp_path / "assets" / "red_box.asset.py").exists()
 
     def _fake_critic(*_args: object, **kwargs: object) -> int:

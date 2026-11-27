@@ -34,6 +34,7 @@ from pixelforge.cli.settings import (
 )
 from pixelforge.export.analyze_ref import (
     analyze_reference_image,
+    emit_spr_snippet,
     sanitize_asset_id,
     scaffold_asset_from_analysis,
 )
@@ -426,6 +427,9 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
         style_id: str | None = None,
         width: int = 32,
         height: int = 32,
+        trim: bool = False,
+        emit_spr: bool = False,
+        include_emissive: bool = False,
         scaffold: bool = False,
         asset_id: str | None = None,
         root: str | None = None,
@@ -450,11 +454,14 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
                 resolved_img,
                 styles[resolved_style_id],
                 size=(width, height),
+                trim=trim,
+                include_emissive=include_emissive,
             )
         except (OSError, ValueError) as exc:
             err(f"failed to analyze reference image {resolved_img}: {exc}")
             return _text_result(1, out_lines, err_lines)
 
+        spr_snippet = emit_spr_snippet(analysis) if emit_spr else None
         scaffold_source: str | None = None
         if scaffold:
             resolved_asset_id = (
@@ -464,6 +471,7 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
                 analysis,
                 styles[resolved_style_id],
                 asset_id=resolved_asset_id,
+                emit_spr=emit_spr,
             )
         emit_reference_analysis(
             analysis,
@@ -471,6 +479,7 @@ def _register_diagnostic_tools(server: MCPServer, base_root: Path) -> None:
             out=out,
             scaffold_source=scaffold_source,
             scaffold_path=None,
+            spr_snippet=spr_snippet,
         )
         return _text_result(0, out_lines, err_lines)
 

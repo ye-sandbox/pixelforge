@@ -14,6 +14,7 @@ from pixelforge.cli.main import main
 from pixelforge.core.types import PaletteColor, StylePack
 from pixelforge.export.analyze_ref import (
     analyze_reference_image,
+    emit_spr_snippet,
     parse_sketch_size,
     sanitize_asset_id,
     scaffold_asset_from_analysis,
@@ -54,7 +55,7 @@ def test_analyze_reference_image_proportions_histogram_and_sketch() -> None:
     rgba[60:, 120:] = (0, 0, 0, 0)
 
     png_buf = _make_png_bytes(rgba)
-    analysis = analyze_reference_image(png_buf, style, size=(8, 4))
+    analysis = analyze_reference_image(png_buf, style, size=(8, 4), include_emissive=True)
 
     assert analysis.source_width == 160
     assert analysis.source_height == 80
@@ -107,7 +108,9 @@ def test_scaffold_asset_from_analysis_passes_guards(tmp_path: Path) -> None:
     rgba[4:28, 4:28] = (220, 38, 38, 255)
     rgba[10:14, 14:18] = (0, 229, 255, 255)
 
-    analysis = analyze_reference_image(_make_png_bytes(rgba), style, size=(16, 16))
+    analysis = analyze_reference_image(
+        _make_png_bytes(rgba), style, size=(16, 16), include_emissive=True
+    )
     source = scaffold_asset_from_analysis(analysis, style, asset_id="Server-Rack 01")
 
     assert 'id="server_rack_01"' in source
@@ -236,3 +239,100 @@ def test_cli_analyze_ref_scaffold_and_write(
     assert main(["check", "--format", "json", "--root", str(tmp_path)]) == 0
     check_payload = json.loads(capsys.readouterr().out)
     assert check_payload["passed"] is True
+
+
+def test_analyze_ref_excludes_emissive_by_default_and_uses_oklab() -> None:
+    """Verify emissive tokens are excluded by default and OKLab quantization is perceptual."""
+    style = StylePack(
+        id="oklab-test",
+        perspective="iso-2:1",
+        lighting_angle="top-left",
+        outline_index=0,
+        palette=(
+            PaletteColor(index=0, name="OUTLINE", hex="#0d1117", flags=("outline",)),
+            PaletteColor(index=1, name="CYAN_GLOW", hex="#00e5ff", flags=("emissive",)),
+            PaletteColor(index=2, name="TEAL_PAINT", hex="#1b7a8a", flags=("surface",)),
+            PaletteColor(index=3, name="RUST_RED", hex="#dc2626", flags=("surface",)),
+        ),
+    )
+    rgba = np.zeros((8, 8, 4), dtype=np.uint8)
+    rgba[:, :] = (0, 229, 255, 255)
+
+    default_analysis = analyze_reference_image(_make_png_bytes(rgba), style, size=(4, 4))
+    default_tokens = {e.token for e in default_analysis.histogram}
+    assert "CYAN_GLOW" not in default_tokens
+    assert default_tokens == {"TEAL_PAINT"}
+
+    emissive_analysis = analyze_reference_image(
+        _make_png_bytes(rgba), style, size=(4, 4), include_emissive=True
+    )
+    assert {e.token for e in emissive_analysis.histogram} == {"CYAN_GLOW"}
+
+
+def test_analyze_ref_trim_and_edge_preserving_downscale() -> None:
+    """Verify `--trim` auto-crops transparent margins and downscaling preserves crisp edges."""
+    style = _sample_style()
+    rgba = np.zeros((32, 32, 4), dtype=np.uint8)
+    # 16x8 solid red bar surrounded by transparent margins, with 1px-sharp border.
+    rgba[12:20, 8:24] = (220, 38, 38, 255)
+
+    trimmed = analyze_reference_image(_make_png_bytes(rgba), style, size=(8, 4), trim=True)
+    assert trimmed.source_width == 32
+    assert trimmed.source_height == 32
+    assert trimmed.trim_bbox == (8, 12, 23, 19)
+    assert trimmed.simplified_ratio == "2:1"
+    assert all(row == trimmed.ascii_sketch[0] for row in trimmed.ascii_sketch)
+    assert "." not in "".join(trimmed.ascii_sketch)
+
+    # All-transparent image with trim=True should not crash.
+    empty = np.zeros((16, 16, 4), dtype=np.uint8)
+    empty_analysis = analyze_reference_image(_make_png_bytes(empty), style, size=(4, 4), trim=True)
+    assert empty_analysis.trim_bbox is None
+    assert empty_analysis.histogram == ()
+
+
+def test_analyze_ref_emit_spr_and_cli_flags(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify `--emit-spr` standalone, `--scaffold --emit-spr`, and `--trim` CLI flags."""
+    assert main(["init", "--root", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    ref_path = tmp_path / "padded_box.png"
+    rgba = np.zeros((32, 32, 4), dtype=np.uint8)
+    rgba[8:24, 8:24] = (55, 65, 81, 255)
+    Image.fromarray(rgba, mode="RGBA").save(ref_path)
+
+    rc = main(
+        [
+            "analyze-ref",
+            str(ref_path),
+            "--size",
+            "8x8",
+            "--trim",
+            "--emit-spr",
+            "--scaffold",
+            "--id",
+            "spr_box",
+            "--format",
+            "json",
+            "--root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["trim_bbox"] == [8, 8, 23, 23]
+    assert "a.spr(grid, 0, 0, color_map)" in payload["spr_snippet"]
+    assert "a.spr(grid, 0, 0, color_map)" in payload["scaffold_source"]
+
+    asset_path = tmp_path / "assets" / "spr_box.asset.py"
+    asset_path.write_text(payload["scaffold_source"], encoding="utf-8")
+    assert check_ast_file(asset_path, scope="asset") == []
+
+    # Standalone snippet helper
+    analysis = analyze_reference_image(ref_path, _sample_style(), size=(4, 4), trim=True)
+    snippet = emit_spr_snippet(analysis)
+    assert "grid = (" in snippet
+    assert "a.spr(grid, 0, 0, color_map)" in snippet

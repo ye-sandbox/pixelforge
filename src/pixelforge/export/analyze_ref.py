@@ -48,6 +48,7 @@ class ReferenceAnalysis:
     legend: dict[str, str]
     ascii_sketch: tuple[str, ...]
     opaque_bbox: tuple[int, int, int, int] | None = None
+    trim_bbox: tuple[int, int, int, int] | None = None
 
     def format_report(self) -> str:
         """Format the ephemeral analysis as human- and agent-readable text."""
@@ -59,9 +60,10 @@ class ReferenceAnalysis:
                 f"(ratio {self.aspect_ratio:.4f}, {self.simplified_ratio})"
             ),
             f"sketch: {self.target_width}x{self.target_height}",
-            "",
-            "palette_histogram:",
         ]
+        if self.trim_bbox is not None:
+            lines.append(f"trim_bbox: {self.trim_bbox}")
+        lines.extend(["", "palette_histogram:"])
         sym_by_token = {token: sym for sym, token in self.legend.items()}
         for entry in self.histogram:
             sym = sym_by_token.get(entry.token, "?")
@@ -109,9 +111,30 @@ def _open_reference_image(source: Path | BinaryIO | Image.Image) -> Image.Image:
         return img.convert("RGBA")
 
 
+def _srgb_to_oklab(rgb: NDArray[np.uint8]) -> NDArray[np.float64]:
+    """Convert `(..., 3)` uint8 sRGB values into perceptual `(L, a, b)` OKLab coordinates."""
+    c = rgb.astype(np.float64) / 255.0
+    lin = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    r = lin[..., 0]
+    g = lin[..., 1]
+    b = lin[..., 2]
+    l_cone = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m_cone = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    s_cone = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    l_cbrt = np.cbrt(l_cone)
+    m_cbrt = np.cbrt(m_cone)
+    s_cbrt = np.cbrt(s_cone)
+    l_ok = 0.2104542553 * l_cbrt + 0.7936177850 * m_cbrt - 0.0040720468 * s_cbrt
+    a_ok = 1.9779984951 * l_cbrt - 2.4285922050 * m_cbrt + 0.4505937099 * s_cbrt
+    b_ok = 0.0259040371 * l_cbrt + 0.7827717662 * m_cbrt - 0.8086757660 * s_cbrt
+    return np.stack((l_ok, a_ok, b_ok), axis=-1)
+
+
 def _quantize_to_style(
     rgba: NDArray[np.uint8],
     palette: tuple[PaletteColor, ...],
+    *,
+    include_emissive: bool = False,
 ) -> NDArray[np.uint8]:
     """Map an `(H, W, 4)` RGBA array to `StylePack` palette indices (`255` = transparent)."""
     height, width, _ = rgba.shape
@@ -124,16 +147,83 @@ def _quantize_to_style(
         msg = "StylePack palette must contain at least one color"
         raise ValueError(msg)
 
-    pal_indices = np.array([c.index for c in palette], dtype=np.uint8)
-    pal_rgb = np.array([hex_to_rgb(c.hex) for c in palette], dtype=np.int32)
+    candidates = tuple(c for c in palette if include_emissive or "emissive" not in c.flags)
+    if not candidates:
+        candidates = palette
 
-    opaque_rgb = rgba[opaque_mask, :3].astype(np.int32)
-    # INVARIANT: Squared Euclidean RGB distance is deterministic and avoids floating-point
-    # tie-breaking drift across platforms.
-    diffs = opaque_rgb[:, None, :] - pal_rgb[None, :, :]
+    pal_indices = np.array([c.index for c in candidates], dtype=np.uint8)
+    pal_rgb = np.array([hex_to_rgb(c.hex) for c in candidates], dtype=np.uint8)
+    pal_lab = _srgb_to_oklab(pal_rgb)
+
+    opaque_lab = _srgb_to_oklab(rgba[opaque_mask, :3])
+    # INVARIANT: Standard Björn Ottosson OKLab perceptual color space with float64 arithmetic
+    # ensures deterministic cross-platform quantization without mixels or emissive bleed.
+    diffs = opaque_lab[:, None, :] - pal_lab[None, :, :]
     sq_dist = np.sum(diffs * diffs, axis=2)
     nearest_pos = np.argmin(sq_dist, axis=1)
     out[opaque_mask] = pal_indices[nearest_pos]
+    return out
+
+
+def _trim_transparent_margins(
+    rgba_img: Image.Image,
+) -> tuple[Image.Image, tuple[int, int, int, int] | None]:
+    """Auto-crop `rgba_img` to its opaque (`alpha >= 128`) bounding box."""
+    alpha = np.asarray(rgba_img.getchannel("A"), dtype=np.uint8)
+    ys, xs = np.nonzero(alpha >= 128)
+    if len(xs) == 0:
+        return rgba_img, None
+    x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+    return rgba_img.crop((x0, y0, x1 + 1, y1 + 1)), (x0, y0, x1, y1)
+
+
+def _downscale_and_quantize(
+    rgba_img: Image.Image,
+    palette: tuple[PaletteColor, ...],
+    target_size: tuple[int, int],
+    *,
+    include_emissive: bool = False,
+) -> NDArray[np.uint8]:
+    """Downscale/resample `rgba_img` preserving sharp edges and quantize in OKLab."""
+    target_w, target_h = target_size
+    work_w, work_h = rgba_img.size
+
+    if work_w <= target_w and work_h <= target_h:
+        resized = rgba_img.resize((target_w, target_h), Image.Resampling.NEAREST)
+        return _quantize_to_style(
+            np.asarray(resized, dtype=np.uint8),
+            palette,
+            include_emissive=include_emissive,
+        )
+
+    max_w, max_h = target_w * 4, target_h * 4
+    if work_w > max_w or work_h > max_h:
+        work_img = rgba_img.resize(
+            (min(work_w, max_w), min(work_h, max_h)),
+            Image.Resampling.NEAREST,
+        )
+        work_w, work_h = work_img.size
+    else:
+        work_img = rgba_img
+
+    work_grid = _quantize_to_style(
+        np.asarray(work_img, dtype=np.uint8),
+        palette,
+        include_emissive=include_emissive,
+    )
+    out = np.full((target_h, target_w), TRANSPARENT_INDEX, dtype=np.uint8)
+    for ty in range(target_h):
+        y0 = (ty * work_h) // target_h
+        y1 = max(y0 + 1, ((ty + 1) * work_h) // target_h)
+        for tx in range(target_w):
+            x0 = (tx * work_w) // target_w
+            x1 = max(x0 + 1, ((tx + 1) * work_w) // target_w)
+            cell = work_grid[y0:y1, x0:x1]
+            opaque = cell[cell != TRANSPARENT_INDEX]
+            if opaque.size * 2 < cell.size:
+                continue
+            counts = np.bincount(opaque)
+            out[ty, tx] = int(np.argmax(counts))
     return out
 
 
@@ -141,6 +231,9 @@ def analyze_reference_image(
     path: Path | BinaryIO | Image.Image,
     style: StylePack,
     size: tuple[int, int] = (32, 32),
+    *,
+    trim: bool = False,
+    include_emissive: bool = False,
 ) -> ReferenceAnalysis:
     """Analyze a local reference image into proportions, palette histogram, and ASCII sketch."""
     target_w, target_h = size
@@ -152,13 +245,22 @@ def analyze_reference_image(
         msg = f"Reference image has invalid dimensions: {src_w}x{src_h}"
         raise ValueError(msg)
 
-    divisor = math.gcd(src_w, src_h)
-    simplified_ratio = f"{src_w // divisor}:{src_h // divisor}"
-    aspect_ratio = round(src_w / src_h, 4)
+    trim_bbox: tuple[int, int, int, int] | None = None
+    work_img = rgba_img
+    if trim:
+        work_img, trim_bbox = _trim_transparent_margins(rgba_img)
 
-    resized = rgba_img.resize((target_w, target_h), Image.Resampling.BILINEAR)
-    rgba_arr = np.asarray(resized, dtype=np.uint8)
-    index_grid = _quantize_to_style(rgba_arr, style.palette)
+    eff_w, eff_h = work_img.size
+    divisor = math.gcd(eff_w, eff_h)
+    simplified_ratio = f"{eff_w // divisor}:{eff_h // divisor}"
+    aspect_ratio = round(eff_w / eff_h, 4)
+
+    index_grid = _downscale_and_quantize(
+        work_img,
+        style.palette,
+        (target_w, target_h),
+        include_emissive=include_emissive,
+    )
 
     by_index = {c.index: c for c in style.palette}
     unique_vals, counts = np.unique(index_grid, return_counts=True)
@@ -209,7 +311,25 @@ def analyze_reference_image(
         legend=legend,
         ascii_sketch=sketch_rows,
         opaque_bbox=opaque_bbox,
+        trim_bbox=trim_bbox,
     )
+
+
+def emit_spr_snippet(analysis: ReferenceAnalysis, *, indent: str = "") -> str:
+    """Format a clean Python `a.spr(...)` snippet from `analysis.ascii_sketch` and `legend`."""
+    lines: list[str] = [f"{indent}grid = ("]
+    for row in analysis.ascii_sketch:
+        lines.append(f'{indent}    "{row}",')
+    lines.append(f"{indent})")
+    if analysis.legend:
+        lines.append(f"{indent}color_map = {{")
+        for sym, token in analysis.legend.items():
+            lines.append(f"{indent}    {sym!r}: p.{token},")
+        lines.append(f"{indent}}}")
+    else:
+        lines.append(f"{indent}color_map: dict[str, int] = {{}}")
+    lines.append(f"{indent}a.spr(grid, 0, 0, color_map)")
+    return "\n".join(lines)
 
 
 def sanitize_asset_id(raw: str) -> str:
@@ -291,6 +411,7 @@ def scaffold_asset_from_analysis(
     style: StylePack,
     *,
     asset_id: str,
+    emit_spr: bool = False,
 ) -> str:
     """Generate a `Layer`/`Plane`/`StylePack`-tokenized `.asset.py` skeleton from `analysis`."""
     norm_id = sanitize_asset_id(asset_id)
@@ -342,14 +463,21 @@ def scaffold_asset_from_analysis(
         "    p = a.pal",
         f"    # Reference palette tokens: {token_summary}",
         f'    with a.layer("body", outline=p.{outline_tok}):',
-        f"        with a.plane(p0={p0!r}, p1={p1!r}, p2={p2!r}) as body_plane:",
-        f"            body_plane.rect(0.0, 0.0, 1.0, 1.0, fill=p.{primary_tok})",
     ]
-    if secondary_tok is not None:
-        body_lines.append(
-            f"            body_plane.rect(0.2, 0.2, 0.6, 0.6, fill=p.{secondary_tok})"
+    if emit_spr:
+        body_lines.append(emit_spr_snippet(analysis, indent="        "))
+    else:
+        body_lines.extend(
+            [
+                f"        with a.plane(p0={p0!r}, p1={p1!r}, p2={p2!r}) as body_plane:",
+                f"            body_plane.rect(0.0, 0.0, 1.0, 1.0, fill=p.{primary_tok})",
+            ]
         )
-    if emissive_tok is not None:
+        if secondary_tok is not None:
+            body_lines.append(
+                f"            body_plane.rect(0.2, 0.2, 0.6, 0.6, fill=p.{secondary_tok})"
+            )
+    if emissive_tok is not None and not emit_spr:
         cx = max(0, min(analysis.target_width - 1, (p0[0] + p1[0]) // 2))
         cy = max(0, min(analysis.target_height - 1, (p0[1] + p2[1]) // 2))
         body_lines.append(f"    a.put({cx}, {cy}, p.{emissive_tok})")

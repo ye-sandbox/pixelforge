@@ -230,6 +230,7 @@ def emit_reference_analysis(
     out: OutputFn,
     scaffold_source: str | None = None,
     scaffold_path: Path | None = None,
+    spr_snippet: str | None = None,
 ) -> None:
     """Emit `pixelforge analyze-ref` output in `llm`, `json`, or `human` format."""
     if output_format == "json":
@@ -255,6 +256,10 @@ def emit_reference_analysis(
             "legend": analysis.legend,
             "ascii_sketch": list(analysis.ascii_sketch),
         }
+        if analysis.trim_bbox is not None:
+            payload["trim_bbox"] = list(analysis.trim_bbox)
+        if spr_snippet is not None:
+            payload["spr_snippet"] = spr_snippet
         if scaffold_source is not None:
             payload["scaffold_source"] = scaffold_source
         if scaffold_path is not None:
@@ -264,6 +269,9 @@ def emit_reference_analysis(
 
     if output_format == "human":
         out(analysis.format_report())
+        if spr_snippet is not None:
+            out("\n# --- spr() snippet ---")
+            out(spr_snippet)
         if scaffold_path is not None:
             out(f"\nscaffold_written: {scaffold_path}")
         if scaffold_source is not None:
@@ -272,11 +280,12 @@ def emit_reference_analysis(
         return
 
     sym_by_token = {token: sym for sym, token in analysis.legend.items()}
+    trim_part = f" trim={analysis.trim_bbox}" if analysis.trim_bbox is not None else ""
     out(
         f"ephemeral=true style={analysis.style_id} "
         f"src={analysis.source_width}x{analysis.source_height} "
         f"ratio={analysis.aspect_ratio:.4f}({analysis.simplified_ratio}) "
-        f"sketch={analysis.target_width}x{analysis.target_height}"
+        f"sketch={analysis.target_width}x{analysis.target_height}{trim_part}"
     )
     if analysis.histogram:
         tokens_summary = " ".join(
@@ -289,6 +298,9 @@ def emit_reference_analysis(
     out("ascii:")
     for row in analysis.ascii_sketch:
         out(row)
+    if spr_snippet is not None:
+        out("spr_snippet:")
+        out(spr_snippet)
     if scaffold_path is not None:
         out(f"scaffold_path={scaffold_path}")
     if scaffold_source is not None:

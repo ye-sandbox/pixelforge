@@ -47,6 +47,7 @@ from pixelforge.cli.settings import (
 from pixelforge.cli.watch_cmd import watch_loop
 from pixelforge.export.analyze_ref import (
     analyze_reference_image,
+    emit_spr_snippet,
     parse_sketch_size,
     sanitize_asset_id,
     scaffold_asset_from_analysis,
@@ -243,11 +244,18 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
         return 1
 
     try:
-        analysis = analyze_reference_image(image_path, styles[style_id], size=size)
+        analysis = analyze_reference_image(
+            image_path,
+            styles[style_id],
+            size=size,
+            trim=bool(args.trim),
+            include_emissive=bool(args.include_emissive),
+        )
     except (OSError, ValueError) as exc:
         _err(f"failed to analyze reference image {image_path}: {exc}")
         return 1
 
+    spr_snippet = emit_spr_snippet(analysis) if bool(args.emit_spr) else None
     scaffold_source: str | None = None
     scaffold_path: Path | None = None
     if bool(args.scaffold):
@@ -255,7 +263,10 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
             sanitize_asset_id(str(args.id)) if args.id else sanitize_asset_id(image_path.stem)
         )
         scaffold_source = scaffold_asset_from_analysis(
-            analysis, styles[style_id], asset_id=asset_id
+            analysis,
+            styles[style_id],
+            asset_id=asset_id,
+            emit_spr=bool(args.emit_spr),
         )
         if args.out is not None:
             raw_out = Path(str(args.out))
@@ -277,6 +288,7 @@ def _cmd_analyze_ref(args: argparse.Namespace, settings: PixelforgeSettings) -> 
         out=_out,
         scaffold_source=scaffold_source,
         scaffold_path=scaffold_path,
+        spr_snippet=spr_snippet,
     )
     return 0
 
@@ -679,6 +691,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_p.add_argument("--style", default=None, help="Target StylePack ID")
     analyze_p.add_argument("--size", default="32x32", help="Sketch dimensions WxH (default: 32x32)")
+    analyze_p.add_argument(
+        "--trim",
+        action="store_true",
+        help="Auto-crop transparent margins before downscaling and quantization",
+    )
+    analyze_p.add_argument(
+        "--emit-spr",
+        action="store_true",
+        help="Emit clean ASCII a.spr() grid/color_map scaffolding",
+    )
+    analyze_p.add_argument(
+        "--include-emissive",
+        action="store_true",
+        help="Allow emissive-flagged palette tokens during quantization (excluded by default)",
+    )
     analyze_p.add_argument(
         "--scaffold",
         action="store_true",
